@@ -124,9 +124,90 @@ http://localhost:3000
 
 The project uses Firebase for authentication.
 
-To run Firebase functionality locally, configure your own Firebase project and add the required configuration according to the application's implementation.
+To run Firebase functionality locally, configure your own Firebase project, then copy `.env.example` to `.env.local` and fill in your values:
+
+```bash
+cp .env.example .env.local
+```
+
+Required variables:
+
+```text
+REACT_APP_FIREBASE_API_KEY
+REACT_APP_FIREBASE_AUTH_DOMAIN
+REACT_APP_FIREBASE_PROJECT_ID
+REACT_APP_FIREBASE_STORAGE_BUCKET
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID
+REACT_APP_FIREBASE_APP_ID
+```
+
+Also enable **Email/Password** under Authentication → Sign-in method in the Firebase console. For **Continue with Google** on the login page, enable the **Google** provider there as well.
 
 > Do not commit private credentials, API keys, or sensitive configuration files to the repository.
+
+### Auth features
+
+* Email/password login with "remember me" (session- vs local-persistence)
+* Google sign-in (Sign-in method → Google)
+* Password reset (`/forgot-password`) via Firebase reset email
+* Central auth state (`AuthContext`) exposing the user, loading, and error states
+* Protected routes (`/account`, `/orders`, `/addresses`, `/favorites`) and a checkout gate that prompts unauthenticated users to log in instead of redirecting
+* Customer profile with name, email, phone, profile image URL, default address, and edit profile
+* Favorites toggling on menu items, saved addresses, and local order history
+
+---
+
+## 🏢 Roles & Multi-Tenancy
+
+The platform has a role system ready for multi-restaurant SaaS (`src/config/roles.js`):
+
+| Role                 | Status     | Access                                  |
+| -------------------- | ---------- | --------------------------------------- |
+| `customer`           | Fully built | Customer store + `/account`            |
+| `restaurant_owner`   | Fully built | `/admin` dashboard                      |
+| `restaurant_admin`   | Reserved   | Future operational access               |
+| `staff`              | Reserved   | Future restricted access                |
+| `platform_admin`     | Reserved   | Future platform-wide access             |
+
+Every restaurant-owned resource (orders, products) is tagged with a `restaurantId`,
+and the owner → restaurant relationship lives on the user's profile (never a
+hardcoded constant). Admin queries filter strictly by that `restaurantId`, so two
+restaurants can never leak data to each other.
+
+## 🍕 Restaurant Owner Dashboard (`/admin`)
+
+* Owner registration at `/owner/register` (creates the `Owner → Restaurant`
+  relationship), owner login via the existing `/login`, and role-protected routes.
+* `RoleProtectedRoute` keeps customers out of `/admin` entirely.
+* Professional SaaS layout: sticky sidebar, dashboard header with dropdown,
+  stat cards, sales chart, recent orders and quick actions — all driven by real
+  stored data (zeros and empty states when the store is empty — nothing is faked).
+* Responsive: sidebar becomes an off-canvas drawer on tablets; order rows become
+  cards on mobile.
+* Placeholder pages for `/admin/orders`, `/admin/menu`, `/admin/customers`,
+  `/admin/coupons`, `/admin/reviews`, `/admin/analytics`, `/admin/settings`.
+
+## 🔐 Required backend configuration
+
+The client currently persists to the browser (localStorage). Before this grows
+into a production multi-tenant platform, wire it to Firestore and deploy the
+rules in `firestore.rules` at the repository root:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+Create the collections **`users`**, **`restaurants`**, **`orders`**, **`products`**
+matching the models in this repo (each with `restaurantId`), and:
+
+1. **Roles must exist server-side.** Store `role` on each `users/{uid}` document.
+   Assign elevated/platform roles only via Firebase Custom Claims through a Cloud
+   Function or Admin SDK — never trust a client-supplied role.
+2. **Multi-tenancy.** The rules in `firestore.rules` restrict restaurant data to
+   members of that restaurant (`request.auth.uid` + the `restaurantId` on each
+   document). Do not weaken them.
+3. **Never store passwords or raw card data.** This project has no payment
+   provider configured; cards are only ever represented by provider tokens.
 
 ---
 

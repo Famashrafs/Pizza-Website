@@ -1,0 +1,147 @@
+rules_version = '2';
+
+// ===========================================================================
+// Firestore security rules — REQUIRED PRODUCTION BACKEND CONFIGURATION
+// ===========================================================================
+//
+// The client currently persists to the browser (localStorage), so these rules
+// are the template that MUST be deployed before the dashboard is wired to
+// real backend data. They enforce the multi-tenant isolation described in the
+// README:
+//
+//   Restaurant A owner  -->  Restaurant A data
+//   Restaurant B owner  -->  Restaurant B data
+//   (A can never read or modify B's dashboard data)
+//
+// Deployment: put this file at the root of your Firebase project and run
+//   firebase deploy --only firestore:rules
+//
+// NOTE ON ROLES: never trust a role that exists only on the client. In
+// production, assign `platform_admin` via Firebase Authentication Custom
+// Claims (set server-side through the Admin SDK or a Cloud Function), and
+// store `restaurant_owner` / `restaurant_admin` / `staff` on the user's own
+// `users/{uid}` document as the server-side record of truth. The rules below
+// read that document.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function hasRole(role) {
+      return userRole() == role;
+    }
+
+    // Owns at least one restaurant (owner, admin or staff of that restaurant).
+    function isMemberOf(restaurantId) {
+      return isSignedIn()
+        && restaurantId != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.restaurantIds.keys().hasAny([restaurantId]);
+    }
+
+    function canManageRestaurant(restaurantId) {
+      return (isMemberOf(restaurantId) && hasRole('restaurant_owner'))
+        || (isMemberOf(restaurantId) && hasRole('restaurant_admin'));
+    }
+
+    function isSelf() {
+      return request.auth != null && request.auth.uid == resource.data.uid;
+    }
+
+    // -----------------------------------------------------------------------
+    // Users
+    // -----------------------------------------------------------------------
+
+    // A user may only read/update their own document. Writes that change a
+    // role are forbidden entirely from the client — they must happen through
+    // a trusted backend path (Cloud Function / Admin SDK).
+    match /users/{userId} {
+      allow read: if isSignedIn() && isSelf();
+      allow create: if isSignedIn() && isSelf() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn()
+        && isSelf()
+        && !hasChangedRole(request.resource.data, resource.data);
+      allow delete: if isSignedIn() && isSelf();
+
+      function hasChangedRole(next, prev) {
+        return next.role != prev.role;
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Restaurants
+    // -----------------------------------------------------------------------
+
+    match /restaurants/{restaurantId} {
+      // Profile is public (name, logo, hours) so customers can view it.
+      allow read: if isSignedIn();
+      // Only the owner / admins of the restaurant can create or update it.
+      allow create: if hasRole('restaurant_owner');
+      allow update: if canManageRestaurant(restaurantId);
+      allow delete: if hasRole('platform_admin');
+    }
+
+    // -----------------------------------------------------------------------
+    // Orders (restaurant-scoped)
+    // -----------------------------------------------------------------------
+
+    match /orders/{orderId} {
+      // A customer can read their own orders; restaurant members can read the
+      // restaurant's orders. The resource MUST be tagged with restaurantId.
+      allow read: if isSignedIn()
+        && ( (resource.data.customerId == request.auth.uid)
+             || isMemberOf(resource.data.restaurantId) );
+
+      allow create: if isSignedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.restaurantId != null;
+
+      // Only restaurant members may advance an order's status.
+      allow update: if isSignedIn()
+        && isMemberOf(resource.data.restaurantId);
+      allow delete: if hasRole('platform_admin');
+    }
+
+    // -----------------------------------------------------------------------
+    // Products / menu (restaurant-scoped)
+    // -----------------------------------------------------------------------
+
+    match /products/{productId} {
+      allow read: if true; // the menu is public by design
+      allow create, update: if isSignedIn()
+        && isMemberOf(request.resource.data.restaurantId);
+      allow delete: if hasRole('platform_admin');
+    }
+
+    // -----------------------------------------------------------------------
+    // Reserved collections (future phases) — same multi-tenant pattern.
+    // -----------------------------------------------------------------------
+
+    match /coupons/{couponId} {
+      allow read: if isSignedIn() && isMemberOf(resource.data.restaurantId);
+      allow create, update: if isSignedIn()
+        && isMemberOf(request.resource.data.restaurantId);
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && request.resource.data.customerId == request.auth.uid;
+    }
+  }
+}

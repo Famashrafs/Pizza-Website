@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c120c"/>
+      <stop offset="1" stop-color="#0d0b09"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" fill="url(#g)"/>
+  <path d="M250 360 h100 a10 10 0 0 0 10 -10 v-150 a220 220 0 0 0 -120 0 v150 a10 10 0 0 0 10 10 z" fill="none" stroke="#fac564" stroke-width="5"/>
+  <g fill="#fac564">
+    <circle cx="282" cy="215" r="7"/>
+    <circle cx="318" cy="225" r="7"/>
+    <circle cx="296" cy="245" r="7"/>
+  </g>
+  <path d="M262 200 q38 -10 76 0" stroke="#fac564" stroke-width="3" fill="none"/>
+  <text x="300" y="345" fill="#fac564" font-family="sans-serif" font-size="26" text-anchor="middle" letter-spacing="3">TIRAMISU</text>
+</svg>

@@ -1,161 +1,196 @@
-import React, { useState } from 'react';
-import HotMeals from '../components/HotMeals';
-import Menu from '../components/Menu';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCart } from '../context/CartContext';
+import { useToast } from '../context/ToastContext';
+import { fetchProducts, getCategories } from '../services/menuService';
+import {
+  DEFAULT_FILTERS,
+  searchProducts,
+  filterProducts,
+  sortProducts,
+  getPriceLimits,
+  countActiveFilters,
+  pluralizeCategory,
+} from '../utils/menuLogic';
+import { createCartItem } from '../utils/cartItem';
+import MenuToolbar from '../components/MenuToolbar';
+import MenuFilters from '../components/MenuFilters';
+import ProductCard from '../components/ProductCard';
+import ProductModal from '../components/ProductModal';
+import SkeletonCard from '../components/SkeletonCard';
+import EmptyState from '../components/EmptyState';
+
+const SKELETON_COUNT = 8;
 
 function MenuPage() {
-  const [activeTab, setActiveTab] = useState('Pizza');
+  const [products, setProducts] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS });
+  const [sortKey, setSortKey] = useState('featured');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [customizing, setCustomizing] = useState(null);
 
-  const handleTabClick = (tab) => {
-    setActiveTab(tab);
-  };
+  const { addItem } = useCart();
+  const { showToast } = useToast();
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'Pizza':
-        return (
-          <div className="menu-content">
-            <div className="cards">
-              <div className="card">
-                <img src="../images/pizza-1.jpg" alt="Pizza 1" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/pizza-2.jpg" alt="Pizza 2" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/pizza-8.jpg" alt="Pizza 3" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-            </div>
-          </div>
-        );
-      case 'Drinks':
-        return (
-          <div className="menu-content">
-            <div className="cards">
-              <div className="card">
-                <img src="../images/drink-1.jpg" alt="Drink 1" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/drink-2.jpg" alt="Drink 2" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/drink-3.jpg" alt="Drink 3" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-            </div>
-          </div>
-        );
-      case 'Burger':
-        return (
-          <div className="menu-content">
-            <div className="cards">
-              <div className="card">
-                <img src="../images/burger-1.jpg" alt="Burger 1" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/burger-2.jpg" alt="Burger 2" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/burger-3.jpg" alt="Burger 3" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-            </div>
-          </div>
-        );
-      case 'Pasta':
-        return (
-          <div className="menu-content">
-            <div className="cards">
-              <div className="card">
-                <img src="../images/pasta-1.jpg" alt="Pasta 1" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/pasta-2.jpg" alt="Pasta 2" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-              <div className="card">
-                <img src="../images/pasta-3.jpg" alt="Pasta 3" />
-                <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia.</p>
-                <p className = "price"> $2,50</p>
-                <button>Order Now</button>
-              </div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
+  const loadProducts = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const data = await fetchProducts();
+      setProducts(data);
+      setStatus('ready');
+    } catch (err) {
+      setStatus('error');
     }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const categories = useMemo(() => getCategories(products), [products]);
+  const priceLimits = useMemo(() => getPriceLimits(products), [products]);
+
+  const visibleProducts = useMemo(() => {
+    const searched = searchProducts(products, query);
+    const filtered = filterProducts(searched, filters);
+    return sortProducts(filtered, sortKey);
+  }, [products, query, filters, sortKey]);
+
+  const activeFilterCount = countActiveFilters(filters);
+
+  const updateFilters = (patch) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
   };
+
+  const resetFilters = () => {
+    setQuery('');
+    setFilters({ ...DEFAULT_FILTERS });
+  };
+
+  const selectCategory = (category) => updateFilters({ category });
+
+  const handleConfirmCustomization = (config) => {
+    const item = createCartItem(customizing, config);
+    if (!item) {
+      showToast('That configuration is not valid.', 'error');
+      return;
+    }
+    addItem(item);
+    showToast(`${customizing.name} added to cart.`);
+    setCustomizing(null);
+  };
+
+  const emptyMessage = query
+    ? `No ${pluralizeCategory(
+        filters.category === 'All' ? null : filters.category
+      )} found for '${query}'.`
+    : 'No products match your filters.';
 
   return (
     <>
-        <div className="landing-page">
-                <h1 className='landing-title'>OUR MENU</h1>
+      <div className="landing-page">
+        <h1 className="landing-title">OUR MENU</h1>
+      </div>
+
+      <section className="catalog">
+        <div className="catalog-heading">
+          <h2>OUR MENU</h2>
+          <p>
+            Freshly made with quality ingredients. Search, filter and customize
+            your favorites.
+          </p>
         </div>
-            <h1 style={{textAlign:"center",marginTop:"40px",color:"#fac564"}}>OUR MENU</h1>
-            <p style={{textAlign:"center",color:"#808080"}}>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia, there live the blind texts.</p>
-        <div className='menu'>
-            <nav className="menu-tabs">
-                <button
-                className={activeTab === 'Pizza' ? 'active' : ''}
-                onClick={() => handleTabClick('Pizza')}
-                >
-                Pizza
-                </button>
-                <button
-                className={activeTab === 'Drinks' ? 'active' : ''}
-                onClick={() => handleTabClick('Drinks')}
-                >
-                Drinks
-                </button>
-                <button
-                className={activeTab === 'Burger' ? 'active' : ''}
-                onClick={() => handleTabClick('Burger')}
-                >
-                Burger
-                </button>
-                <button
-                className={activeTab === 'Pasta' ? 'active' : ''}
-                onClick={() => handleTabClick('Pasta')}
-                >
-                Pasta
-                </button>
-            </nav>
-        <div className="tab-content">
-        {renderContent()}
+
+        <MenuToolbar
+          query={query}
+          onQueryChange={setQuery}
+          onClearQuery={() => setQuery('')}
+          sortKey={sortKey}
+          onSortChange={setSortKey}
+          resultCount={visibleProducts.length}
+          activeFilterCount={activeFilterCount}
+          onToggleFilters={() => setFiltersOpen((open) => !open)}
+        />
+
+        <nav className="menu-tabs" aria-label="Menu categories">
+          <button
+            className={filters.category === 'All' ? 'active' : ''}
+            onClick={() => selectCategory('All')}
+          >
+            All
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category}
+              className={filters.category === category ? 'active' : ''}
+              onClick={() => selectCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </nav>
+
+        <div className="catalog-body">
+          {filtersOpen && (
+            <MenuFilters
+              filters={filters}
+              categories={categories}
+              priceLimits={priceLimits}
+              onChange={updateFilters}
+              onReset={resetFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
+          )}
+
+          <div className="catalog-results">
+            {status === 'loading' && (
+              <div className="product-grid">
+                {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
+                  <SkeletonCard key={index} />
+                ))}
+              </div>
+            )}
+
+            {status === 'error' && (
+              <EmptyState
+                title="We couldn't load the menu"
+                message="Something went wrong while loading the products. Please try again."
+                actionLabel="Try again"
+                onAction={loadProducts}
+              />
+            )}
+
+            {status === 'ready' && visibleProducts.length === 0 && (
+              <EmptyState
+                message={emptyMessage}
+                actionLabel="Clear filters"
+                onAction={resetFilters}
+              />
+            )}
+
+            {status === 'ready' && visibleProducts.length > 0 && (
+              <div className="product-grid">
+                {visibleProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onCustomize={setCustomizing}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        </div>
-        <HotMeals />
-        <Menu />
+      </section>
+
+      {customizing && (
+        <ProductModal
+          product={customizing}
+          onClose={() => setCustomizing(null)}
+          onConfirm={handleConfirmCustomization}
+        />
+      )}
     </>
   );
 }

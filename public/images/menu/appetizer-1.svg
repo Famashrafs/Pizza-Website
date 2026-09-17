@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a1e10"/>
+      <stop offset="1" stop-color="#0f0d0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" fill="url(#g)"/>
+  <circle cx="300" cy="180" r="120" fill="none" stroke="#fac564" stroke-width="4"/>
+  <path d="M300 100 v60 M220 180 h60 M320 180 h60 M240 240 l45 -45 M315 135 l45 -45 M240 120 l45 45 M315 225 l45 45" stroke="#fac564" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <text x="300" y="345" fill="#fac564" font-family="sans-serif" font-size="26" text-anchor="middle" letter-spacing="3">GARLIC BREAD</text>
+</svg>

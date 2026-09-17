@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1410"/>
+      <stop offset="1" stop-color="#0d0b09"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" fill="url(#g)"/>
+  <path d="M230 240 h140 a15 15 0 0 0 15 -15 v-80 a8 8 0 0 0 -8 -8 h-154 a8 8 0 0 0 -8 8 v80 a15 15 0 0 0 15 15 z" fill="none" stroke="#fac564" stroke-width="5"/>
+  <g stroke="#fac564" stroke-width="3">
+    <path d="M230 165 l20 20 l20 -20 l20 20 l20 -20 l20 20 l20 -20 l20 20"/>
+  </g>
+  <path d="M220 260 h160" stroke="#fac564" stroke-width="5"/>
+  <text x="300" y="345" fill="#fac564" font-family="sans-serif" font-size="26" text-anchor="middle" letter-spacing="3">CHEESECAKE</text>
+</svg>

@@ -176,9 +176,21 @@ restaurants can never leak data to each other.
 
 ## 🍕 Restaurant Owner Dashboard (`/admin`)
 
-* Owner registration at `/owner/register` (creates the `Owner → Restaurant`
-  relationship), owner login via the existing `/login`, and role-protected routes.
-* `RoleProtectedRoute` keeps customers out of `/admin` entirely.
+* Admin auth entry points:
+  * `/admin/login` — admin login (rejects non-admin accounts);
+  * `/admin/register` — admin sign up (creates the `Owner → Restaurant`
+    relationship);
+  * `/owner/register` — legacy alias of the sign-up page.
+  These live **outside** the guarded route so they remain reachable when signed out.
+  You can also log in through the normal `/login`; admins are routed to `/admin`.
+* The `/admin` route is protected by `RoleProtectedRoute`:
+  * not logged in → redirected to `/login` (and returned to `/admin` after login);
+  * logged in as a customer → redirected to `/account`;
+  * `restaurant_owner` (or another admin role) → the dashboard;
+  * while the session/profile is still loading, a **“Checking authentication…”**
+    state is shown so no route redirects early.
+* A logged-in admin gets a **Dashboard** entry in the navbar account area
+  (next to *Account*); customers never see it.
 * Professional SaaS layout: sticky sidebar, dashboard header with dropdown,
   stat cards, sales chart, recent orders and quick actions — all driven by real
   stored data (zeros and empty states when the store is empty — nothing is faked).
@@ -186,6 +198,36 @@ restaurants can never leak data to each other.
   cards on mobile.
 * Placeholder pages for `/admin/orders`, `/admin/menu`, `/admin/customers`,
   `/admin/coupons`, `/admin/reviews`, `/admin/analytics`, `/admin/settings`.
+
+### Testing the owner dashboard
+
+User profiles (including `role` and `restaurantId`) are stored **in the browser**
+(`localStorage`, key `profile-<uid>`) in this phase — the app does not read
+Firestore yet. There are two ways to get an owner account:
+
+1. **Register one (recommended):** go to `/admin/register` (or the `/owner/register`
+   alias), create an account and a restaurant. That account is a
+   `restaurant_owner` and lands straight on `/admin`. Returning admins sign in at
+   `/admin/login`.
+2. **Promote an existing account (development only):** sign in normally, then run
+   this in the browser DevTools console. It targets whatever profile is on this
+   device, so no UID is ever hardcoded, and it changes nothing in production code:
+
+   ```js
+   (() => {
+     const key = Object.keys(localStorage).find((k) => k.startsWith('profile-'));
+     if (!key) return console.warn('Log in first.');
+     const profile = JSON.parse(localStorage.getItem(key));
+     profile.role = 'restaurant_owner';
+     localStorage.setItem(key, JSON.stringify(profile));
+     console.log('Promoted this account to restaurant_owner. Reload the page.');
+   })();
+   ```
+
+   Reload, then open `/admin`. (The owner has no restaurant record yet, so the
+   dashboard renders its empty state until one is created.)
+
+To go back to a customer, repeat the snippet with `profile.role = 'customer'`.
 
 ## 🔐 Required backend configuration
 

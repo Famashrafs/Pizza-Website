@@ -1,18 +1,23 @@
 // Restaurant records — the hub of multi-tenant data isolation.
 //
-// Every restaurant-owned resource (orders, products, …) carries a
-// `restaurantId`. This module owns the restaurant documents themselves and the
-// Owner -> Restaurant relationship.
+// Every restaurant-owned resource (orders, products, categories, …) carries a
+// `restaurantId`. This module owns the restaurant documents themselves, the
+// Owner -> Restaurant relationship, and the restaurant's business settings
+// (identity, branding, hours, delivery).
 //
 // Storage note: the project currently persists to localStorage (mirroring the
-// existing product/order stores). The API is deliberately backend-shaped so it
-// can move to Firestore without changing callers: createRestaurant /
-// getRestaurantById / updateRestaurant / getOwnerRestaurant. See
-// `firestore.rules` and the README for the production configuration.
+// product/order stores). The API is deliberately backend-shaped so it can move
+// to Firestore without changing callers. See `firestore.rules` and the README.
 
 import { RESTAURANT_ID, RESTAURANT_SETTINGS } from '../config/restaurant';
+import {
+  readCollection,
+  subscribe,
+  writeCollection,
+} from './collectionStore';
 
 const STORAGE_KEY = 'restaurants';
+const COLLECTION = 'restaurants';
 const LATENCY = 300;
 
 const now = () => new Date().toISOString();
@@ -25,25 +30,34 @@ function generateId() {
   return `rest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// The full set of owner-editable business settings. Keeping the shape in one
+// place means a new restaurant and the seeded deployment restaurant never drift.
+function defaultSettings() {
+  return {
+    description: RESTAURANT_SETTINGS.tagline || '',
+    logo: '',
+    coverImage: '',
+    tagline: RESTAURANT_SETTINGS.tagline || '',
+    phone: RESTAURANT_SETTINGS.phone || '',
+    email: RESTAURANT_SETTINGS.email || '',
+    address: RESTAURANT_SETTINGS.pickup?.address || '',
+    openingHours: RESTAURANT_SETTINGS.pickup?.hours || '',
+    currency: RESTAURANT_SETTINGS.currency || '$',
+    taxRate: RESTAURANT_SETTINGS.taxRate ?? 0,
+    minOrder: RESTAURANT_SETTINGS.minOrder ?? 0,
+    deliveryEnabled: true,
+    deliveryFee: RESTAURANT_SETTINGS.delivery?.baseFee ?? 0,
+    freeDeliveryThreshold: RESTAURANT_SETTINGS.delivery?.freeDeliveryThreshold ?? 0,
+  };
+}
+
 function readAll() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (err) {
-    /* storage unavailable — fall through to in-memory default */
-  }
-  return [];
+  const parsed = readCollection(STORAGE_KEY, null);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 function writeAll(restaurants) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurants));
-  } catch (err) {
-    /* storage unavailable — keep in-memory only */
-  }
+  return writeCollection(STORAGE_KEY, restaurants, COLLECTION);
 }
 
 // Materializes the deployment's restaurant record from config when no restaurant
@@ -56,13 +70,9 @@ function ensureDefaultRestaurant() {
   const record = {
     id: RESTAURANT_ID,
     name: RESTAURANT_SETTINGS.name,
-    tagline: RESTAURANT_SETTINGS.tagline,
-    phone: RESTAURANT_SETTINGS.phone,
-    email: RESTAURANT_SETTINGS.email,
-    address: RESTAURANT_SETTINGS.pickup?.address || '',
-    openingHours: RESTAURANT_SETTINGS.pickup?.hours || '',
     ownerId: null,
     branches: [],
+    ...defaultSettings(),
     createdAt: now(),
     updatedAt: now(),
   };
@@ -82,9 +92,7 @@ export function getRestaurantById(id) {
 
 export function getOwnerRestaurant(ownerId) {
   if (!ownerId) return null;
-  return (
-    getRestaurants().find((record) => record.ownerId === ownerId) || null
-  );
+  return getRestaurants().find((record) => record.ownerId === ownerId) || null;
 }
 
 export async function fetchOwnerRestaurant(ownerId) {
@@ -101,6 +109,7 @@ export function createRestaurant({ ownerId = null, name, ...extra } = {}) {
     name: trimmedName || 'My Restaurant',
     ownerId,
     branches: [],
+    ...defaultSettings(),
     createdAt: now(),
     updatedAt: now(),
     ...extra,
@@ -110,12 +119,18 @@ export function createRestaurant({ ownerId = null, name, ...extra } = {}) {
   return restaurant;
 }
 
-export function updateRestaurant(id, patch) {
+export function updateRestaurant(id, patch = {}) {
   const list = ensureDefaultRestaurant();
+  const existing = list.find((record) => record.id === id);
+  if (!existing) return null;
+
+  // Never allow the record id to be overwritten through a settings form.
+  const { id: _ignoredId, ...safePatch } = patch;
+
   let updated = null;
   const next = list.map((record) => {
     if (record.id !== id) return record;
-    updated = { ...record, ...patch, updatedAt: now() };
+    updated = { ...record, ...safePatch, updatedAt: now() };
     return updated;
   });
   if (updated) writeAll(next);
@@ -127,6 +142,10 @@ export function setRestaurantOwner(id, ownerId) {
     ownerId,
     ownerTakenAt: now(),
   });
+}
+
+export function subscribeRestaurant(listener) {
+  return subscribe(COLLECTION, listener);
 }
 
 // --- Onboarding: User -> Restaurant -> Owner ------------------------------
@@ -149,6 +168,8 @@ export function onboardOwnerRestaurant({ ownerId, name }) {
   });
 }
 
+export const RESTAURANT_STORAGE_KEY = STORAGE_KEY;
+
 const restaurantService = {
   getRestaurants,
   getRestaurantById,
@@ -157,6 +178,7 @@ const restaurantService = {
   createRestaurant,
   updateRestaurant,
   setRestaurantOwner,
+  subscribeRestaurant,
   onboardOwnerRestaurant,
 };
 

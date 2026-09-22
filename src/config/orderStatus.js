@@ -118,6 +118,18 @@ export function getOrderStatusFlow(fulfillmentType) {
   return ORDER_STATUS_FLOW[fulfillmentType] || ORDER_STATUS_FLOW.delivery;
 }
 
+// The next expected status for an order (used by the admin "advance order"
+// action). Returns null when the order is already terminal (delivered/cancelled)
+// or currently cancelled.
+export function getNextOrderStatus(fulfillmentType, currentStatus) {
+  const status = normalizeOrderStatus(currentStatus);
+  if (status === ORDER_STATUS.CANCELLED) return null;
+  const flow = getOrderStatusFlow(fulfillmentType);
+  const index = flow.indexOf(status);
+  if (index === -1 || index >= flow.length - 1) return null;
+  return flow[index + 1];
+}
+
 export function isOrderCancellable(order) {
   return CANCELLABLE_ORDER_STATUSES.includes(
     normalizeOrderStatus(order?.orderStatus)

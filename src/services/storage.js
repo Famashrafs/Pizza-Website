@@ -1,3 +1,5 @@
+import { notify } from './collectionStore';
+
 function readJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -83,6 +85,8 @@ export function getOrders() {
 export function addOrder(order) {
   const orders = getOrders();
   writeJSON('orders', [order, ...orders]);
+  // Let the restaurant dashboard react to the new order without polling.
+  notify('orders');
   return order;
 }
 
@@ -98,7 +102,10 @@ export function updateOrder(id, patch) {
     updated = { ...order, ...patch, updatedAt: new Date().toISOString() };
     return updated;
   });
-  if (updated) writeJSON('orders', next);
+  if (updated) {
+    writeJSON('orders', next);
+    notify('orders');
+  }
   return updated;
 }
 

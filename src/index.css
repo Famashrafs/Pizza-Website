@@ -1,13 +1,416 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ============================================================
+   Design tokens — the single source of truth for the product.
+   Two complete themes live here:
+     · :root (default)  → DARK  (cinematic warm charcoals)
+     · [data-theme=light] → LIGHT (warm cream editorial)
+   Every consumer of these values should read from the tokens,
+   never hardcode hex. The <html data-theme> attribute is set by
+   an inline script in index.html BEFORE first paint so there is
+   no wrong-theme flash.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* ===== Surfaces — layered warm charcoals ===== */
+  --bg-primary: #0d0b0a;
+  --bg-secondary: #15110f;
+  --bg-deep: #080605;
+  --surface: #1c1715;
+  --surface-elevated: #241d1a;
+  --surface-2: #211a17;
+  --surface-3: #291f1a;
+
+  /* Back-compat aliases consumed throughout App.css */
+  --bg: var(--bg-primary);
+
+  /* ===== Text — layered warm creams ===== */
+  --ink: #f7efe8; /* high-contrast headings */
+  --ink-soft: #e9ddd0; /* secondary headings */
+  --text: #c6b7ac; /* primary body copy */
+  --muted: #8d7d74; /* secondary text */
+  --faint: #6b5d54; /* muted text / meta */
+
+  /* ===== Borders ===== */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* ===== Brand (warm ember + gold) ===== */
+  --primary: #c95a3d;
+  --primary-strong: #e06a49; /* hover / emphasis */
+  --primary-soft: rgba(201, 90, 61, 0.16);
+  --accent: #dca54c; /* warm gold */
+  --accent-strong: #ecbd65; /* gold text on dark */
+  --accent-soft: rgba(220, 165, 76, 0.14);
+
+  /* ===== Status ===== */
+  --success: #63bd80;
+  --success-soft: rgba(99, 189, 128, 0.14);
+  --warning: #dda750;
+  --warning-soft: rgba(221, 167, 80, 0.14);
+  --error: #e2665a;
+  --error-soft: rgba(226, 102, 90, 0.14);
+  --info: #7fb6d8;
+  --info-soft: rgba(127, 182, 216, 0.14);
+
+  /* ===== Gradients — subtle, warm, cinematic ===== */
+  --gradient-primary: linear-gradient(
+    135deg,
+    #8f321f 0%,
+    #b8472c 50%,
+    #d35c3b 100%
+  );
+  --gradient-primary-hover: linear-gradient(
+    135deg,
+    #a73e26 0%,
+    #d35c3b 55%,
+    #e06947 100%
+  );
+  --gradient-wine: linear-gradient(150deg, #1c0f0d 0%, #351313 52%, #100a09 100%);
+  --gradient-ember: linear-gradient(135deg, #24100c 0%, #4a1c14 55%, #170d0a 100%);
+  --gradient-rose: linear-gradient(135deg, #1b1513 0%, #25100d 100%);
+  --gradient-hero: radial-gradient(
+      1100px 500px at 78% -12%,
+      rgba(201, 90, 61, 0.18),
+      transparent 62%
+    ),
+    linear-gradient(180deg, #16100d 0%, #0d0b0a 100%);
+  --gradient-page: radial-gradient(
+      900px 420px at 85% -10%,
+      rgba(201, 90, 61, 0.14),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #16100d 0%, #0d0b0a 100%);
+
+  /* ===== Component recipes (theme specific surfaces) ===== */
+  --product-card-bg: linear-gradient(135deg, #211916 0%, #2b1814 100%);
+  --section-tinted-bg: linear-gradient(180deg, #17110f 0%, #0d0b0a 100%);
+  --input-bg: #211916;
+  --nav-bg: rgba(13, 11, 10, 0.8);
+  --dropdown-bg: #241d1a;
+  --overlay-scrim: rgba(5, 4, 3, 0.68);
+  --band-overlay: linear-gradient(
+    160deg,
+    rgba(13, 11, 10, 0.92) 0%,
+    rgba(51, 22, 16, 0.85) 100%
+  );
+  --hero-orb: rgba(220, 165, 76, 0.22);
+  --hero-ember-glow: rgba(201, 84, 48, 0.3);
+  --cta-glow: rgba(201, 84, 48, 0.35);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --price: #e06a49;
+
+  /* Text that sits ON accent/ember fills must stay readable in both themes */
+  --on-primary: #fff8f1;
+  --on-accent: #241208;
+
+  /* ===== Shape ===== */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* ===== Elevation (dark-friendly) ===== */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.34), 0 14px 32px rgba(0, 0, 0, 0.44);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 8px 22px rgba(201, 90, 61, 0.32);
+  --shadow-glow-hover: 0 12px 30px rgba(201, 90, 61, 0.4);
+
+  /* ===== Type ===== */
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-body: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Editorial type scale */
+  --fs-display: clamp(2.7rem, 5.4vw, 4.4rem);
+  --fs-title-xl: clamp(2.1rem, 4vw, 3.2rem);
+  --fs-title-lg: clamp(1.9rem, 3.4vw, 2.6rem);
+  --fs-title-sm: clamp(1.4rem, 2.2vw, 1.7rem);
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-xs: 12.5px;
+
+  /* ===== Layout ===== */
+  --container: 1280px;
+  --gutter: clamp(20px, 4vw, 40px);
+
+  /* ===== Spacing scale ===== */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
+  /* ===== Motion ===== */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --trans-fast: 160ms var(--ease);
+  --trans: 240ms var(--ease);
+  --trans-slow: 420ms var(--ease);
+
+  /* Z-index scale */
+  --z-nav: 900;
+  --z-overlay: 1000;
+  --z-modal: 1100;
+  --z-toast: 1300;
+
+  /* ===== Semantic aliases (requirement 7 naming) ===== */
+  --text-primary: var(--ink);
+  --text-secondary: var(--text);
+  --text-muted: var(--muted);
+  --background: var(--bg-primary);
+  --background-secondary: var(--bg-secondary);
+  --accent-hover: var(--primary-strong);
+  --gradient-secondary: var(--gradient-wine);
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* ============================================================
+   LIGHT THEME — warm, elegant, cream-based restaurant palette.
+   ============================================================ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces — layered warm creams (never one flat white) */
+  --bg-primary: #f6f1ea;
+  --bg-secondary: #efe7dd;
+  --bg-deep: #e2d6c7;
+  --surface: #fff9f3;
+  --surface-elevated: #ffffff;
+  --surface-2: #f2e9de;
+  --surface-3: #e9ded0;
+
+  /* Text — warm near-black hierarchy */
+  --ink: #241a16;
+  --ink-soft: #43362e;
+  --text: #4a3d33;
+  --muted: #6f625b;
+  --faint: #8e8179;
+
+  /* Borders — warm dark hairlines */
+  --border: rgba(36, 26, 22, 0.1);
+  --border-strong: rgba(36, 26, 22, 0.18);
+
+  /* Brand — deep warm red + restrained gold */
+  --primary: #a63d24;
+  --primary-strong: #bf4a2c;
+  --primary-soft: rgba(166, 61, 36, 0.12);
+  --accent: #b57c3a;
+  --accent-strong: #9a6427;
+  --accent-soft: rgba(181, 124, 58, 0.14);
+
+  /* Status — deeper, readable on cream */
+  --success: #2e7d4f;
+  --success-soft: rgba(46, 125, 79, 0.12);
+  --warning: #b0771e;
+  --warning-soft: rgba(176, 119, 30, 0.14);
+  --error: #c53d2f;
+  --error-soft: rgba(197, 61, 47, 0.12);
+  --info: #34658f;
+  --info-soft: rgba(52, 101, 143, 0.12);
+
+  /* Gradients — bright, tasteful, warm */
+  --gradient-primary: linear-gradient(
+    135deg,
+    #8f321f 0%,
+    #a63d24 50%,
+    #c04a2c 100%
+  );
+  --gradient-primary-hover: linear-gradient(
+    135deg,
+    #a63d24 0%,
+    #c04a2c 55%,
+    #d25a38 100%
+  );
+  --gradient-wine: linear-gradient(150deg, #f8efe6 0%, #ecc9bc 55%, #f0ded3 100%);
+  --gradient-ember: linear-gradient(135deg, #fbf4eb 0%, #f3dbcc 100%);
+  --gradient-rose: linear-gradient(135deg, #fff7ed 0%, #f6d7c1 100%);
+  --gradient-hero: radial-gradient(
+      1100px 520px at 80% -12%,
+      rgba(166, 61, 36, 0.16),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #fbf3e9 0%, #f4e5d6 100%);
+  --gradient-page: radial-gradient(
+      900px 420px at 85% -10%,
+      rgba(166, 61, 36, 0.12),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #f9f0e5 0%, #f1e3d3 100%);
+
+  /* Component recipes */
+  --product-card-bg: linear-gradient(135deg, #fff9f3 0%, #f3e5d8 100%);
+  --section-tinted-bg: linear-gradient(180deg, #efe4d7 0%, #f6f1ea 100%);
+  --input-bg: #fff9f3;
+  --nav-bg: rgba(255, 249, 243, 0.85);
+  --dropdown-bg: #ffffff;
+  --overlay-scrim: rgba(41, 31, 26, 0.55);
+  --band-overlay: linear-gradient(
+    160deg,
+    rgba(255, 249, 243, 0.88) 0%,
+    rgba(240, 218, 205, 0.92) 100%
+  );
+  --hero-orb: rgba(166, 61, 36, 0.14);
+  --hero-ember-glow: rgba(166, 61, 36, 0.22);
+  --cta-glow: rgba(166, 61, 36, 0.26);
+  --scrollbar-thumb: rgba(36, 26, 22, 0.25);
+  --price: #8f321f;
+
+  --on-primary: #fffaf3;
+  --on-accent: #241208;
+
+  /* Elevation — soft warm shadows */
+  --shadow-sm: 0 1px 2px rgba(43, 32, 26, 0.05), 0 1px 3px rgba(43, 32, 26, 0.07);
+  --shadow: 0 2px 8px rgba(43, 32, 26, 0.05), 0 14px 32px rgba(43, 32, 26, 0.09);
+  --shadow-lg: 0 4px 16px rgba(43, 32, 26, 0.07), 0 24px 56px rgba(43, 32, 26, 0.12);
+  --shadow-glow: 0 8px 22px rgba(166, 61, 36, 0.18);
+  --shadow-glow-hover: 0 12px 30px rgba(166, 61, 36, 0.24);
+}
+
+/* ============================================================
+   Base / reset
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  background-color: var(--bg-primary);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--text);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.12;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--primary-strong);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+select option {
+  background: var(--surface-elevated);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Theme-aware scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ============================================================
+   Layout helpers
+   ============================================================ */
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

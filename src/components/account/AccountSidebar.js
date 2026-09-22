@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -10,6 +10,8 @@ import {
   faBoxArchive,
   faHeart,
   faGear,
+  faBars,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
 export const ACCOUNT_SECTIONS = [
@@ -24,9 +26,20 @@ export const ACCOUNT_SECTIONS = [
 ];
 
 function AccountSidebar() {
+  const [open, setOpen] = useState(false);
+
   return (
     <nav className="dash-sidebar" aria-label="Account navigation">
-      <ul className="dash-sidebar-list">
+      <button
+        type="button"
+        className="dash-sidebar-toggle"
+        onClick={() => setOpen((isOpen) => !isOpen)}
+        aria-expanded={open}
+      >
+        <FontAwesomeIcon icon={open ? faXmark : faBars} />
+        {open ? 'Hide sections' : 'Account sections'}
+      </button>
+      <ul className={`dash-sidebar-list ${open ? 'open' : ''}`}>
         {ACCOUNT_SECTIONS.map((section) => (
           <li key={section.to}>
             <NavLink
@@ -35,6 +48,7 @@ function AccountSidebar() {
               className={({ isActive }) =>
                 isActive ? 'dash-nav-link active' : 'dash-nav-link'
               }
+              onClick={() => setOpen(false)}
             >
               <FontAwesomeIcon icon={section.icon} />
               <span>{section.label}</span>

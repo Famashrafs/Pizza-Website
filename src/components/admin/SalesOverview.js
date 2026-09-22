@@ -14,8 +14,30 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { computeSalesSeries } from '../../services/adminService';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { useTheme } from '../../context/ThemeContext';
 import AdminEmptyState from './AdminEmptyState';
 import AdminErrorState from './AdminErrorState';
+
+// Read the active theme's design tokens so the chart follows Light/Dark mode
+// instead of being permanently dark.
+function readPalette() {
+  const rootStyles =
+    typeof document !== 'undefined'
+      ? getComputedStyle(document.documentElement)
+      : null;
+  const token = (name, fallback) =>
+    rootStyles?.getPropertyValue(name)?.trim() || fallback;
+  return {
+    accent: token('--accent', '#dca54c'),
+    grid: token('--border', '#23282c'),
+    axis: token('--border-strong', '#2a2f33'),
+    tick: token('--text-muted', '#808080'),
+    label: token('--text-secondary', '#b8b8b8'),
+    tooltipBg: token('--surface-elevated', '#171b1e'),
+    tooltipBorder: token('--border-strong', '#2a2f33'),
+    onAccent: token('--on-accent', '#121618'),
+  };
+}
 
 const RANGES = [
   { key: 'today', label: 'Today' },
@@ -36,9 +58,25 @@ function SalesSkeleton() {
   );
 }
 
-function SalesOverview({ orders = [], status, error, onRetry }) {
-  const [range, setRange] = useState('7d');
+function SalesOverview({
+  orders = [],
+  status,
+  error,
+  onRetry,
+  ranges = RANGES,
+  range: controlledRange,
+  onRangeChange,
+  defaultRange = '7d',
+}) {
+  const [internalRange, setInternalRange] = useState(defaultRange);
+  const range = controlledRange || internalRange;
+  const setRange = (key) => {
+    if (onRangeChange) onRangeChange(key);
+    else setInternalRange(key);
+  };
   const currency = RESTAURANT_SETTINGS.currency || '$';
+  const { theme } = useTheme();
+  const palette = useMemo(() => readPalette(), [theme]);
 
   const series = useMemo(
     () => computeSalesSeries(orders, range),
@@ -60,11 +98,13 @@ function SalesOverview({ orders = [], status, error, onRetry }) {
           <p className="admin-panel-sub">
             {range === 'today'
               ? 'Revenue by hour'
-              : `Revenue, last ${range === '7d' ? 7 : 30} days`}
+              : `Revenue · ${
+                  ranges.find((entry) => entry.key === range)?.label || range
+                }`}
           </p>
         </div>
         <div className="admin-tabs" role="tablist" aria-label="Sales range">
-          {RANGES.map((r) => (
+          {ranges.map((r) => (
             <button
               key={r.key}
               type="button"
@@ -104,39 +144,39 @@ function SalesOverview({ orders = [], status, error, onRetry }) {
               <AreaChart data={series} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fac564" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#fac564" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor={palette.accent} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={palette.accent} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#23282c" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fill: '#808080', fontSize: 11 }}
-                  axisLine={{ stroke: '#2a2f33' }}
+                  tick={{ fill: palette.tick, fontSize: 11 }}
+                  axisLine={{ stroke: palette.axis }}
                   tickLine={false}
                   minTickGap={24}
                 />
                 <YAxis
-                  tick={{ fill: '#808080', fontSize: 11 }}
+                  tick={{ fill: palette.tick, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `${currency}${v}`}
                   width={64}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#171b1e', border: '1px solid #2a2f33', borderRadius: 8 }}
-                  labelStyle={{ color: '#b8b8b8' }}
+                  contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, borderRadius: 8 }}
+                  labelStyle={{ color: palette.label }}
                   formatter={(value) => [`${currency}${Number(value).toFixed(2)}`, 'Revenue']}
-                  cursor={{ stroke: '#fac564', strokeDasharray: '3 3' }}
+                  cursor={{ stroke: palette.accent, strokeDasharray: '3 3' }}
                 />
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  stroke="#fac564"
+                  stroke={palette.accent}
                   strokeWidth={2}
                   fill="url(#salesFill)"
                   dot={false}
-                  activeDot={{ r: 4, fill: '#fac564', stroke: '#121618' }}
+                  activeDot={{ r: 4, fill: palette.accent, stroke: palette.onAccent }}
                 />
               </AreaChart>
             </ResponsiveContainer>

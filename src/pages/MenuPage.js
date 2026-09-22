@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { fetchProducts, getCategories } from '../services/menuService';
@@ -22,10 +23,17 @@ import EmptyState from '../components/EmptyState';
 const SKELETON_COUNT = 8;
 
 function MenuPage() {
+  const location = useLocation();
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('loading');
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS });
+  const [filters, setFilters] = useState(() => {
+    const initialCategory = location.state?.category;
+    return {
+      ...DEFAULT_FILTERS,
+      ...(initialCategory ? { category: initialCategory } : {}),
+    };
+  });
   const [sortKey, setSortKey] = useState('featured');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [customizing, setCustomizing] = useState(null);
@@ -95,7 +103,7 @@ function MenuPage() {
 
       <section className="catalog">
         <div className="catalog-heading">
-          <h2>OUR MENU</h2>
+          <h2>Order in minutes</h2>
           <p>
             Freshly made with quality ingredients. Search, filter and customize
             your favorites.
@@ -131,7 +139,7 @@ function MenuPage() {
           ))}
         </nav>
 
-        <div className="catalog-body">
+        <div className={`catalog-body${filtersOpen ? ' filters-open' : ''}`}>
           {filtersOpen && (
             <MenuFilters
               filters={filters}

@@ -78,11 +78,14 @@ export function AuthProvider({ children }) {
         password
       );
       const user = credential.user;
+      const now = new Date().toISOString();
       const profile = {
         role: DEFAULT_ROLE,
         phone,
         address,
         email,
+        createdAt: now,
+        updatedAt: now,
       };
       saveUserData(user.uid, profile);
       // Set the profile immediately: the auth-state listener may have already
@@ -106,10 +109,13 @@ export function AuthProvider({ children }) {
         ownerId: user.uid,
         name: restaurantName,
       });
+      const now = new Date().toISOString();
       const profile = {
         role: ROLES.RESTAURANT_OWNER,
         restaurantId: restaurant?.id || null,
         email,
+        createdAt: now,
+        updatedAt: now,
       };
       saveUserData(user.uid, profile);
       // Set the profile immediately: the auth-state listener may have already
@@ -266,7 +272,18 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? (
+        // Shown while Firebase restores the session and we load the profile.
+        // Doing this here guarantees no protected route redirects before the
+        // auth/profile request has finished.
+        <div className="auth-page" data-testid="checking-auth">
+          <div className="auth-card">
+            <p>Checking authentication…</p>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }

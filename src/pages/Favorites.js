@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
+import { faCartShopping } from '@fortawesome/free-solid-svg-icons';
 import { useFavorites } from '../context/FavoritesContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
@@ -14,6 +15,11 @@ function Favorites() {
   const handleAddToCart = (fav) => {
     addItem(fav);
     showToast(`${fav.name} added to cart.`);
+  };
+
+  const handleRemove = (fav) => {
+    removeFavorite(fav.id);
+    showToast('Removed from favorites.');
   };
 
   return (
@@ -33,25 +39,34 @@ function Favorites() {
             </Link>
           </div>
         ) : (
-          <div className="cards">
+          <div className="product-grid">
             {favorites.map((fav) => (
-              <div className="card" key={fav.id}>
-                <img src={fav.image} alt={fav.name} />
-                <h4>{fav.name}</h4>
-                <p className="price">${fav.price.toFixed(2)}</p>
-                <button onClick={() => handleAddToCart(fav)}>
-                  Add to Cart
-                </button>
-                <button
-                  className="favorite-btn"
-                  onClick={() => {
-                    removeFavorite(fav.id);
-                    showToast('Removed from favorites.');
-                  }}
-                >
-                  <FontAwesomeIcon icon={faHeart} /> Remove
-                </button>
-              </div>
+              <article className="product-card" key={fav.id}>
+                <div className="product-media">
+                  <img src={fav.image} alt={fav.name} loading="lazy" />
+                  <button
+                    type="button"
+                    className="favorite-toggle active"
+                    aria-label={`Remove ${fav.name} from favorites`}
+                    onClick={() => handleRemove(fav)}
+                  >
+                    <FontAwesomeIcon icon={faHeart} />
+                  </button>
+                </div>
+                <div className="product-body">
+                  <h4>{fav.name}</h4>
+                  <div className="product-foot">
+                    <span className="price">${fav.price.toFixed(2)}</span>
+                    <button
+                      type="button"
+                      className="product-add"
+                      onClick={() => handleAddToCart(fav)}
+                    >
+                      <FontAwesomeIcon icon={faCartShopping} /> Add
+                    </button>
+                  </div>
+                </div>
+              </article>
             ))}
           </div>
         )}

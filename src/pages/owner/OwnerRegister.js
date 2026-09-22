@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
-function OwnerRegister() {
+function OwnerRegister({ adminMode = false }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,13 +53,15 @@ function OwnerRegister() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">OWNER SIGN UP</h1>
+        <h1 className="landing-title">
+          {adminMode ? 'ADMIN SIGN UP' : 'OWNER SIGN UP'}
+        </h1>
       </div>
       <div className="auth-card">
         <span className="owner-reg-icon">
           <FontAwesomeIcon icon={faStore} />
         </span>
-        <h2>Open your restaurant dashboard</h2>
+        <h2>{adminMode ? 'Create your admin account' : 'Open your restaurant dashboard'}</h2>
         <p className="auth-subtitle">
           Set up your restaurant account. Orders, menu, customers and analytics
           will live here.
@@ -112,7 +114,10 @@ function OwnerRegister() {
         </form>
 
         <p className="auth-switch">
-          Already an owner? <Link to="/login">Login</Link>
+          Already have an account?{' '}
+          <Link to={adminMode ? '/admin/login' : '/login'}>
+            {adminMode ? 'Admin login' : 'Login'}
+          </Link>
         </p>
         <p className="dash-form-note" style={{ textAlign: 'center' }}>
           Customers continue to manage their account from their normal account

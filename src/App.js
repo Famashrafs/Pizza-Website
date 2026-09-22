@@ -10,36 +10,29 @@ import { FavoritesProvider } from './context/FavoritesContext';
 import NavBar from "./components/NavBar";
 import CartDrawer from './components/CartDrawer';
 import RequireAuth from './components/RequireAuth';
-import Slider from "./components/Slider";
-import About from './components/About';
-import Services from './components/Services';
-import HotMeals from './components/HotMeals';
-import Menu from './components/Menu';
-import Counter from './components/Counter';
-import Blog from './components/Blog';
-import Location from './components/Location';
 import Footer from './components/Footer';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ADMIN_ROLES } from './config/roles';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminComingSoon from './pages/admin/AdminComingSoon';
+import AdminMenu from './pages/admin/AdminMenu';
+import AdminProductForm from './pages/admin/AdminProductForm';
+import CategoryManager from './pages/admin/CategoryManager';
+import AdminOrders from './pages/admin/AdminOrders';
+import AdminOrderDetails from './pages/admin/AdminOrderDetails';
+import AdminCustomers from './pages/admin/AdminCustomers';
+import AdminCustomerDetails from './pages/admin/AdminCustomerDetails';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminSettings from './pages/admin/AdminSettings';
 import OwnerRegister from './pages/owner/OwnerRegister';
-import {
-  faReceipt,
-  faUtensils,
-  faUsers,
-  faTicket,
-  faStar,
-  faChartLine,
-  faGear,
-} from '@fortawesome/free-solid-svg-icons';
+import { faTicket, faStar } from '@fortawesome/free-solid-svg-icons';
 
 // Importing pages
+import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
+import OffersPage from './pages/OffersPage';
 import MenuPage from './pages/MenuPage';
-import ServicesPage from './pages/ServicesPage';
-import BlogPage from './pages/BlogPage';
 import ContactPage from './pages/ContactPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -104,21 +97,19 @@ function App() {
   const [showMoveToTop, setShowMoveToTop] = useState(false);
 
   useEffect(() => {
+    // The storefront has a sticky nav and a back-to-top button; both appear
+    // once the page has scrolled past the hero. A fixed threshold keeps this
+    // working on every page without depending on a hero element's height.
+    const isPastHero = () => window.pageYOffset > 120;
+
     const handleScroll = () => {
-      const landingSection = document.querySelector('.landing');
-      if (landingSection) {
-        const landingHeight = landingSection.offsetHeight;
-        if (window.pageYOffset >= landingHeight) {
-          setIsScrolled(true);
-          setShowMoveToTop(true);
-        } else {
-          setIsScrolled(false);
-          setShowMoveToTop(false);
-        }
-      }
+      const scrolled = isPastHero();
+      setIsScrolled(scrolled);
+      setShowMoveToTop(scrolled);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
@@ -136,24 +127,10 @@ function App() {
             <Router>
               <PublicTopChrome isScrolled={isScrolled} />
               <Routes>
-                <Route path="/" element={
-                  <>
-                    <div className="landing">
-                      <Slider />
-                    </div>
-                    <About />
-                    <Services />
-                    <HotMeals />
-                    <Menu />
-                    <Counter />
-                    <Blog />
-                    <Location />
-                  </>
-                } />
+                <Route path="/" element={<HomePage />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/offers" element={<OffersPage />} />
                 <Route path="/menu" element={<MenuPage />} />
-                <Route path="/services" element={<ServicesPage />} />
-                <Route path="/blog" element={<BlogPage />} />
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -198,6 +175,14 @@ function App() {
 
                 <Route path="/owner/register" element={<OwnerRegister />} />
 
+                {/* Admin auth entry points (must sit outside the guarded
+                    /admin route so they stay reachable when signed out). */}
+                <Route path="/admin/login" element={<Login adminMode />} />
+                <Route
+                  path="/admin/register"
+                  element={<OwnerRegister adminMode />}
+                />
+
                 <Route
                   path="/admin"
                   element={
@@ -207,36 +192,14 @@ function App() {
                   }
                 >
                   <Route index element={<AdminDashboard />} />
-                  <Route
-                    path="orders"
-                    element={
-                      <AdminComingSoon
-                        icon={faReceipt}
-                        title="Orders"
-                        description="Track, update and manage every order — from placed to delivered. This section will be built in the next phase."
-                      />
-                    }
-                  />
-                  <Route
-                    path="menu"
-                    element={
-                      <AdminComingSoon
-                        icon={faUtensils}
-                        title="Menu"
-                        description="Add, edit, price and organize your menu items and categories. This section will be built in the next phase."
-                      />
-                    }
-                  />
-                  <Route
-                    path="customers"
-                    element={
-                      <AdminComingSoon
-                        icon={faUsers}
-                        title="Customers"
-                        description="View your customer base, order history and profiles. This section will be built in the next phase."
-                      />
-                    }
-                  />
+                  <Route path="orders" element={<AdminOrders />} />
+                  <Route path="orders/:id" element={<AdminOrderDetails />} />
+                  <Route path="menu" element={<AdminMenu />} />
+                  <Route path="menu/new" element={<AdminProductForm />} />
+                  <Route path="menu/categories" element={<CategoryManager />} />
+                  <Route path="menu/:id/edit" element={<AdminProductForm />} />
+                  <Route path="customers" element={<AdminCustomers />} />
+                  <Route path="customers/:id" element={<AdminCustomerDetails />} />
                   <Route
                     path="coupons"
                     element={
@@ -257,26 +220,8 @@ function App() {
                       />
                     }
                   />
-                  <Route
-                    path="analytics"
-                    element={
-                      <AdminComingSoon
-                        icon={faChartLine}
-                        title="Analytics"
-                        description="Deep insights into sales, products and customers. This section will be built in the next phase."
-                      />
-                    }
-                  />
-                  <Route
-                    path="settings"
-                    element={
-                      <AdminComingSoon
-                        icon={faGear}
-                        title="Restaurant Settings"
-                        description="Hours, delivery settings, location and billing. This section will be built in the next phase."
-                      />
-                    }
-                  />
+                  <Route path="analytics" element={<AdminAnalytics />} />
+                  <Route path="settings" element={<AdminSettings />} />
                 </Route>
               </Routes>
               <PublicBottomChrome

@@ -8,9 +8,12 @@ import {
   faGear,
   faRightFromBracket,
   faChevronDown,
+  faSun,
+  faMoon,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useTheme } from '../../context/ThemeContext';
 import Avatar from '../account/Avatar';
 
 const ADMIN_TITLES = [
@@ -36,10 +39,12 @@ function resolveTitle(pathname) {
 function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
   const { currentUser, logout } = useAuth();
   const { showToast } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -86,6 +91,16 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
       </div>
 
       <div className="admin-header-right">
+        <button
+          type="button"
+          className="admin-icon-btn theme-toggle"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={toggleTheme}
+        >
+          <FontAwesomeIcon icon={isDark ? faSun : faMoon} />
+        </button>
+
         <button
           type="button"
           className="admin-icon-btn"

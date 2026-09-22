@@ -9,7 +9,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 const ACTIONS = [
-  { to: '/admin/menu', label: 'Add Product', icon: faPlus, hint: 'Create a new menu item' },
+  { to: '/admin/menu/new', label: 'Add Product', icon: faPlus, hint: 'Create a new menu item' },
   { to: '/admin/orders', label: 'View Orders', icon: faClipboardList, hint: 'Manage incoming orders' },
   { to: '/admin/menu', label: 'Manage Menu', icon: faUtensils, hint: 'Edit prices & availability' },
   { to: '/admin/settings', label: 'Restaurant Settings', icon: faGear, hint: 'Hours, delivery & billing' },

@@ -17,7 +17,7 @@ function resolvePostLoginPath(from) {
   return roleHasAdminAccess(role) ? '/admin' : from;
 }
 
-function Login() {
+function Login({ adminMode = false }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -26,7 +26,20 @@ function Login() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from || '/account';
+  const from = location.state?.from || (adminMode ? '/admin' : '/account');
+
+  // In admin mode only admin-level accounts are allowed through; anyone else is
+  // sent to the normal customer account area.
+  const completeLogin = (successMessage) => {
+    const path = resolvePostLoginPath(from);
+    if (adminMode && path !== '/admin') {
+      showToast('This account does not have admin access.', 'error');
+      navigate('/account', { replace: true });
+      return;
+    }
+    showToast(successMessage);
+    navigate(path, { replace: true });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,8 +47,7 @@ function Login() {
     const result = await login(email, password, remember);
     setAction(null);
     if (result.success) {
-      showToast('Welcome back!');
-      navigate(resolvePostLoginPath(from), { replace: true });
+      completeLogin('Welcome back!');
     }
   };
 
@@ -45,19 +57,22 @@ function Login() {
     const result = await loginWithGoogle();
     setAction(null);
     if (result.success) {
-      showToast('Signed in with Google!');
-      navigate(resolvePostLoginPath(from), { replace: true });
+      completeLogin('Signed in with Google!');
     }
   };
 
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">LOGIN</h1>
+        <h1 className="landing-title">{adminMode ? 'ADMIN LOGIN' : 'LOGIN'}</h1>
       </div>
       <div className="auth-card">
-        <h2>Welcome Back</h2>
-        <p className="auth-subtitle">Log in to your account to continue</p>
+        <h2>{adminMode ? 'Restaurant Admin' : 'Welcome Back'}</h2>
+        <p className="auth-subtitle">
+          {adminMode
+            ? 'Sign in with your admin account to open the dashboard'
+            : 'Log in to your account to continue'}
+        </p>
         {authError && <p className="auth-error">{authError}</p>}
         <form className="auth-form" onSubmit={handleSubmit}>
           <input
@@ -107,9 +122,21 @@ function Login() {
           <FontAwesomeIcon icon={faGoogle} className="google-icon" />
           {action === 'google' ? 'Signing in...' : 'Continue with Google'}
         </button>
-        <p className="auth-switch">
-          Don't have an account? <Link to="/register">Sign up</Link>
-        </p>
+        {adminMode ? (
+          <p className="auth-switch">
+            New restaurant?{' '}
+            <Link to="/admin/register">Create an admin account</Link>
+          </p>
+        ) : (
+          <>
+            <p className="auth-switch">
+              Don't have an account? <Link to="/register">Sign up</Link>
+            </p>
+            <p className="auth-switch">
+              Restaurant owner? <Link to="/admin/login">Log in as admin</Link>
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

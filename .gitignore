@@ -25,3 +25,5 @@ yarn-error.log*
 .vercel
 
 npm-start*.log
+
+dev-server.log

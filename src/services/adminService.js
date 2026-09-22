@@ -1,13 +1,20 @@
-// Pure computation helpers for the admin dashboard. Every function takes data
-// arguments and returns a plain object — no I/O, no side-effects. This makes
-// the dashboard stats testable and decoupled from storage format.
+// Pure computation helpers for the admin dashboard and analytics. Every
+// function takes data arguments and returns a plain object — no I/O, no
+// side-effects. This keeps the numbers testable and decoupled from storage.
 
-import {
-  normalizeOrder,
-  ORDER_STATUS,
-} from '../config/orderStatus';
+import { normalizeOrder, ORDER_STATUS } from '../config/orderStatus';
 
-// --- Helpers ---------------------------------------------------------------
+// Revenue counts orders the restaurant has *accepted* — anything beyond the
+// initial "placed" state and not cancelled. Pending orders are excluded because
+// they have not been confirmed yet; cancelled orders never count.
+const REVENUE_EXCLUDED_STATUSES = [ORDER_STATUS.PENDING, ORDER_STATUS.CANCELLED];
+
+export function isRevenueOrder(order) {
+  const status = normalizeOrder(order)?.orderStatus || order?.orderStatus;
+  return Boolean(status) && !REVENUE_EXCLUDED_STATUSES.includes(status);
+}
+
+// --- Date helpers -----------------------------------------------------------
 
 function startOfToday() {
   const d = new Date();
@@ -47,20 +54,32 @@ function round2(v) {
   return Math.round((Number(v) || 0) * 100) / 100;
 }
 
-// Normalizes an order record for admin display / computation. Accepts already-
-// normalized orders too (idempotent for the fields we read).
+// Normalizes an order record for admin display / computation. Idempotent for
+// already-normalized orders.
 function ensureNormalized(order) {
   if (order?.statusMeta) return order;
   return normalizeOrder(order) || { ...order };
 }
 
-// Exclude cancelled orders from revenue and active-order counts.
 function isActiveOrder(order) {
-  const s = normalizeOrder(order)?.orderStatus || order.orderStatus;
+  const s = ensureNormalized(order)?.orderStatus || order.orderStatus;
   return s && s !== ORDER_STATUS.CANCELLED;
 }
 
-// --- Dashboard stats -------------------------------------------------------
+export const ANALYTICS_RANGES = [
+  { key: '7d', label: '7 Days', days: 7 },
+  { key: '30d', label: '30 Days', days: 30 },
+  { key: '90d', label: '90 Days', days: 90 },
+];
+
+const RANGE_DAYS = Object.fromEntries(ANALYTICS_RANGES.map((r) => [r.key, r.days]));
+
+function rangeToDays(range, fallback = 7) {
+  if (typeof range === 'number') return range;
+  return RANGE_DAYS[range] || fallback;
+}
+
+// --- Dashboard stats --------------------------------------------------------
 
 export function computeDashboardStats({ orders = [], products = [] }) {
   const today = startOfToday();
@@ -74,8 +93,10 @@ export function computeDashboardStats({ orders = [], products = [] }) {
 
     const created = toDate(order.createdAt);
     if (created && isSameDay(created, today)) {
-      todayRevenue += Number(order.total) || 0;
       todayOrders += 1;
+      if (isRevenueOrder(order)) {
+        todayRevenue += Number(order.total) || 0;
+      }
     }
 
     if (order.customerId) customerIds.add(order.customerId);
@@ -89,42 +110,22 @@ export function computeDashboardStats({ orders = [], products = [] }) {
   };
 }
 
-// --- Sales series ----------------------------------------------------------
+// --- Time series ------------------------------------------------------------
 
-// Produces an array of { label, fullDate, revenue } for the chart.
-export function computeSalesSeries(orders = [], range = '7d') {
-  const today = startOfToday();
-  let dates;
-
-  if (range === 'today') {
-    // 24 hourly buckets for today
-    dates = Array.from({ length: 24 }, (_, i) => {
-      const d = new Date(today);
-      d.setHours(i, 0, 0, 0);
-      return d;
-    });
-  } else if (range === '30d') {
-    dates = Array.from({ length: 30 }, (_, i) => addDays(today, i - 29));
-  } else {
-    // 7d (default)
-    dates = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
-  }
-
+function emptyBuckets(dates, keyFn, formatLabel) {
   const buckets = new Map();
-  if (range === 'today') {
-    // 24 hourly buckets, keyed by the local hour so the chart always has a
-    // full day shape.
-    for (let hour = 0; hour < 24; hour += 1) {
-      const d = new Date(today);
-      d.setHours(hour, 0, 0, 0);
-      buckets.set(String(hour), { label: formatLabel(d, range), fullDate: d, revenue: 0 });
-    }
-  } else {
-    for (const d of dates) {
-      buckets.set(localDateKey(d), { label: formatLabel(d, range), fullDate: d, revenue: 0 });
-    }
-  }
+  dates.forEach((date, index) => {
+    buckets.set(keyFn(date, index), {
+      label: formatLabel(date),
+      fullDate: date,
+      revenue: 0,
+      orders: 0,
+    });
+  });
+  return buckets;
+}
 
+function addToSeries(orders, buckets, range, today) {
   for (const raw of orders) {
     const order = ensureNormalized(raw);
     if (order.isCancelled) continue;
@@ -134,28 +135,59 @@ export function computeSalesSeries(orders = [], range = '7d') {
     if (range === 'today') {
       if (!isSameDay(created, today)) continue;
       const bucket = buckets.get(String(created.getHours()));
-      if (bucket) bucket.revenue += Number(order.total) || 0;
+      if (!bucket) continue;
+      bucket.orders += 1;
+      if (isRevenueOrder(order)) bucket.revenue += Number(order.total) || 0;
     } else {
       const bucket = buckets.get(localDateKey(created));
-      if (bucket) bucket.revenue += Number(order.total) || 0;
+      if (!bucket) continue;
+      bucket.orders += 1;
+      if (isRevenueOrder(order)) bucket.revenue += Number(order.total) || 0;
     }
   }
+}
 
-  return Array.from(buckets.values()).map((b) => ({
-    ...b,
-    revenue: round2(b.revenue),
-    label: b.label,
+function finalizeSeries(buckets) {
+  return Array.from(buckets.values()).map((bucket) => ({
+    ...bucket,
+    revenue: round2(bucket.revenue),
   }));
 }
 
-function formatLabel(date, range) {
-  if (range === 'today') {
-    return `${String(date.getHours()).padStart(2, '0')}:00`;
-  }
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+function buildHourlySeries(orders, today) {
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(today);
+    d.setHours(i, 0, 0, 0);
+    return d;
+  });
+  const buckets = emptyBuckets(
+    hours,
+    (date) => String(date.getHours()),
+    (date) => `${String(date.getHours()).padStart(2, '0')}:00`
+  );
+  addToSeries(orders, buckets, 'today', today);
+  return finalizeSeries(buckets);
 }
 
-// --- Recent orders ---------------------------------------------------------
+function buildDailySeries(orders, days, today) {
+  const dates = Array.from({ length: days }, (_, i) => addDays(today, i - (days - 1)));
+  const buckets = emptyBuckets(
+    dates,
+    (date) => localDateKey(date),
+    (date) => `${date.getMonth() + 1}/${date.getDate()}`
+  );
+  addToSeries(orders, buckets, `${days}d`, today);
+  return finalizeSeries(buckets);
+}
+
+// Produces { label, fullDate, revenue, orders } points for the chart.
+export function computeSalesSeries(orders = [], range = '7d') {
+  const today = startOfToday();
+  if (range === 'today') return buildHourlySeries(orders, today);
+  return buildDailySeries(orders, rangeToDays(range), today);
+}
+
+// --- Recent orders ----------------------------------------------------------
 
 export function getRecentOrders(orders = [], limit = 5) {
   return [...orders]
@@ -168,10 +200,85 @@ export function getRecentOrders(orders = [], limit = 5) {
     .map(ensureNormalized);
 }
 
-// --- Revenue series for "active orders" label (total non-cancelled count) ---
-
 export function computeActiveOrderCount(orders = []) {
   return orders.filter((o) => isActiveOrder(o)).length;
+}
+
+// --- Analytics --------------------------------------------------------------
+
+function withinWindow(order, from, to) {
+  const created = toDate(order.createdAt);
+  if (!created) return false;
+  return created >= from && created <= to;
+}
+
+// Best-selling products across the selected window, based on the line items
+// snapshotted on each order. Cancelled orders are ignored.
+export function computeBestSellers(orders = [], { limit = 5 } = {}) {
+  const byProduct = new Map();
+
+  for (const raw of orders) {
+    const order = ensureNormalized(raw);
+    if (order.isCancelled) continue;
+    for (const item of order.items || []) {
+      const key = item.productId || item.id || item.name;
+      if (!key) continue;
+      if (!byProduct.has(key)) {
+        byProduct.set(key, {
+          productId: item.productId || null,
+          name: item.name || 'Item',
+          qty: 0,
+          revenue: 0,
+        });
+      }
+      const entry = byProduct.get(key);
+      const qty = Number(item.qty) || 0;
+      entry.qty += qty;
+      entry.revenue += Number(item.lineTotal != null ? item.lineTotal : (item.unitPrice || item.price || 0) * qty) || 0;
+    }
+  }
+
+  return Array.from(byProduct.values())
+    .map((entry) => ({ ...entry, revenue: round2(entry.revenue) }))
+    .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+    .slice(0, limit);
+}
+
+// Aggregates everything the analytics page needs for a time window.
+export function computeAnalytics({ orders = [], products = [], range = '30d' } = {}) {
+  const days = rangeToDays(range, 30);
+  const today = startOfToday();
+  const from = addDays(today, -(days - 1));
+
+  const windowOrders = orders.filter((raw) => withinWindow(ensureNormalized(raw), from, today));
+
+  const delivered = windowOrders.filter(
+    (o) => ensureNormalized(o).orderStatus === ORDER_STATUS.DELIVERED
+  ).length;
+  const cancelled = windowOrders.filter((o) => ensureNormalized(o).isCancelled).length;
+  const revenueOrders = windowOrders.filter((o) => isRevenueOrder(o));
+
+  const totalRevenue = round2(
+    revenueOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+  );
+  const totalOrders = windowOrders.length;
+  const averageOrderValue = revenueOrders.length
+    ? round2(totalRevenue / revenueOrders.length)
+    : 0;
+
+  return {
+    range,
+    days,
+    series: buildDailySeries(orders, days, today),
+    totalRevenue,
+    totalOrders,
+    averageOrderValue,
+    delivered,
+    cancelled,
+    activeOrders: computeActiveOrderCount(windowOrders),
+    bestSellers: computeBestSellers(windowOrders, { limit: 5 }),
+    totalProducts: products.length,
+  };
 }
 
 const adminService = {
@@ -179,6 +286,10 @@ const adminService = {
   computeSalesSeries,
   getRecentOrders,
   computeActiveOrderCount,
+  isRevenueOrder,
+  computeBestSellers,
+  computeAnalytics,
+  ANALYTICS_RANGES,
 };
 
 export default adminService;

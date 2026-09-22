@@ -19,6 +19,7 @@ import {
   normalizeOrder,
   normalizeOrderStatus,
 } from '../config/orderStatus.js';
+import { subscribe } from './collectionStore';
 import { createCartItem, createSimpleCartItem } from '../utils/cartItem.js';
 import { calculateTotals } from '../utils/cartPricing.js';
 import {
@@ -256,6 +257,24 @@ export function getRestaurantOrders(restaurantId) {
     .map(normalizeOrder);
 }
 
+// Single restaurant-scoped order. Ownership is enforced here the same way the
+// list is: an order tagged with a different restaurant is never returned.
+export function getRestaurantOrderById(id, restaurantId) {
+  if (!id || !restaurantId) return null;
+  const order = getOrderById(id);
+  if (!order) return null;
+  const rid = order.restaurantId || RESTAURANT_ID;
+  if (rid !== restaurantId) return null;
+  return normalizeOrder(order);
+}
+
+// Real-time-ish subscription: fires whenever the order collection changes (new
+// order placed, status updated) in this tab. Cross-tab writes are covered by
+// the collection store's `storage` bridge.
+export function subscribeOrders(listener) {
+  return subscribe('orders', listener);
+}
+
 // --- Cancellation (the only status change a customer may trigger) ---
 
 export async function cancelOrder(id, uid) {
@@ -280,10 +299,12 @@ export async function cancelOrder(id, uid) {
 
 // --- Dashboard hook (not exposed to customers) ---
 
-// Kept centralized so the restaurant dashboard can later drive
-// pending → confirmed → preparing → ready | out_for_delivery → delivered
-// without any UI changes.
-export async function updateOrderStatus(id, status) {
+// Kept centralized so the restaurant dashboard drives
+// placed → confirmed → preparing → ready | out_for_delivery → delivered (or
+// cancelled) without any UI changes. When `restaurantId` is supplied the update
+// is rejected unless the order belongs to that restaurant — the admin UI always
+// passes the signed-in owner's restaurantId.
+export async function updateOrderStatus(id, status, { restaurantId = null } = {}) {
   if (!isValidOrderStatus(status)) {
     return { success: false, error: `Unknown order status: ${status}` };
   }
@@ -291,9 +312,20 @@ export async function updateOrderStatus(id, status) {
   if (!order) {
     return { success: false, error: 'Order not found.' };
   }
+  if (restaurantId) {
+    const rid = order.restaurantId || RESTAURANT_ID;
+    if (rid !== restaurantId) {
+      return { success: false, error: 'Order not found.' };
+    }
+  }
+
+  const nextStatus = normalizeOrderStatus(status);
+  const now = new Date().toISOString();
+  const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   const updated = updateOrder(id, {
-    orderStatus: normalizeOrderStatus(status),
-    statusUpdatedAt: new Date().toISOString(),
+    orderStatus: nextStatus,
+    statusUpdatedAt: now,
+    statusHistory: [...history, { status: nextStatus, at: now }],
   });
   return { success: true, order: normalizeOrder(updated) };
 }

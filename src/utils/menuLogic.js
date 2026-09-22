@@ -17,13 +17,20 @@ export const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
 ];
 
+const fold = (value) =>
+  String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
 export function normalizeQuery(query) {
-  return String(query || '').trim().toLowerCase();
+  return fold(query).trim();
 }
 
 export function searchProducts(products, query) {
   const q = normalizeQuery(query);
-  if (!q) {
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
     return products;
   }
   return products.filter((product) => {
@@ -32,10 +39,10 @@ export function searchProducts(products, query) {
       product.description,
       product.category,
       ...(product.ingredients || []),
-    ];
-    return haystack.some((field) =>
-      String(field || '').toLowerCase().includes(q)
-    );
+    ]
+      .map(fold)
+      .join(' ');
+    return tokens.every((token) => haystack.includes(token));
   });
 }
 

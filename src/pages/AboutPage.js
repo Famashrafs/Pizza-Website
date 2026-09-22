@@ -34,7 +34,7 @@ const VALUES = [
 function AboutPage() {
   return (
     <>
-      <div className="landing-page">
+      <div className="landing-page landing-page--about">
         <h1 className="landing-title">ABOUT US</h1>
       </div>
 

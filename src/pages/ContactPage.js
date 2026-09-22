@@ -54,7 +54,7 @@ function ContactPage() {
 
   return (
     <>
-      <div className="landing-page">
+      <div className="landing-page landing-page--contact">
         <h1 className="landing-title">CONTACT US</h1>
       </div>
 

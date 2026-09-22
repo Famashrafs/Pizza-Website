@@ -97,7 +97,7 @@ function MenuPage() {
 
   return (
     <>
-      <div className="landing-page">
+      <div className="landing-page landing-page--menu">
         <h1 className="landing-title">OUR MENU</h1>
       </div>
 

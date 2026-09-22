@@ -80,7 +80,7 @@ function OffersPage() {
 
   return (
     <>
-      <div className="landing-page">
+      <div className="landing-page landing-page--offers">
         <h1 className="landing-title">OFFERS</h1>
       </div>
 

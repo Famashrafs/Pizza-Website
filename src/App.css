@@ -265,12 +265,43 @@ textarea::placeholder {
    =========================================================================== */
 
 .landing-page {
-  background: var(--gradient-page);
+  background-color: var(--bg-primary);
+  background-image: url('../public/images/bg_3.jpg');
+  background-size: cover;
+  background-position: center;
   border-bottom: 1px solid var(--border);
-  padding: clamp(88px, 12vh, 132px) 0 clamp(40px, 6vh, 64px);
+  padding: clamp(130px, 20vh, 210px) 0 clamp(70px, 10vh, 100px);
   text-align: center;
   position: relative;
   overflow: hidden;
+}
+
+.landing-page--menu {
+  background-image: url('../public/images/pcze-hero.jpg');
+}
+
+.landing-page--offers {
+  background-image: url('../public/images/landing-page.jpg');
+}
+
+.landing-page--about {
+  background-image: url('../public/images/about.jpg');
+}
+
+.landing-page--contact {
+  background-image: url('../public/images/bg_2.jpg');
+}
+
+.landing-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(4, 3, 2, 0.12) 0%,
+    rgba(4, 3, 2, 0.38) 100%
+  );
+  pointer-events: none;
 }
 
 .landing-page::after {
@@ -287,12 +318,20 @@ textarea::placeholder {
 }
 
 .landing-page .landing-title {
-  font-size: var(--fs-title-xl);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  margin: 0 auto;
-  max-width: 16ch;
+  position: relative;
+  z-index: 1;
   font-family: var(--font-display);
+  font-size: var(--fs-title-xl);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.45),
+    0 14px 44px rgba(0, 0, 0, 0.5);
+  margin: 0 auto;
+  max-width: 18ch;
 }
 
 .landing-page p {
@@ -825,6 +864,9 @@ textarea::placeholder {
   overflow: hidden;
   background: var(--gradient-hero);
   border-bottom: 1px solid var(--border);
+  min-height: calc(100vh - 72px);
+  display: flex;
+  align-items: center;
 }
 
 .hero::after {
@@ -5997,7 +6039,7 @@ textarea::placeholder {
   }
 
   .landing-page {
-    padding-top: clamp(72px, 12vh, 96px);
+    padding-top: clamp(110px, 16vh, 150px);
   }
 
   .checkout-stepper {

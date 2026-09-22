@@ -292,6 +292,8 @@ body {
   line-height: 1.6;
   color: var(--text);
   background-color: var(--bg-primary);
+  background-image: var(--gradient-page);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 300ms ease, color 300ms ease;

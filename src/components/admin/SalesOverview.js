@@ -75,8 +75,8 @@ function SalesOverview({
     else setInternalRange(key);
   };
   const currency = RESTAURANT_SETTINGS.currency || '$';
-  const { theme } = useTheme();
-  const palette = useMemo(() => readPalette(), [theme]);
+  useTheme();
+  const palette = readPalette();
 
   const series = useMemo(
     () => computeSalesSeries(orders, range),

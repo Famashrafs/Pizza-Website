@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { devLog } from '../utils/devLog';
 
 // Generic live-data hook. Runs a loader (sync or async), exposes a loading/
 // success/error state, and re-runs whenever the subscribed collection changes
@@ -23,6 +24,7 @@ export function useLiveData(load, deps = [], { subscribe } = {}) {
         if (!cancelled) setState({ status: 'success', data, error: null });
       } catch (err) {
         if (!cancelled) {
+          devLog('[useLiveData] failed to load data', err);
           setState({
             status: 'error',
             data: null,

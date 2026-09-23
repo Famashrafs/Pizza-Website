@@ -121,3 +121,76 @@ describe('menu management flow', () => {
     expect(typeof result.error).toBe('string');
   });
 });
+
+describe('deployment catalog seed-on-read', () => {
+  it('seeds the default catalog when the deployment menu is empty', async () => {
+    db.__reset();
+    const menu = await getProductsForRestaurant(RESTAURANT_ID);
+
+    expect(menu.length).toBeGreaterThan(0);
+    expect(menu.every((p) => p.restaurantId === RESTAURANT_ID)).toBe(true);
+  });
+
+  it('is idempotent — repeated reads never duplicate products', async () => {
+    db.__reset();
+    const first = await getProductsForRestaurant(RESTAURANT_ID);
+    const second = await getProductsForRestaurant(RESTAURANT_ID);
+
+    const stored = (await db.getDocs('products')).filter(
+      (p) => p.restaurantId === RESTAURANT_ID
+    );
+    expect(second.length).toBe(first.length);
+    expect(stored.length).toBe(first.length);
+  });
+
+  it('never overwrites or duplicates an existing catalog', async () => {
+    db.__reset();
+    await db.setDoc('products/prod-existing', {
+      id: 'prod-existing',
+      name: 'Existing Slice',
+      basePrice: 5,
+      restaurantId: RESTAURANT_ID,
+      sortOrder: 0,
+      available: true,
+    });
+
+    const menu = await getProductsForRestaurant(RESTAURANT_ID);
+    expect(menu).toHaveLength(1);
+    expect(menu[0].id).toBe('prod-existing');
+  });
+
+  it('is scoped only to RESTAURANT_ID — other restaurants are never auto-seeded', async () => {
+    db.__reset();
+    const other = await getProductsForRestaurant('rest-other');
+    expect(other).toEqual([]);
+    const seeded = (await db.getDocs('products')).some(
+      (p) => p.restaurantId === 'rest-other'
+    );
+    expect(seeded).toBe(false);
+  });
+
+  it('falls back to a client-sorted read when the ordered query is blocked by a missing index', async () => {
+    db.__reset();
+    const realGetDocs = db.getDocs;
+    let orderedCalls = 0;
+    db.getDocs = async (collectionPath, queryOptions) => {
+      if (
+        collectionPath === 'products' &&
+        (queryOptions?.orderBy || []).length > 0 &&
+        orderedCalls++ === 0
+      ) {
+        const err = new Error('The query requires an index. Create it or use a different query.');
+        err.code = 'failed-precondition';
+        throw err;
+      }
+      return realGetDocs(collectionPath, queryOptions);
+    };
+
+    try {
+      const menu = await getProductsForRestaurant(RESTAURANT_ID);
+      expect(menu.length).toBeGreaterThan(0);
+    } finally {
+      db.getDocs = realGetDocs;
+    }
+  });
+});

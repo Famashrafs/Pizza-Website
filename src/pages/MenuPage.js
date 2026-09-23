@@ -19,6 +19,7 @@ import ProductCard from '../components/ProductCard';
 import ProductModal from '../components/ProductModal';
 import SkeletonCard from '../components/SkeletonCard';
 import EmptyState from '../components/EmptyState';
+import { devLog } from '../utils/devLog';
 
 const SKELETON_COUNT = 8;
 
@@ -48,6 +49,7 @@ function MenuPage() {
       setProducts(data);
       setStatus('ready');
     } catch (err) {
+      devLog('[MenuPage] failed to load the menu', err);
       setStatus('error');
     }
   }, []);

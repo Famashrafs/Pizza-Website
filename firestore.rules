@@ -76,7 +76,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && isSelf();
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role in ['customer', 'restaurant_owner'];
+        && request.resource.data.role in ['customer', 'restaurant_owner']
+        && isSafeProfileCreate();
       allow update: if isSignedIn()
         && isSelf()
         && request.resource.data.role == resource.data.role
@@ -86,6 +87,18 @@ service cloud.firestore {
       function isRegularProfileUpdate() {
         return !request.resource.data.diff(resource.data).affectedKeys()
           .hasAny(['role', 'restaurantId', 'restaurantIds']);
+      }
+
+      // A profile document is created WITHOUT a restaurant identity — a client
+      // can never claim ownership simply by writing to its own user document.
+      // Null/empty defaults (as written by customer signup) are fine; any real
+      // restaurant identity may only be attached later through
+      // `isOwnershipGrant()`, which verifies the target restaurant's `ownerId`.
+      function isSafeProfileCreate() {
+        return (request.resource.data.restaurantId == null
+            || request.resource.data.restaurantId == '')
+          && (request.resource.data.restaurantIds == null
+            || request.resource.data.restaurantIds.size() == 0);
       }
 
       // Ownership grant/refresh: only touches restaurant identity keys, and the

@@ -17,6 +17,7 @@ import { CATEGORY_ORDER } from '../data/categories.js';
 import { RESTAURANT_ID } from '../config/restaurant';
 import db from './db';
 import { resolveCategory } from './categoryService';
+import { devLog } from '../utils/devLog';
 
 const COLLECTION = 'products';
 const NOT_CATEGORIZED = 'Uncategorized';
@@ -144,15 +145,58 @@ export async function fetchProductById(id) {
 
 // --- Restaurant-scoped reads (admin dashboard) ------------------------------
 
+// Runs the catalog query for one restaurant. Live Firestore needs a composite
+// index for `where(restaurantId == X).orderBy(sortOrder)`; when that index is
+// missing the read throws `failed-precondition`. We fall back to an
+// equality-only query and sort client-side so the menu never hard-fails on a
+// missing index, and log the cause in development so the index can be created.
+async function queryProducts(restaurantId) {
+  const where = [{ field: 'restaurantId', op: '==', value: restaurantId }];
+  try {
+    return await db.getDocs(COLLECTION, {
+      where,
+      orderBy: [{ field: 'sortOrder', dir: 'asc' }],
+    });
+  } catch (err) {
+    if (err && err.code === 'failed-precondition') {
+      devLog(
+        '[menuService] ordered catalog query needs a composite index — falling back to client-side sort. Create the index for: products(restaurantId ASC, sortOrder ASC)',
+        err
+      );
+      const docs = await db.getDocs(COLLECTION, { where });
+      docs.sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
+      return docs;
+    }
+    throw err;
+  }
+}
+
 export async function getProductsForRestaurant(restaurantId, { includeArchived = false } = {}) {
   if (!restaurantId) return [];
-  const docs = await db.getDocs(COLLECTION, {
-    where: [{ field: 'restaurantId', op: '==', value: restaurantId }],
-    orderBy: [{ field: 'sortOrder', dir: 'asc' }],
-  });
-  return docs
+  const docs = await queryProducts(restaurantId);
+  let visible = docs
     .filter((product) => includeArchived || !product.archived)
     .map(hydrateProduct);
+
+  // First-run recovery for the deployment storefront: when Firestore has no
+  // products for RESTAURANT_ID at all, seed the default catalog before serving
+  // the menu. `ensureDefaultProducts()` is idempotent, never overwrites or
+  // deletes, and is hard-scoped to RESTAURANT_ID. Firestore rules only let a
+  // restaurant *member* perform the seed write, so a signed-out visitor or a
+  // plain customer gets a harmless denied attempt (logged in dev) and the menu
+  // simply reflects whatever is actually readable.
+  if (!includeArchived && restaurantId === RESTAURANT_ID && visible.length === 0) {
+    try {
+      await ensureDefaultProducts();
+      visible = (await queryProducts(restaurantId))
+        .filter((product) => !product.archived)
+        .map(hydrateProduct);
+    } catch (err) {
+      devLog('[menuService] seed-on-read failed (catalog left as-is)', err);
+    }
+  }
+
+  return visible;
 }
 
 export async function getProductById(id) {

@@ -25,9 +25,11 @@ import db from '../services/db';
 import { removeUserData } from '../services/storage';
 import { ROLES, DEFAULT_ROLE, normalizeRole, roleHasAdminAccess } from '../config/roles';
 import {
+  getOwnerRestaurant,
   onboardOwnerRestaurant,
   seedOwnerSetup,
 } from '../services/restaurantService';
+import { devLog } from '../utils/devLog';
 
 const AuthContext = createContext();
 
@@ -62,6 +64,79 @@ function stripIdentityFields(data) {
   return fields;
 }
 
+// Legacy-owner recovery (migration from before `users/{uid}` documents existed).
+//
+// For a signed-in user whose Firestore profile is missing, we ONLY restore owner
+// access when a Firestore `restaurants` document explicitly lists
+// `ownerId == currentUser.uid`. That document relationship is the authority —
+// never localStorage, email address, URL, or a client-side role.
+//
+// The write is deliberately split in two so `firestore.rules` can verify it:
+//   1. create the profile WITHOUT a restaurant identity (the create rule now
+//      forbids claiming ownership on create), then
+//   2. attach the identity through the ownership-grant update, which the rules
+//      re-verify against the restaurant's `ownerId`.
+// Returns the recovered profile, or null when ownership cannot be verified
+// (the caller then falls back to a default customer profile).
+async function recoverOwnerProfile(user) {
+  if (!user) return null;
+
+  let restaurant = null;
+  try {
+    restaurant = await getOwnerRestaurant(user.uid);
+  } catch (err) {
+    devLog('[auth] owner recovery could not verify restaurant ownership', user.uid, err);
+    return null;
+  }
+  // getOwnerRestaurant already filters by ownerId, but the relationship is
+  // re-asserted explicitly — it must never be inferred.
+  if (!restaurant || restaurant.ownerId !== user.uid) return null;
+
+  const now = db.nowISO();
+  const profile = {
+    uid: user.uid,
+    role: ROLES.RESTAURANT_OWNER,
+    name: String(user.displayName || '').trim(),
+    email: user.email || '',
+    phone: '',
+    photoURL: user.photoURL || '',
+    phoneVerified: false,
+    restaurantId: restaurant.id,
+    restaurantIds: { [restaurant.id]: true },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await db.setDoc(`users/${user.uid}`, {
+      uid: user.uid,
+      role: ROLES.RESTAURANT_OWNER,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      photoURL: profile.photoURL,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.updateDoc(`users/${user.uid}`, {
+      restaurantId: restaurant.id,
+      restaurantIds: { [restaurant.id]: true },
+      updatedAt: db.nowISO(),
+    });
+  } catch (err) {
+    devLog('[auth] owner recovery profile write failed', user.uid, err);
+    return null;
+  }
+
+  try {
+    await seedOwnerSetup(restaurant.id);
+  } catch (err) {
+    devLog('[auth] owner recovery menu seeding failed (non-fatal)', user.uid, err);
+  }
+
+  return profile;
+}
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
@@ -87,24 +162,29 @@ export function AuthProvider({ children }) {
       }
 
       const seq = profileSeq.current;
+      let profile = null;
+      let doc = null;
       try {
-        const doc = await db.getDoc(`users/${user.uid}`);
-        if (seq !== profileSeq.current) return; // superseded by a newer write
-        setUserProfile(
-          doc
-            ? {
-                ...defaultCustomerProfile(user),
-                ...doc,
-                role: normalizeRole(doc.role),
-              }
-            : defaultCustomerProfile(user)
-        );
+        doc = await db.getDoc(`users/${user.uid}`);
       } catch (err) {
-        if (seq !== profileSeq.current) return;
-        setUserProfile(defaultCustomerProfile(user));
-      } finally {
-        if (seq === profileSeq.current) setLoading(false);
+        devLog('[auth] unable to read user profile (will attempt recovery)', user.uid, err);
       }
+      if (seq !== profileSeq.current) return; // superseded by a newer write
+
+      if (doc) {
+        profile = {
+          ...defaultCustomerProfile(user),
+          ...doc,
+          role: normalizeRole(doc.role),
+        };
+      } else {
+        // Missing/unreadable profile → only a verified Firestore restaurant
+        // ownership relationship may restore admin access for legacy accounts.
+        profile = (await recoverOwnerProfile(user)) || defaultCustomerProfile(user);
+      }
+      if (seq !== profileSeq.current) return;
+      setUserProfile(profile);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);

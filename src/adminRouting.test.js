@@ -195,3 +195,48 @@ test('owner refreshing /admin stays on the dashboard (profile rehydrated)', asyn
   await resolveAuth({ uid: 'owner-1', email: 'owner@example.com' });
   await waitFor(() => expect(window.location.pathname).toBe('/admin'));
 });
+
+test('legacy owner with no Firestore profile is recovered via the restaurant ownerId', async () => {
+  // Account predates the migration: Firebase Auth exists, no `users/{uid}` doc.
+  // The restaurant document is the only authority.
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-legacy-1',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'owner-legacy-1', email: 'old.owner@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/admin'));
+  const profile = db.__getDocs()['users/owner-legacy-1'];
+  expect(profile).toBeTruthy();
+  expect(profile.role).toBe('restaurant_owner');
+  expect(profile.restaurantId).toBe('restaurant-pizza-demo');
+  expect(profile.restaurantIds['restaurant-pizza-demo']).toBe(true);
+});
+
+test('signed-in user with no owned restaurant is NOT granted admin access', async () => {
+  // No profile doc, no restaurant with ownerId == uid → stays a customer.
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'plain-1', email: 'plain@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/account'));
+});
+
+test('ownership is never granted from a restaurant owned by someone else', async () => {
+  // The restaurant exists but belongs to another uid — permission is denied
+  // regardless of what any legacy client data might claim.
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'other-owner',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'impostor-1', email: 'impostor@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/account'));
+  expect(db.__getDocs()['users/impostor-1']).toBeUndefined();
+});

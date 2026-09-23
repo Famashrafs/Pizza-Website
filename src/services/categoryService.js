@@ -1,24 +1,15 @@
 // Category service — the single source of truth for menu categories.
 //
-// Categories are restaurant-scoped exactly like products and orders: every
-// record carries a `restaurantId`, and callers only ever ask for the categories
-// that belong to their restaurant. Storage mirrors the rest of the project
-// (localStorage with a backend-shaped API) so it can move to Firestore without
-// changing callers.
+// Categories are restaurant-scoped documents under the
+// `restaurants/{restaurantId}/categories` subcollection, exactly like the
+// multi-tenant layout in `firestore.rules`. Every call is async and goes
+// through `src/services/db.js`.
 
 import { CATEGORY_ORDER } from '../data/categories';
-import { RESTAURANT_ID } from '../config/restaurant';
-import {
-  readCollection,
-  subscribe,
-  writeCollection,
-} from './collectionStore';
+import db from './db';
 
-const STORAGE_KEY = 'menu-categories-v1';
-const PRODUCTS_KEY = 'menu-products-v2';
-const COLLECTION = 'categories';
-
-const now = () => new Date().toISOString();
+const categoriesPath = (restaurantId) => `restaurants/${restaurantId}/categories`;
+const categoryPath = (restaurantId, id) => `${categoriesPath(restaurantId)}/${id}`;
 
 function generateId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -27,98 +18,81 @@ function generateId() {
   return `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalizeName(name) {
-  return String(name || '').trim();
-}
+const normalizeName = (name) => String(name || '').trim();
 
-function hydrateCategory(record, index) {
+function hydrate(category) {
+  if (!category) return null;
   return {
-    id: record.id || generateId(),
-    restaurantId: record.restaurantId || RESTAURANT_ID,
-    name: normalizeName(record.name) || 'Category',
-    description: record.description || '',
-    image: record.image || '',
-    sortOrder: Number.isFinite(record.sortOrder) ? record.sortOrder : index,
-    createdAt: record.createdAt || now(),
-    updatedAt: record.updatedAt || now(),
+    id: category.id,
+    restaurantId: category.restaurantId,
+    name: normalizeName(category.name) || 'Category',
+    description: category.description || '',
+    image: category.image || '',
+    sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : 0,
+    createdAt: db.timestampToISO(category.createdAt) || category.createdAt || null,
+    updatedAt: db.timestampToISO(category.updatedAt) || category.updatedAt || null,
   };
 }
 
-function readRaw() {
-  const parsed = readCollection(STORAGE_KEY, null);
-  return Array.isArray(parsed) ? parsed.map(hydrateCategory) : null;
+export async function getCategoriesForRestaurant(restaurantId) {
+  if (!restaurantId) return [];
+  const docs = await db.getDocs(categoriesPath(restaurantId), {
+    orderBy: [{ field: 'sortOrder', dir: 'asc' }],
+  });
+  return docs.map(hydrate);
 }
 
-function writeAll(categories) {
-  return writeCollection(STORAGE_KEY, categories, COLLECTION);
-}
+// Seeds the canonical category set for a restaurant that has no categories yet
+// (the deployment restaurant and brand-new owner restaurants alike). Matches
+// the old behaviour of materializing `data/categories.js` once per restaurant.
+export async function ensureCategories(restaurantId) {
+  if (!restaurantId) return [];
+  const existing = await getCategoriesForRestaurant(restaurantId);
+  if (existing.length) return existing;
 
-// The canonical categories ship as configuration (data/categories.js) and are
-// materialized once, the same way the menu seeds its products. Categories are
-// configuration — not fabricated statistics — so this never invents data for a
-// restaurant that already has its own categories.
-function ensureSeeded() {
-  const existing = readRaw();
-  if (existing) return existing;
-  const seeded = CATEGORY_ORDER.map((name, index) =>
-    hydrateCategory({ id: `cat-${name.toLowerCase()}`, name, sortOrder: index }, index)
-  );
-  writeAll(seeded);
-  return seeded;
-}
-
-// Seeds the canonical categories for a restaurant that has none yet (e.g. a
-// brand-new owner). Ids are namespaced by restaurant so two restaurants can
-// never collide on the same category id.
-function seedForRestaurant(restaurantId, list) {
-  const seeded = CATEGORY_ORDER.map((name, index) =>
-    hydrateCategory(
-      {
-        id: `${restaurantId}__cat-${name.toLowerCase()}`,
+  await Promise.all(
+    CATEGORY_ORDER.map((name, index) =>
+      db.setDoc(categoryPath(restaurantId, `cat-${name.toLowerCase()}`), {
         restaurantId,
         name,
+        description: '',
+        image: '',
         sortOrder: index,
-      },
-      index
+        createdAt: db.serversNow(),
+        updatedAt: db.serversNow(),
+      })
     )
   );
-  writeAll([...list, ...seeded]);
-  return seeded;
+  return getCategoriesForRestaurant(restaurantId);
 }
 
-export function getCategoriesForRestaurant(restaurantId) {
-  if (!restaurantId) return [];
-  const list = ensureSeeded();
-  let mine = list.filter((category) => category.restaurantId === restaurantId);
-  if (mine.length === 0 && restaurantId !== RESTAURANT_ID) {
-    mine = seedForRestaurant(restaurantId, list);
-  }
-  return mine.sort((a, b) => a.sortOrder - b.sortOrder);
+export async function getCategoryById(id, restaurantId) {
+  if (!id || !restaurantId) return null;
+  return hydrate(await db.getDoc(categoryPath(restaurantId, id)));
 }
 
-export function getCategoryById(id) {
-  if (!id) return null;
-  return ensureSeeded().find((category) => category.id === id) || null;
-}
-
-export function getCategoryByName(restaurantId, name) {
+export async function getCategoryByName(restaurantId, name) {
   const clean = normalizeName(name).toLowerCase();
-  if (!clean) return null;
-  return (
-    getCategoriesForRestaurant(restaurantId).find(
-      (category) => category.name.toLowerCase() === clean
-    ) || null
-  );
+  if (!restaurantId || !clean) return null;
+  const matches = await db.getDocs(categoriesPath(restaurantId), {
+    where: [{ field: 'name', op: '==', value: name }],
+  });
+  const found = matches.find((category) => category.name.toLowerCase() === clean);
+  return found ? hydrate(found) : null;
 }
 
 // Resolves a category for a product being created/edited. Matches by id first,
 // then by name, and finally creates the category when the owner typed a new one
 // inline. This keeps products and categories from ever drifting apart.
-export function resolveCategory({ restaurantId, categoryId, name }) {
-  const byId = categoryId ? getCategoryById(categoryId) : null;
-  if (byId && byId.restaurantId === restaurantId) return byId;
+export async function resolveCategory({ restaurantId, categoryId, name }) {
+  if (!restaurantId) return null;
 
-  const byName = getCategoryByName(restaurantId, name);
+  if (categoryId) {
+    const byId = await getCategoryById(categoryId, restaurantId);
+    if (byId) return byId;
+  }
+
+  const byName = await getCategoryByName(restaurantId, name);
   if (byName) return byName;
 
   if (normalizeName(name)) {
@@ -127,90 +101,79 @@ export function resolveCategory({ restaurantId, categoryId, name }) {
   return null;
 }
 
-export function createCategory({ restaurantId, name, description = '', image = '' } = {}) {
+export async function createCategory({ restaurantId, name, description = '', image = '' } = {}) {
   const clean = normalizeName(name);
   if (!restaurantId) throw new Error('A restaurant is required to create a category.');
   if (!clean) throw new Error('Category name is required.');
 
-  const list = ensureSeeded();
-  const duplicate = list.some(
-    (category) =>
-      category.restaurantId === restaurantId &&
-      category.name.toLowerCase() === clean.toLowerCase()
+  const siblings = await getCategoriesForRestaurant(restaurantId);
+  const duplicate = siblings.some(
+    (category) => category.name.toLowerCase() === clean.toLowerCase()
   );
   if (duplicate) {
     throw new Error(`A category named "${clean}" already exists.`);
   }
 
-  const siblings = list.filter((c) => c.restaurantId === restaurantId);
   const sortOrder = siblings.length
     ? Math.max(...siblings.map((c) => c.sortOrder)) + 1
     : 0;
+  const id = generateId();
 
-  const category = hydrateCategory(
-    {
-      id: generateId(),
-      restaurantId,
-      name: clean,
-      description: String(description || '').trim(),
-      image: String(image || '').trim(),
-      sortOrder,
-      createdAt: now(),
-      updatedAt: now(),
-    },
-    sortOrder
-  );
+  await db.setDoc(categoryPath(restaurantId, id), {
+    restaurantId,
+    name: clean,
+    description: String(description || '').trim(),
+    image: String(image || '').trim(),
+    sortOrder,
+    createdAt: db.serversNow(),
+    updatedAt: db.serversNow(),
+  });
 
-  writeAll([...list, category]);
-  return category;
+  return hydrate({ id, restaurantId, name: clean, description, image, sortOrder });
 }
 
-export function updateCategory(id, patch = {}) {
-  const list = ensureSeeded();
-  const existing = list.find((category) => category.id === id);
+export async function updateCategory(id, patch = {}, restaurantId) {
+  if (!id || !restaurantId) return null;
+  const existing = await getCategoryById(id, restaurantId);
   if (!existing) return null;
 
   if (patch.name != null) {
     const clean = normalizeName(patch.name);
     if (!clean) throw new Error('Category name is required.');
-    const duplicate = list.some(
-      (category) =>
-        category.id !== id &&
-        category.restaurantId === existing.restaurantId &&
-        category.name.toLowerCase() === clean.toLowerCase()
+    const siblings = await getCategoriesForRestaurant(restaurantId);
+    const duplicate = siblings.some(
+      (category) => category.id !== id && category.name.toLowerCase() === clean.toLowerCase()
     );
     if (duplicate) {
       throw new Error(`A category named "${clean}" already exists.`);
     }
   }
 
-  let updated = null;
-  const next = list.map((category) => {
-    if (category.id !== id) return category;
-    updated = {
-      ...category,
-      ...patch,
-      name: patch.name != null ? normalizeName(patch.name) : category.name,
-      updatedAt: now(),
-    };
-    return updated;
-  });
-  writeAll(next);
-  return updated;
+  const { id: _ignoredId, ...safePatch } = patch;
+  const next = {
+    ...existing,
+    ...safePatch,
+    name: patch.name != null ? normalizeName(patch.name) : existing.name,
+    updatedAt: db.serversNow(),
+  };
+  await db.setDoc(categoryPath(restaurantId, id), next);
+  return hydrate({ ...next, id, restaurantId });
 }
 
 // Deletion is blocked while products still reference the category so a menu can
 // never end up with orphaned items. Callers surface the returned error.
-export function deleteCategory(id) {
-  const list = ensureSeeded();
-  const category = list.find((entry) => entry.id === id);
-  if (!category) return { success: false, error: 'Category not found.' };
+export async function deleteCategory(id, restaurantId) {
+  if (!id || !restaurantId) return { success: false, error: 'Category not found.' };
+  const existing = await getCategoryById(id, restaurantId);
+  if (!existing) return { success: false, error: 'Category not found.' };
 
-  const products = readCollection(PRODUCTS_KEY, []);
-  const inUse = (Array.isArray(products) ? products : []).some(
+  const products = await db.getDocs('products', {
+    where: [{ field: 'restaurantId', op: '==', value: restaurantId }],
+  });
+  const inUse = products.some(
     (product) =>
       product.categoryId === id ||
-      (!product.categoryId && product.category === category.name)
+      (!product.categoryId && product.category === existing.name)
   );
   if (inUse) {
     return {
@@ -219,33 +182,38 @@ export function deleteCategory(id) {
     };
   }
 
-  writeAll(list.filter((entry) => entry.id !== id));
+  await db.deleteDoc(categoryPath(restaurantId, id));
   return { success: true };
 }
 
-export function reorderCategories(restaurantId, orderedIds = []) {
-  const list = ensureSeeded();
+export async function reorderCategories(restaurantId, orderedIds = []) {
+  if (!restaurantId) return [];
   const orderIndex = new Map(orderedIds.map((id, index) => [id, index]));
+  const current = await getCategoriesForRestaurant(restaurantId);
+
   let fallback = orderedIds.length;
-  const next = list.map((category) => {
-    if (category.restaurantId !== restaurantId) return category;
-    const position = orderIndex.has(category.id)
-      ? orderIndex.get(category.id)
-      : fallback++;
-    return { ...category, sortOrder: position, updatedAt: now() };
-  });
-  writeAll(next);
+  await Promise.all(
+    current.map((category) => {
+      const position = orderIndex.has(category.id)
+        ? orderIndex.get(category.id)
+        : fallback++;
+      return db.updateDoc(categoryPath(restaurantId, category.id), {
+        sortOrder: position,
+        updatedAt: db.serversNow(),
+      });
+    })
+  );
   return getCategoriesForRestaurant(restaurantId);
 }
 
-export function subscribeCategories(listener) {
-  return subscribe(COLLECTION, listener);
+export function subscribeCategories(listener, { restaurantId } = {}) {
+  if (!restaurantId) return () => {};
+  return db.subscribe(categoriesPath(restaurantId), {}, listener);
 }
-
-export const CATEGORY_STORAGE_KEY = STORAGE_KEY;
 
 const categoryService = {
   getCategoriesForRestaurant,
+  ensureCategories,
   getCategoryById,
   getCategoryByName,
   resolveCategory,

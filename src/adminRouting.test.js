@@ -2,8 +2,12 @@ import React from 'react';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import App from './App';
 
-// --- Firebase is fully mocked: these tests exercise the real routing + auth
-//     context logic without touching a live Firebase project. ----------------
+// --- Firebase is fully mocked: these exercises exercise the real routing +
+//     auth-context logic against the in-memory Firestore mock instead of a
+//     live Firebase project. ------------------------------------------------
+
+jest.mock('./services/db');
+const db = require('./services/db');
 
 let authListener = null;
 
@@ -38,8 +42,22 @@ jest.mock('./firebase', () => ({
   default: {},
 }));
 
-function seedProfile(uid, profile) {
-  localStorage.setItem(`profile-${uid}`, JSON.stringify(profile));
+// Profiles and restaurant records live in the mocked Firestore, exactly like a
+// signed-up account would be found there in production.
+function seedUser(uid, profile) {
+  db.__setDocs({
+    [`users/${uid}`]: {
+      uid,
+      name: profile.name || '',
+      email: profile.email || '',
+      phone: profile.phone || '',
+      ...profile,
+    },
+  });
+}
+
+function seedRestaurant(restaurant) {
+  db.__setDocs({ [`restaurants/${restaurant.id}`]: restaurant });
 }
 
 function goTo(path) {
@@ -50,11 +68,12 @@ function goTo(path) {
 async function resolveAuth(user) {
   await waitFor(() => expect(authListener).toBeTruthy());
   await act(async () => {
-    authListener(user);
+    await authListener(user);
   });
 }
 
 beforeEach(() => {
+  db.__reset();
   localStorage.clear();
   authListener = null;
   goTo('/');
@@ -78,7 +97,7 @@ test('anonymous user visiting /admin is redirected to /login', async () => {
 });
 
 test('owner sees a Dashboard entry in the account menu; customer does not', async () => {
-  seedProfile('owner-1', { role: 'restaurant_owner' });
+  seedUser('owner-1', { role: 'restaurant_owner', email: 'owner@example.com' });
   const owner = render(<App />);
   await resolveAuth({ uid: 'owner-1', email: 'owner@example.com' });
 
@@ -91,9 +110,9 @@ test('owner sees a Dashboard entry in the account menu; customer does not', asyn
   ).toBeInTheDocument();
   owner.unmount();
 
+  db.__reset();
   authListener = null;
-  localStorage.clear();
-  seedProfile('cust-1', { role: 'customer' });
+  seedUser('cust-1', { role: 'customer', email: 'cust@example.com' });
   render(<App />);
   await resolveAuth({ uid: 'cust-1', email: 'cust@example.com' });
   const customerMenuButton = await screen.findByRole('button', { name: /cust/i });
@@ -122,7 +141,7 @@ test('admin login and admin signup pages are reachable while signed out', async 
 });
 
 test('logged-in customer visiting /admin is redirected to /account', async () => {
-  seedProfile('cust-1', { role: 'customer' });
+  seedUser('cust-1', { role: 'customer', email: 'cust@example.com' });
   goTo('/admin');
   render(<App />);
   await resolveAuth({ uid: 'cust-1', email: 'cust@example.com' });
@@ -131,20 +150,17 @@ test('logged-in customer visiting /admin is redirected to /account', async () =>
 });
 
 test('restaurant owner visiting /admin reaches the dashboard', async () => {
-  seedProfile('owner-1', {
+  seedUser('owner-1', {
     role: 'restaurant_owner',
     restaurantId: 'restaurant-pizza-demo',
+    restaurantIds: { 'restaurant-pizza-demo': true },
+    email: 'owner@example.com',
   });
-  localStorage.setItem(
-    'restaurants',
-    JSON.stringify([
-      {
-        id: 'restaurant-pizza-demo',
-        name: 'Demo Pizza',
-        ownerId: 'owner-1',
-      },
-    ])
-  );
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-1',
+  });
   goTo('/admin');
   render(<App />);
   await resolveAuth({ uid: 'owner-1', email: 'owner@example.com' });
@@ -156,9 +172,16 @@ test('restaurant owner visiting /admin reaches the dashboard', async () => {
 });
 
 test('owner refreshing /admin stays on the dashboard (profile rehydrated)', async () => {
-  seedProfile('owner-1', {
+  seedUser('owner-1', {
     role: 'restaurant_owner',
     restaurantId: 'restaurant-pizza-demo',
+    restaurantIds: { 'restaurant-pizza-demo': true },
+    email: 'owner@example.com',
+  });
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-1',
   });
   goTo('/admin');
   const first = render(<App />);

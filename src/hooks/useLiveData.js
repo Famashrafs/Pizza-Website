@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Generic live-data hook. Runs a synchronous loader, exposes a loading/success/
-// error state, and re-runs whenever the subscribed collection changes (a write
-// from anywhere in the app, or another tab). This is how the dashboard becomes
-// reactive without polling.
+// Generic live-data hook. Runs a loader (sync or async), exposes a loading/
+// success/error state, and re-runs whenever the subscribed collection changes
+// (a write from anywhere in the app, or another tab). This is how the
+// dashboard becomes reactive without polling.
 export function useLiveData(load, deps = [], { subscribe } = {}) {
   const [state, setState] = useState({
     status: 'loading',
@@ -17,9 +17,9 @@ export function useLiveData(load, deps = [], { subscribe } = {}) {
   useEffect(() => {
     let cancelled = false;
 
-    const run = () => {
+    const run = async () => {
       try {
-        const data = loadRef.current();
+        const data = await loadRef.current();
         if (!cancelled) setState({ status: 'success', data, error: null });
       } catch (err) {
         if (!cancelled) {

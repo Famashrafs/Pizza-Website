@@ -5,23 +5,16 @@
 // Owner -> Restaurant relationship, and the restaurant's business settings
 // (identity, branding, hours, delivery).
 //
-// Storage note: the project currently persists to localStorage (mirroring the
-// product/order stores). The API is deliberately backend-shaped so it can move
-// to Firestore without changing callers. See `firestore.rules` and the README.
+// Persistence: documents live in the `restaurants` collection of Firestore.
+// Reads/writes go through `src/services/db.js`, which centralizes timestamp
+// handling. The API surface is unchanged from the localStorage era so callers
+// did not have to move — but every function is now async.
 
 import { RESTAURANT_ID, RESTAURANT_SETTINGS } from '../config/restaurant';
-import {
-  readCollection,
-  subscribe,
-  writeCollection,
-} from './collectionStore';
+import db from './db';
 
-const STORAGE_KEY = 'restaurants';
 const COLLECTION = 'restaurants';
-const LATENCY = 300;
-
-const now = () => new Date().toISOString();
-const wait = (ms = LATENCY) => new Promise((resolve) => setTimeout(resolve, ms));
+const path = (id) => `${COLLECTION}/${id}`;
 
 function generateId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -51,124 +44,142 @@ function defaultSettings() {
   };
 }
 
-function readAll() {
-  const parsed = readCollection(STORAGE_KEY, null);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function writeAll(restaurants) {
-  return writeCollection(STORAGE_KEY, restaurants, COLLECTION);
-}
-
-// Materializes the deployment's restaurant record from config when no restaurant
-// exists yet. This mirrors how the menu store seeds products from config data;
-// it is the restaurant's own record (identity/settings), never dashboard stats.
-function ensureDefaultRestaurant() {
-  const list = readAll();
-  if (list.some((record) => record.id === RESTAURANT_ID)) return list;
-
-  const record = {
-    id: RESTAURANT_ID,
-    name: RESTAURANT_SETTINGS.name,
-    ownerId: null,
-    branches: [],
-    ...defaultSettings(),
-    createdAt: now(),
-    updatedAt: now(),
+function normalize(record) {
+  if (!record) return null;
+  return {
+    ...record,
+    id: record.id,
+    createdAt: db.timestampToISO(record.createdAt) || record.createdAt || null,
+    updatedAt: db.timestampToISO(record.updatedAt) || record.updatedAt || null,
+    ownerTakenAt: db.timestampToISO(record.ownerTakenAt) || record.ownerTakenAt || null,
   };
-  const next = [record, ...list];
-  writeAll(next);
-  return next;
 }
 
-export function getRestaurants() {
-  return ensureDefaultRestaurant();
+export async function getRestaurants() {
+  const docs = await db.getDocs(COLLECTION);
+  return docs.map(normalize);
 }
 
-export function getRestaurantById(id) {
+export async function getRestaurantById(id) {
   if (!id) return null;
-  return getRestaurants().find((record) => record.id === id) || null;
+  return normalize(await db.getDoc(path(id)));
 }
 
-export function getOwnerRestaurant(ownerId) {
+export async function getOwnerRestaurant(ownerId) {
   if (!ownerId) return null;
-  return getRestaurants().find((record) => record.ownerId === ownerId) || null;
+  const matches = await db.getDocs(COLLECTION, {
+    where: [{ field: 'ownerId', op: '==', value: ownerId }],
+  });
+  return matches.length ? normalize(matches[0]) : null;
 }
 
 export async function fetchOwnerRestaurant(ownerId) {
-  await wait();
   return getOwnerRestaurant(ownerId);
 }
 
-export function createRestaurant({ ownerId = null, name, ...extra } = {}) {
+export async function createRestaurant({ ownerId = null, name, id, ...extra } = {}) {
   const trimmedName = String(name || '').trim();
-  const list = ensureDefaultRestaurant();
-
-  const restaurant = {
-    id: generateId(),
+  const restaurantId = id || generateId();
+  const data = {
+    id: restaurantId,
     name: trimmedName || 'My Restaurant',
     ownerId,
     branches: [],
     ...defaultSettings(),
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: db.serversNow(),
+    updatedAt: db.serversNow(),
     ...extra,
   };
-
-  writeAll([restaurant, ...list]);
-  return restaurant;
+  await db.setDoc(path(restaurantId), data);
+  return (await getRestaurantById(restaurantId)) || { ...data, id: restaurantId };
 }
 
-export function updateRestaurant(id, patch = {}) {
-  const list = ensureDefaultRestaurant();
-  const existing = list.find((record) => record.id === id);
+export async function updateRestaurant(id, patch = {}) {
+  if (!id) return null;
+  const existing = await getRestaurantById(id);
   if (!existing) return null;
 
   // Never allow the record id to be overwritten through a settings form.
   const { id: _ignoredId, ...safePatch } = patch;
 
-  let updated = null;
-  const next = list.map((record) => {
-    if (record.id !== id) return record;
-    updated = { ...record, ...safePatch, updatedAt: now() };
-    return updated;
-  });
-  if (updated) writeAll(next);
-  return updated;
+  const next = {
+    ...existing,
+    ...safePatch,
+    updatedAt: db.serversNow(),
+  };
+  await db.setDoc(path(id), next);
+  return getRestaurantById(id);
 }
 
-export function setRestaurantOwner(id, ownerId) {
+export async function setRestaurantOwner(id, ownerId) {
   return updateRestaurant(id, {
     ownerId,
-    ownerTakenAt: now(),
+    ownerTakenAt: db.serversNow(),
   });
 }
 
-export function subscribeRestaurant(listener) {
-  return subscribe(COLLECTION, listener);
+// Real-time listener over the owner's own restaurants (single-owner apps see
+// exactly one). Returns an unsubscribe function.
+export function subscribeRestaurant(listener, { ownerId } = {}) {
+  if (!ownerId) return () => {};
+  return db.subscribe(
+    COLLECTION,
+    { where: [{ field: 'ownerId', op: '==', value: ownerId }] },
+    listener
+  );
 }
 
 // --- Onboarding: User -> Restaurant -> Owner ------------------------------
 //
-// A new owner either takes over the deployment's (unclaimed) restaurant, which
-// keeps the existing local store coherent, or — when that restaurant already
-// has an owner — creates a brand-new restaurant that is fully isolated. Either
-// way the returned restaurant becomes the owner's `restaurantId`.
-export function onboardOwnerRestaurant({ ownerId, name }) {
-  if (!ownerId) return null;
+// A new owner either takes over the deployment restaurant (when it exists and
+// is unclaimed) or claims a brand-new restaurant that is fully isolated. Either
+// way the returned restaurant becomes the owner's `restaurantId` and its menu
+// is seeded so the dashboard starts with a working catalog (matching the old
+// localStorage behaviour).
 
-  const claimed = getRestaurantById(RESTAURANT_ID);
-  if (claimed && !claimed.ownerId) {
-    return setRestaurantOwner(claimed.id, ownerId);
+// Seeds the menu for a restaurant that has already been claimed by its owner.
+// This must run AFTER the owner's `users/{uid}` document carries the
+// restaurant identity, because the rules only let a *member* write a
+// restaurant's categories and products. It is idempotent and best-effort.
+export async function seedOwnerSetup(restaurantId) {
+  if (!restaurantId) return;
+  try {
+    const { ensureCategories } = await import('./categoryService');
+    await ensureCategories(restaurantId);
+    if (restaurantId === RESTAURANT_ID) {
+      const { ensureDefaultProducts } = await import('./menuService');
+      await ensureDefaultProducts();
+    }
+  } catch (err) {
+    // A partial failure must never block the owner's onboarding.
   }
-
-  return createRestaurant({
-    ownerId,
-    name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
-  });
 }
 
-export const RESTAURANT_STORAGE_KEY = STORAGE_KEY;
+export async function onboardOwnerRestaurant({ ownerId, name }) {
+  if (!ownerId) return null;
+
+  const claimed = await getRestaurantById(RESTAURANT_ID);
+  let restaurant = null;
+
+  if (claimed && !claimed.ownerId) {
+    restaurant = await setRestaurantOwner(claimed.id, ownerId);
+  } else if (claimed && claimed.ownerId === ownerId) {
+    restaurant = claimed;
+  } else if (claimed && claimed.ownerId) {
+    restaurant = await createRestaurant({
+      ownerId,
+      name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
+    });
+  } else {
+    restaurant = await createRestaurant({
+      ownerId,
+      name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
+      id: RESTAURANT_ID,
+    });
+  }
+
+  return restaurant;
+}
 
 const restaurantService = {
   getRestaurants,
@@ -180,6 +191,7 @@ const restaurantService = {
   setRestaurantOwner,
   subscribeRestaurant,
   onboardOwnerRestaurant,
+  seedOwnerSetup,
 };
 
 export default restaurantService;

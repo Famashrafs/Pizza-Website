@@ -1,27 +1,28 @@
 rules_version = '2';
 
 // ===========================================================================
-// Firestore security rules — REQUIRED PRODUCTION BACKEND CONFIGURATION
+// Firestore security rules — multi-tenant isolation
 // ===========================================================================
 //
-// The client currently persists to the browser (localStorage), so these rules
-// are the template that MUST be deployed before the dashboard is wired to
-// real backend data. They enforce the multi-tenant isolation described in the
-// README:
+// Model (matches the same multi-tenant layout the app's services write):
 //
-//   Restaurant A owner  -->  Restaurant A data
-//   Restaurant B owner  -->  Restaurant B data
-//   (A can never read or modify B's dashboard data)
+//   users/{uid}                         profile + role + restaurant ownership
+//   restaurants/{restaurantId}          business settings (owner/admin manage)
+//   restaurants/{restaurantId}/categories/{categoryId}   menu categories
+//   products/{productId}                menu items (restaurantId-tagged)
+//   orders/{orderId}                    orders (restaurantId/customerId-tagged)
+//   coupons/{couponId}                  (reserved) restaurant-scoped
+//   reviews/{reviewId}                  (reserved) customer-scoped
+//
+// Ownership lives on the user's OWN document (`users/{uid}`): either a scalar
+// `restaurantId` or a `restaurantIds` map. Nothing trusts a client-only role.
 //
 // Deployment: put this file at the root of your Firebase project and run
 //   firebase deploy --only firestore:rules
 //
-// NOTE ON ROLES: never trust a role that exists only on the client. In
-// production, assign `platform_admin` via Firebase Authentication Custom
-// Claims (set server-side through the Admin SDK or a Cloud Function), and
-// store `restaurant_owner` / `restaurant_admin` / `staff` on the user's own
-// `users/{uid}` document as the server-side record of truth. The rules below
-// read that document.
+// Roles: only `customer` and `restaurant_owner` are produced by the client
+// flows today. `platform_admin` is reserved for server-side assignment via
+// Firebase Authentication Custom Claims.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -34,31 +35,32 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userRole() {
-      return isSignedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-        : null;
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function hasRole(role) {
-      return userRole() == role;
+      return isSignedIn() && userDoc().role == role;
     }
 
-    // Owns at least one restaurant (owner, admin or staff of that restaurant).
+    // Belongs to a restaurant as an owner/admin/staff member. Accepts both the
+    // scalar `restaurantId` and the `restaurantIds` map so onboarding and the
+    // legacy template keep working. `get()` requires the user's own doc to
+    // exist — signup/onboarding writes it before any member-scoped write.
     function isMemberOf(restaurantId) {
       return isSignedIn()
         && restaurantId != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.restaurantIds.keys().hasAny([restaurantId]);
+        && (userDoc().restaurantId == restaurantId
+            || userDoc().restaurantIds.keys().hasAny([restaurantId]));
     }
 
     function canManageRestaurant(restaurantId) {
-      return (isMemberOf(restaurantId) && hasRole('restaurant_owner'))
-        || (isMemberOf(restaurantId) && hasRole('restaurant_admin'));
+      return isMemberOf(restaurantId)
+        && (hasRole('restaurant_owner') || hasRole('restaurant_admin'));
     }
 
     function isSelf() {
-      return request.auth != null && request.auth.uid == resource.data.uid;
+      return isSignedIn() && request.auth.uid == resource.data.uid;
     }
 
     // -----------------------------------------------------------------------
@@ -66,18 +68,34 @@ service cloud.firestore {
     // -----------------------------------------------------------------------
 
     // A user may only read/update their own document. Writes that change a
-    // role are forbidden entirely from the client — they must happen through
-    // a trusted backend path (Cloud Function / Admin SDK).
+    // role are forbidden from the client — roles come from a trusted backend.
+    // Restaurant identity is special: it can only ever be set to a restaurant
+    // the caller actually owns (see `isOwnershipGrant` below), so one owner
+    // can never grant themselves another restaurant's data.
     match /users/{userId} {
       allow read: if isSignedIn() && isSelf();
-      allow create: if isSignedIn() && isSelf() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role in ['customer', 'restaurant_owner'];
       allow update: if isSignedIn()
         && isSelf()
-        && !hasChangedRole(request.resource.data, resource.data);
+        && request.resource.data.role == resource.data.role
+        && (isRegularProfileUpdate() || isOwnershipGrant());
       allow delete: if isSignedIn() && isSelf();
 
-      function hasChangedRole(next, prev) {
-        return next.role != prev.role;
+      function isRegularProfileUpdate() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'restaurantId', 'restaurantIds']);
+      }
+
+      // Ownership grant/refresh: only touches restaurant identity keys, and the
+      // target restaurant must list the caller as its owner.
+      function isOwnershipGrant() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['restaurantId', 'restaurantIds', 'updatedAt'])
+          && request.resource.data.restaurantId != null
+          && get(/databases/$(database)/documents/restaurants/$(request.resource.data.restaurantId))
+              .data.ownerId == request.auth.uid;
       }
     }
 
@@ -88,31 +106,81 @@ service cloud.firestore {
     match /restaurants/{restaurantId} {
       // Profile is public (name, logo, hours) so customers can view it.
       allow read: if isSignedIn();
-      // Only the owner / admins of the restaurant can create or update it.
-      allow create: if hasRole('restaurant_owner');
-      allow update: if canManageRestaurant(restaurantId);
+
+      // An owner may register themselves as the owner of a new restaurant.
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // First-time claim of an unowned restaurant, or owner/admin management.
+      allow update: if isSignedIn()
+        && (isClaim() || canManageRestaurant(restaurantId));
       allow delete: if hasRole('platform_admin');
+
+      function isClaim() {
+        return resource.data.ownerId == null
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['ownerId', 'ownerTakenAt', 'updatedAt']);
+      }
     }
 
     // -----------------------------------------------------------------------
-    // Orders (restaurant-scoped)
+    // Categories (restaurant-scoped subcollection)
+    // -----------------------------------------------------------------------
+
+    match /restaurants/{restaurantId}/categories/{categoryId} {
+      allow read: if isSignedIn() && isMemberOf(restaurantId);
+      allow create, update, delete: if isSignedIn()
+        && isMemberOf(request.resource.data.restaurantId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Orders (restaurant-scoped with customer-ownership reads)
     // -----------------------------------------------------------------------
 
     match /orders/{orderId} {
       // A customer can read their own orders; restaurant members can read the
       // restaurant's orders. The resource MUST be tagged with restaurantId.
       allow read: if isSignedIn()
-        && ( (resource.data.customerId == request.auth.uid)
-             || isMemberOf(resource.data.restaurantId) );
+        && (resource.data.customerId == request.auth.uid
+            || isMemberOf(resource.data.restaurantId));
 
+      // An order is created as itself — customers only, tagged with their uid,
+      // and always starting in the initial `placed` status.
       allow create: if isSignedIn()
         && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.restaurantId != null;
+        && request.resource.data.restaurantId != null
+        && request.resource.data.orderStatus == 'placed';
 
-      // Only restaurant members may advance an order's status.
+      // Updates are limited to the two legitimate flows:
+      //   - the order's customer may cancel their own cancellable order
+      //     (placed/confirmed) with the exact cancellation patch;
+      //   - restaurant staff may ONLY touch status-related fields. The
+      //     immutable creation data (customer, restaurant, items, prices,
+      //     totals, payment) can never change from any client.
       allow update: if isSignedIn()
-        && isMemberOf(resource.data.restaurantId);
+        && (isCustomerCancellation() || isStaffOrderUpdate());
       allow delete: if hasRole('platform_admin');
+
+      function isCustomerCancellation() {
+        return resource.data.customerId == request.auth.uid
+          && request.resource.data.orderStatus == 'cancelled'
+          && resource.data.orderStatus in ['placed', 'confirmed']
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['orderStatus', 'cancelledAt', 'cancelledBy', 'statusHistory', 'updatedAt']);
+      }
+
+      // Staff of the order's restaurant may only advance status-related fields.
+      // The restaurant and customer identity must remain exactly as created, so
+      // a multi-restaurant member can never reassign an order to themselves.
+      function isStaffOrderUpdate() {
+        return isMemberOf(resource.data.restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['orderStatus', 'statusUpdatedAt', 'statusHistory',
+                      'cancelledAt', 'cancelledBy', 'updatedAt']);
+      }
     }
 
     // -----------------------------------------------------------------------
@@ -121,9 +189,8 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if true; // the menu is public by design
-      allow create, update: if isSignedIn()
+      allow create, update, delete: if isSignedIn()
         && isMemberOf(request.resource.data.restaurantId);
-      allow delete: if hasRole('platform_admin');
     }
 
     // -----------------------------------------------------------------------

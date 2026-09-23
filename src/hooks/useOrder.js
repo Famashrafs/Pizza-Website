@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getOrderForUser } from '../services/orderService';
+import {
+  getOrderForUser,
+  subscribeCustomerOrders,
+} from '../services/orderService';
 
+// Live order tracking for one customer. The initial load shows the loading
+// state; a scoped subscription (customerId) re-reads the order whenever the
+// customer's orders change so status updates from the restaurant appear live.
 export function useOrder(id, uid) {
   const [state, setState] = useState({
     status: 'loading',
@@ -11,12 +17,11 @@ export function useOrder(id, uid) {
 
   useEffect(() => {
     let cancelled = false;
-    setState((prev) => ({ ...prev, status: 'loading' }));
 
-    const timer = setTimeout(() => {
+    const load = async () => {
       try {
+        const order = await getOrderForUser(id, uid);
         if (cancelled) return;
-        const order = getOrderForUser(id, uid);
         setState({
           status: order ? 'success' : 'notfound',
           order,
@@ -30,11 +35,18 @@ export function useOrder(id, uid) {
           error: 'We could not load this order. Please try again.',
         });
       }
-    }, 350);
+    };
+
+    setState((prev) => ({ ...prev, status: 'loading' }));
+    load();
+
+    const unsubscribe = uid
+      ? subscribeCustomerOrders(load, { customerId: uid })
+      : null;
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [id, uid, reloadKey]);
 

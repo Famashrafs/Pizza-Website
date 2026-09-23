@@ -55,36 +55,45 @@ export const PROFILE_COMPLETION_CRITERIA = [
 ];
 
 // Assembles the normalized customer account model used by the dashboard.
-export function normalizeAccount(uid, authUser = null) {
-  const profile = getUserData(uid);
+// Identity fields come from the Firestore `users/{uid}` document (`serverProfile`)
+// and the auth record; only device-local data (addresses, payment metadata,
+// favorites, preferences) is read from localStorage.
+export function normalizeAccount(uid, authUser = null, serverProfile = null) {
+  const prefs = getUserData(uid);
   const addresses = getSavedAddresses(uid);
-  const paymentMethods = Array.isArray(profile.paymentMethods)
-    ? profile.paymentMethods
+  const paymentMethods = Array.isArray(prefs.paymentMethods)
+    ? prefs.paymentMethods
     : [];
   return {
     userId: uid,
-    name: authUser?.displayName || profile.displayName || '',
-    email: authUser?.email || profile.email || '',
+    name:
+      authUser?.displayName ||
+      serverProfile?.name ||
+      serverProfile?.displayName ||
+      '',
+    email: authUser?.email || serverProfile?.email || '',
     emailVerified: Boolean(authUser?.emailVerified),
-    photoURL: authUser?.photoURL || profile.photoURL || '',
-    phone: profile.phone || '',
-    phoneVerified: Boolean(profile.phoneVerified),
+    photoURL: authUser?.photoURL || serverProfile?.photoURL || '',
+    phone: serverProfile?.phone || prefs.phone || '',
+    phoneVerified: Boolean(serverProfile?.phoneVerified),
+    role: serverProfile?.role || null,
+    restaurantId: serverProfile?.restaurantId || null,
     addresses,
-    defaultAddressId: profile.defaultAddressId || null,
+    defaultAddressId: prefs.defaultAddressId || null,
     paymentMethods,
     defaultPaymentMethodId:
-      paymentMethods.some((m) => m.id === profile.defaultPaymentMethodId)
-        ? profile.defaultPaymentMethodId
+      paymentMethods.some((m) => m.id === prefs.defaultPaymentMethodId)
+        ? prefs.defaultPaymentMethodId
         : paymentMethods.find((m) => m.isDefault)?.id ||
           paymentMethods[0]?.id ||
           null,
     favorites: getFavorites(uid),
     preferences:
-      profile.preferences && typeof profile.preferences === 'object'
-        ? profile.preferences
+      prefs.preferences && typeof prefs.preferences === 'object'
+        ? prefs.preferences
         : {},
-    createdAt: profile.createdAt || null,
-    updatedAt: profile.updatedAt || null,
+    createdAt: serverProfile?.createdAt || prefs.createdAt || null,
+    updatedAt: serverProfile?.updatedAt || prefs.updatedAt || null,
   };
 }
 

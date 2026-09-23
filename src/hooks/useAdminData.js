@@ -22,10 +22,12 @@ export function useAdminData(restaurantId) {
   useEffect(() => {
     let cancelled = false;
 
-    const load = () => {
+    const load = async () => {
       try {
-        const orders = getRestaurantOrders(restaurantId);
-        const products = getProductsForRestaurant(restaurantId);
+        const [orders, products] = await Promise.all([
+          getRestaurantOrders(restaurantId),
+          getProductsForRestaurant(restaurantId),
+        ]);
         if (cancelled) return;
 
         setState({
@@ -48,8 +50,8 @@ export function useAdminData(restaurantId) {
     setState((prev) => ({ ...prev, status: 'loading' }));
     load();
 
-    const unsubscribeOrders = subscribeOrders(load);
-    const unsubscribeProducts = subscribeProducts(load);
+    const unsubscribeOrders = subscribeOrders(load, { restaurantId });
+    const unsubscribeProducts = subscribeProducts(load, { restaurantId });
 
     return () => {
       cancelled = true;

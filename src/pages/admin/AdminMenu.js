@@ -82,7 +82,7 @@ function AdminMenu() {
   const toggleAvailability = async (product) => {
     setBusyId(product.id);
     try {
-      setProductAvailability(product.id, !product.available);
+      await setProductAvailability(product.id, !product.available);
       showToast(
         product.available
           ? `${product.name} marked unavailable.`
@@ -101,7 +101,7 @@ function AdminMenu() {
     if (!product) return;
     setBusyId(product.id);
     try {
-      const result = deleteProduct(product.id);
+      const result = await deleteProduct(product.id);
       if (result.success) {
         showToast(
           result.mode === 'archived'

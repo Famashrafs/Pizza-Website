@@ -65,8 +65,8 @@ function accumulate(customer, order) {
   return customer;
 }
 
-export function getRestaurantCustomers(restaurantId) {
-  const orders = getRestaurantOrders(restaurantId);
+export async function getRestaurantCustomers(restaurantId) {
+  const orders = await getRestaurantOrders(restaurantId);
   const byKey = new Map();
 
   orders.forEach((order) => {
@@ -87,14 +87,16 @@ export function getRestaurantCustomers(restaurantId) {
     });
 }
 
-export function getRestaurantCustomerById(restaurantId, key) {
+export async function getRestaurantCustomerById(restaurantId, key) {
   if (!key) return null;
-  return getRestaurantCustomers(restaurantId).find((customer) => customer.id === key) || null;
+  const customers = await getRestaurantCustomers(restaurantId);
+  return customers.find((customer) => customer.id === key) || null;
 }
 
-export function getCustomerOrders(restaurantId, key) {
+export async function getCustomerOrders(restaurantId, key) {
   if (!key) return [];
-  return getRestaurantOrders(restaurantId)
+  const orders = await getRestaurantOrders(restaurantId);
+  return orders
     .filter((order) => getCustomerKey(order) === key)
     .sort((a, b) => {
       const da = a.createdAt || '';
@@ -103,9 +105,9 @@ export function getCustomerOrders(restaurantId, key) {
     });
 }
 
-export function subscribeCustomers(listener) {
+export function subscribeCustomers(listener, { restaurantId = null } = {}) {
   // Customers derive from orders, so an order change is a customer change.
-  return subscribeOrders(listener);
+  return subscribeOrders(listener, { restaurantId });
 }
 
 const customerService = {

@@ -19,7 +19,7 @@ import {
 } from '../../services/accountService';
 
 function ProfilePage() {
-  const { currentUser, updateProfileData, resendVerificationEmail, changeEmail } =
+  const { currentUser, userProfile, updateProfileData, resendVerificationEmail, changeEmail } =
     useAuth();
   const { showToast } = useToast();
   const { account } = useOutletContext();
@@ -105,7 +105,7 @@ function ProfilePage() {
     showToast('Default address updated.');
   };
 
-  const normalized = normalizeAccount(uid, currentUser);
+  const normalized = normalizeAccount(uid, currentUser, userProfile);
 
   return (
     <div className="dash-section">

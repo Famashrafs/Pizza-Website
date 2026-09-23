@@ -7,7 +7,7 @@ export function useRestaurantOrders(restaurantId) {
   const { status, data, error, reload } = useLiveData(
     () => (restaurantId ? getRestaurantOrders(restaurantId) : []),
     [restaurantId],
-    { subscribe: subscribeOrders }
+    { subscribe: (listener) => subscribeOrders(listener, { restaurantId }) }
   );
   return { status, orders: data || [], error, reload };
 }

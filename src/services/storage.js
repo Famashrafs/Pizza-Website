@@ -1,4 +1,17 @@
-import { notify } from './collectionStore';
+// Client-side storage for data that is explicitly local to a device or user
+// session and NOT part of the multi-tenant business layer.
+//
+// Firestore now owns the authoritative copies of profiles (users), restaurants,
+// products, categories and orders. This module keeps only:
+//   - the cart (a client-side draft until checkout),
+//   - saved addresses (kept local this phase),
+//   - favorites,
+//   - per-user client preferences and payment-method *metadata* (safe labels,
+//     never raw card data) under the `profile-${uid}` key.
+//
+// Account fields that feed the Firestore profile (name, email, phone, role,
+// restaurant ownership) must NOT live here — they are written through
+// `accountService`/`AuthContext` into `users/{uid}`.
 
 function readJSON(key, fallback) {
   try {
@@ -17,6 +30,7 @@ function writeJSON(key, value) {
   }
 }
 
+// Client preferences & payment-method metadata (never business-critical fields).
 export function getUserData(uid) {
   return readJSON(`profile-${uid}`, {});
 }
@@ -78,45 +92,9 @@ export function saveCart(uid = 'guest', cart) {
   });
 }
 
-export function getOrders() {
-  return readJSON('orders', []);
-}
-
-export function addOrder(order) {
-  const orders = getOrders();
-  writeJSON('orders', [order, ...orders]);
-  // Let the restaurant dashboard react to the new order without polling.
-  notify('orders');
-  return order;
-}
-
-export function getOrderById(id) {
-  return getOrders().find((order) => order.id === id) || null;
-}
-
-export function updateOrder(id, patch) {
-  const orders = getOrders();
-  let updated = null;
-  const next = orders.map((order) => {
-    if (order.id !== id) return order;
-    updated = { ...order, ...patch, updatedAt: new Date().toISOString() };
-    return updated;
-  });
-  if (updated) {
-    writeJSON('orders', next);
-    notify('orders');
-  }
-  return updated;
-}
-
-export function getOrdersForUser(uid) {
-  if (!uid) return [];
-  // Strict ownership: an order without a matching customerId is never shown.
-  return getOrders().filter((order) => order.customerId === uid);
-}
-
-// Removes every per-user key (profile, addresses, favorites, cart). Orders are
-// the restaurant's records and are intentionally left in the shared store.
+// Removes every per-user key this module owns (profile prefs, addresses,
+// favorites, cart). Orders and other Firestore documents belong to the server
+// and are intentionally left in place.
 export function removeUserData(uid) {
   if (!uid) return;
   [

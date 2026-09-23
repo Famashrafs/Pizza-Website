@@ -45,13 +45,13 @@ function CategoryManager() {
   const productCount = (categoryId) =>
     products.filter((product) => product.categoryId === categoryId).length;
 
-  const handleCreate = (event) => {
+  const handleCreate = async (event) => {
     event.preventDefault();
     const name = newName.trim();
     if (!name || !restaurantId) return;
     setBusy(true);
     try {
-      createCategory({ restaurantId, name });
+      await createCategory({ restaurantId, name });
       setNewName('');
       showToast(`Category "${name}" added.`);
     } catch (err) {
@@ -71,7 +71,7 @@ function CategoryManager() {
     setEditName('');
   };
 
-  const saveEdit = (category) => {
+  const saveEdit = async (category) => {
     const name = editName.trim();
     if (!name) {
       showToast('Category name is required.', 'error');
@@ -82,7 +82,7 @@ function CategoryManager() {
       return;
     }
     try {
-      updateCategory(category.id, { name });
+      await updateCategory(category.id, { name }, restaurantId);
       showToast('Category renamed.');
       cancelEdit();
     } catch (err) {
@@ -90,25 +90,33 @@ function CategoryManager() {
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     const category = pendingDelete;
     setPendingDelete(null);
     if (!category) return;
-    const result = deleteCategory(category.id);
-    if (result.success) {
-      showToast(`Category "${category.name}" deleted.`);
-    } else {
-      showToast(result.error || 'Could not delete the category.', 'error');
+    try {
+      const result = await deleteCategory(category.id, restaurantId);
+      if (result.success) {
+        showToast(`Category "${category.name}" deleted.`);
+      } else {
+        showToast(result.error || 'Could not delete the category.', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Could not delete the category.', 'error');
     }
   };
 
-  const move = (category, direction) => {
+  const move = async (category, direction) => {
     const ids = categories.map((entry) => entry.id);
     const index = ids.indexOf(category.id);
     const target = index + direction;
     if (target < 0 || target >= ids.length) return;
     [ids[index], ids[target]] = [ids[target], ids[index]];
-    reorderCategories(restaurantId, ids);
+    try {
+      await reorderCategories(restaurantId, ids);
+    } catch (err) {
+      showToast(err.message || 'Could not reorder the categories.', 'error');
+    }
   };
 
   return (

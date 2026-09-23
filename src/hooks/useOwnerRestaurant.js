@@ -41,7 +41,7 @@ export function useOwnerRestaurant(ownerId) {
     };
 
     load();
-    const unsubscribe = subscribeRestaurant(load);
+    const unsubscribe = subscribeRestaurant(load, { ownerId });
 
     return () => {
       cancelled = true;

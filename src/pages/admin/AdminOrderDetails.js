@@ -18,7 +18,7 @@ import {
   ORDER_STATUS,
   ORDER_STATUS_META,
   getNextOrderStatus,
-  getOrderStatusFlow,
+  getAllowedOrderTransitions,
 } from '../../config/orderStatus';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 import { useToast } from '../../context/ToastContext';
@@ -116,7 +116,10 @@ function AdminOrderDetails() {
   }
 
   const nextStatus = getNextOrderStatus(order.fulfillmentType, order.orderStatus);
-  const flow = getOrderStatusFlow(order.fulfillmentType);
+  const allowedTransitions = getAllowedOrderTransitions(
+    order.fulfillmentType,
+    order.orderStatus
+  );
   const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   const isTerminal =
     order.orderStatus === ORDER_STATUS.DELIVERED || order.orderStatus === ORDER_STATUS.CANCELLED;
@@ -168,16 +171,16 @@ function AdminOrderDetails() {
             <select
               value={order.orderStatus}
               onChange={(event) => changeStatus(event.target.value)}
-              disabled={busy || order.orderStatus === ORDER_STATUS.CANCELLED}
+              disabled={busy || allowedTransitions.length === 0}
             >
-              {flow.map((entry) => (
+              {allowedTransitions.map((entry) => (
                 <option key={entry} value={entry}>
                   {ORDER_STATUS_META[entry].label}
                 </option>
               ))}
-              {order.orderStatus === ORDER_STATUS.CANCELLED && (
-                <option value={ORDER_STATUS.CANCELLED}>
-                  {ORDER_STATUS_META[ORDER_STATUS.CANCELLED].label}
+              {allowedTransitions.length === 0 && (
+                <option value={order.orderStatus}>
+                  {ORDER_STATUS_META[order.orderStatus]?.label || order.orderStatus}
                 </option>
               )}
             </select>

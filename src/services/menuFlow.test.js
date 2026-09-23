@@ -15,16 +15,24 @@ import { RESTAURANT_ID } from '../config/restaurant';
 
 // These tests exercise the real menu-management flow the dashboard drives:
 // create category -> create product -> edit -> toggle availability -> delete.
-// They run against the same service layer the UI uses (services, not renders).
+// They run against the service layer with the in-memory Firestore mock
+// (`src/services/__mocks__/db.js`), so they cover the same async code paths
+// the UI uses.
+
+jest.mock('./db');
+const db = require('./db');
 
 beforeEach(() => {
-  localStorage.clear();
+  db.__reset();
 });
 
 describe('menu management flow', () => {
-  it('creates a product and links it to an existing category', () => {
-    const category = createCategory({ restaurantId: RESTAURANT_ID, name: 'Salads' });
-    const product = createProduct(
+  it('creates a product and links it to an existing category', async () => {
+    const category = await createCategory({
+      restaurantId: RESTAURANT_ID,
+      name: 'Salads',
+    });
+    const product = await createProduct(
       { name: 'Caesar Salad', basePrice: 8.5, categoryId: category.id },
       RESTAURANT_ID
     );
@@ -33,77 +41,82 @@ describe('menu management flow', () => {
     expect(product.category).toBe('Salads');
     expect(product.available).toBe(true);
     expect(product.restaurantId).toBe(RESTAURANT_ID);
-    expect(getProductsForRestaurant(RESTAURANT_ID).some((p) => p.id === product.id)).toBe(true);
+    const menu = await getProductsForRestaurant(RESTAURANT_ID);
+    expect(menu.some((p) => p.id === product.id)).toBe(true);
   });
 
-  it('creates a category on the fly when a new name is typed', () => {
-    const product = createProduct(
+  it('creates a category on the fly when a new name is typed', async () => {
+    const product = await createProduct(
       { name: 'Taco', basePrice: 5, category: 'Mexican' },
       RESTAURANT_ID
     );
 
     expect(product.category).toBe('Mexican');
     expect(product.categoryId).toBeTruthy();
-    expect(
-      getCategoriesForRestaurant(RESTAURANT_ID).some((c) => c.name === 'Mexican')
-    ).toBe(true);
+    const categories = await getCategoriesForRestaurant(RESTAURANT_ID);
+    expect(categories.some((c) => c.name === 'Mexican')).toBe(true);
   });
 
-  it('edits a product and toggles its availability', () => {
-    const created = createProduct(
+  it('edits a product and toggles its availability', async () => {
+    const created = await createProduct(
       { name: 'Soup', basePrice: 4, category: 'Starters' },
       RESTAURANT_ID
     );
 
-    const updated = updateProduct(created.id, { basePrice: 4.75 });
+    const updated = await updateProduct(created.id, { basePrice: 4.75 });
     expect(updated.basePrice).toBe(4.75);
 
-    const off = setAvailability(created.id, false);
+    const off = await setAvailability(created.id, false);
     expect(off.available).toBe(false);
-    expect(getProductById(created.id).available).toBe(false);
+    expect((await getProductById(created.id)).available).toBe(false);
   });
 
-  it('hard-deletes a product that has never been ordered', () => {
-    const created = createProduct(
+  it('hard-deletes a product that has never been ordered', async () => {
+    const created = await createProduct(
       { name: 'Ghost Item', basePrice: 1, category: 'Starters' },
       RESTAURANT_ID
     );
 
-    const result = deleteProduct(created.id);
+    const result = await deleteProduct(created.id);
     expect(result.success).toBe(true);
     expect(result.mode).toBe('deleted');
-    expect(getProductById(created.id)).toBeNull();
+    expect(await getProductById(created.id)).toBeNull();
   });
 
-  it('archives a product that appears in order history', () => {
-    const created = createProduct(
+  it('archives a product that appears in order history', async () => {
+    const created = await createProduct(
       { name: 'Ordered Item', basePrice: 3, category: 'Starters' },
       RESTAURANT_ID
     );
-    localStorage.setItem(
-      'orders',
-      JSON.stringify([
-        {
-          id: 'ORD-1',
-          restaurantId: RESTAURANT_ID,
-          items: [{ productId: created.id, qty: 1 }],
-        },
-      ])
-    );
+    db.__setDocs({
+      'orders/ORD-1': {
+        id: 'ORD-1',
+        restaurantId: RESTAURANT_ID,
+        customerId: 'cust-1',
+        items: [{ productId: created.id, qty: 1 }],
+      },
+    });
 
-    const result = deleteProduct(created.id);
+    const result = await deleteProduct(created.id);
     expect(result.success).toBe(true);
     expect(result.mode).toBe('archived');
-    expect(getProductById(created.id).archived).toBe(true);
+    expect((await getProductById(created.id)).archived).toBe(true);
     // Archived products disappear from the menu the customer/dashboard sees.
-    expect(getProductsForRestaurant(RESTAURANT_ID).some((p) => p.id === created.id)).toBe(false);
+    const menu = await getProductsForRestaurant(RESTAURANT_ID);
+    expect(menu.some((p) => p.id === created.id)).toBe(false);
   });
 
-  it('refuses to delete a category while products still use it', () => {
-    const category = createCategory({ restaurantId: RESTAURANT_ID, name: 'Bowls' });
-    createProduct({ name: 'Bowl', basePrice: 9, categoryId: category.id }, RESTAURANT_ID);
+  it('refuses to delete a category while products still use it', async () => {
+    const category = await createCategory({
+      restaurantId: RESTAURANT_ID,
+      name: 'Bowls',
+    });
+    await createProduct(
+      { name: 'Bowl', basePrice: 9, categoryId: category.id },
+      RESTAURANT_ID
+    );
 
-    const result = deleteCategory(category.id);
+    const result = await deleteCategory(category.id, RESTAURANT_ID);
     expect(result.success).toBe(false);
     expect(typeof result.error).toBe('string');
   });

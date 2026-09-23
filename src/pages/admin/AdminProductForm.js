@@ -44,11 +44,11 @@ function AdminProductForm() {
 
     try {
       if (isEdit) {
-        const updated = updateProduct(id, values);
+        const updated = await updateProduct(id, values);
         if (!updated) return { success: false, error: 'Product not found.' };
         showToast(`${updated.name} updated.`);
       } else {
-        const created = createProduct(values, restaurantId);
+        const created = await createProduct(values, restaurantId);
         showToast(`${created.name} added to your menu.`);
       }
       navigate('/admin/menu');

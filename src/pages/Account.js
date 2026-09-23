@@ -8,7 +8,7 @@ import AccountHeader from '../components/account/AccountHeader';
 function Account() {
   const { currentUser, userProfile } = useAuth();
   const account = useMemo(
-    () => normalizeAccount(currentUser?.uid, currentUser),
+    () => normalizeAccount(currentUser?.uid, currentUser, userProfile),
     // userProfile changes when profile data is saved; recompute the model then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentUser, userProfile]

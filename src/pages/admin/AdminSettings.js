@@ -96,14 +96,14 @@ function AdminSettings() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (saving || !restaurant) return;
     if (!validate()) return;
 
     setSaving(true);
     try {
-      const updated = updateRestaurant(restaurant.id, {
+      const updated = await updateRestaurant(restaurant.id, {
         name: form.name.trim(),
         tagline: form.tagline.trim(),
         description: form.description.trim(),

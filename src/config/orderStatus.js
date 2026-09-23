@@ -130,6 +130,31 @@ export function getNextOrderStatus(fulfillmentType, currentStatus) {
   return flow[index + 1];
 }
 
+// Every target status a staff member may move an order to from its current
+// state. Centralized transition rules: progress is strictly forward along the
+// fulfillment flow, and an active (non-terminal) order may always be cancelled.
+// A delivered or cancelled order has no further valid targets.
+export function getAllowedOrderTransitions(fulfillmentType, currentStatus) {
+  const status = normalizeOrderStatus(currentStatus);
+  if (status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED) {
+    return [];
+  }
+  const flow = getOrderStatusFlow(fulfillmentType);
+  const index = flow.indexOf(status);
+  const result = [];
+  if (index >= 0 && index < flow.length - 1) {
+    result.push(flow[index + 1]);
+  }
+  result.push(ORDER_STATUS.CANCELLED);
+  return result;
+}
+
+export function canTransitionToOrderStatus(fulfillmentType, currentStatus, targetStatus) {
+  return getAllowedOrderTransitions(fulfillmentType, currentStatus).includes(
+    normalizeOrderStatus(targetStatus)
+  );
+}
+
 export function isOrderCancellable(order) {
   return CANCELLABLE_ORDER_STATUSES.includes(
     normalizeOrderStatus(order?.orderStatus)

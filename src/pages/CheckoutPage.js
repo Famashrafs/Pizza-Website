@@ -48,6 +48,23 @@ function CheckoutPage() {
   const [productsLoading, setProductsLoading] = useState(true);
 
   const submitLock = useRef(false);
+  const checkoutKeyRef = useRef(null);
+
+  // Per-user, per-checkout idempotency key. Kept in localStorage so a refresh
+  // mid-submit reuses the same key: repeated/duplicate submissions (double
+  // click, refresh, retry after an error) resolve to the original order on the
+  // service side instead of creating multiple orders.
+  const getCheckoutKey = () => {
+    const stKey = `checkout.id.${currentUser?.uid}`;
+    if (checkoutKeyRef.current) return checkoutKeyRef.current;
+    let key = currentUser?.uid ? localStorage.getItem(stKey) : null;
+    if (!key) {
+      key = `co-${currentUser?.uid || 'anon'}-${Date.now().toString(36)}`;
+      if (currentUser?.uid) localStorage.setItem(stKey, key);
+    }
+    checkoutKeyRef.current = key;
+    return key;
+  };
 
   // Prefill customer + address for the signed-in user (and after a late login).
   useEffect(() => {
@@ -210,6 +227,7 @@ function CheckoutPage() {
         paymentMethod,
         customerNotes: notes,
         promoCode,
+        idempotencyKey: getCheckoutKey(),
       });
 
       if (!result.success) {
@@ -224,6 +242,13 @@ function CheckoutPage() {
         fetchProducts().then(setProducts).catch(() => {});
         return;
       }
+
+      // The idempotency key has done its job — clear it so the NEXT checkout
+      // session gets a fresh key and can never hit this order again.
+      if (currentUser?.uid) {
+        localStorage.removeItem(`checkout.id.${currentUser.uid}`);
+      }
+      checkoutKeyRef.current = null;
 
       if (saveAddress && fulfillmentType === 'delivery') {
         persistAddress();

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getUserOrders } from '../services/orderService';
+import {
+  getUserOrders,
+  subscribeCustomerOrders,
+} from '../services/orderService';
 
-function loadOrders(uid) {
-  return getUserOrders(uid);
-}
-
+// Live order history for one customer. A scoped subscription (customerId)
+// refreshes the list whenever the customer's orders change, e.g. when a
+// restaurant advances the status. The initial load shows the loading state;
+// real-time refreshes apply in place without flicker.
 export function useOrders(uid) {
   const [state, setState] = useState({
     status: 'loading',
@@ -15,13 +18,11 @@ export function useOrders(uid) {
 
   useEffect(() => {
     let cancelled = false;
-    setState((prev) => ({ ...prev, status: 'loading' }));
 
-    // Small latency so the loading skeleton is visible; storage itself is sync.
-    const timer = setTimeout(() => {
+    const load = async () => {
       try {
+        const orders = await getUserOrders(uid);
         if (cancelled) return;
-        const orders = loadOrders(uid);
         setState({
           status: 'success',
           orders,
@@ -35,11 +36,18 @@ export function useOrders(uid) {
           error: 'We could not load your orders. Please try again.',
         });
       }
-    }, 450);
+    };
+
+    setState((prev) => ({ ...prev, status: 'loading' }));
+    load();
+
+    const unsubscribe = uid
+      ? subscribeCustomerOrders(load, { customerId: uid })
+      : null;
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [uid, reloadKey]);
 

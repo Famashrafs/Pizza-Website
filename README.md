@@ -91,7 +91,7 @@ Make sure you have installed:
 Clone the repository:
 
 ```bash
-git clone https://github.com/Famashrafs/restaurant-system.git
+git clone https://github.com/Famashrafs/Pizza-Website.git
 ```
 
 Navigate into the project:
@@ -196,60 +196,87 @@ restaurants can never leak data to each other.
   stored data (zeros and empty states when the store is empty — nothing is faked).
 * Responsive: sidebar becomes an off-canvas drawer on tablets; order rows become
   cards on mobile.
-* Placeholder pages for `/admin/orders`, `/admin/menu`, `/admin/customers`,
-  `/admin/coupons`, `/admin/reviews`, `/admin/analytics`, `/admin/settings`.
+* Built pages: `/admin/orders` (status-advance workflow), `/admin/menu`
+  (products + categories), `/admin/customers`, `/admin/settings`
+  (`/admin/coupons`, `/admin/reviews`, `/admin/analytics` stay reserved).
 
-### Testing the owner dashboard
+### Getting an owner account (Firestore)
 
-User profiles (including `role` and `restaurantId`) are stored **in the browser**
-(`localStorage`, key `profile-<uid>`) in this phase — the app does not read
-Firestore yet. There are two ways to get an owner account:
+User profiles (including `role` and restaurant identity) live in Firestore
+(`users/{uid}`), and owner status is only ever restored from a `restaurants`
+document that lists `ownerId == uid`. There are two ways to get a working owner
+account:
 
-1. **Register one (recommended):** go to `/admin/register` (or the `/owner/register`
-   alias), create an account and a restaurant. That account is a
-   `restaurant_owner` and lands straight on `/admin`. Returning admins sign in at
-   `/admin/login`.
-2. **Promote an existing account (development only):** sign in normally, then run
-   this in the browser DevTools console. It targets whatever profile is on this
-   device, so no UID is ever hardcoded, and it changes nothing in production code:
+1. **Register one (recommended):** go to `/owner/register` (or `/admin/register`),
+   create an account and a restaurant. This claims the deployment restaurant
+   (`restaurant-pizza-demo`), writes the profile + identity, and seeds the menu
+   categories/products automatically. That account is a `restaurant_owner` and
+   lands straight on `/admin`.
+2. **Restore an existing account:** if an account authenticated before the
+   Firestore migration exists in the Firebase console, create the restaurant
+   record it owns in the console:
 
-   ```js
-   (() => {
-     const key = Object.keys(localStorage).find((k) => k.startsWith('profile-'));
-     if (!key) return console.warn('Log in first.');
-     const profile = JSON.parse(localStorage.getItem(key));
-     profile.role = 'restaurant_owner';
-     localStorage.setItem(key, JSON.stringify(profile));
-     console.log('Promoted this account to restaurant_owner. Reload the page.');
-   })();
+   ```text
+   restaurants/restaurant-pizza-demo  →  { ownerId: "<that account's UID>" }
    ```
 
-   Reload, then open `/admin`. (The owner has no restaurant record yet, so the
-   dashboard renders its empty state until one is created.)
+   When that account signs in, the app detects the missing/repairable profile,
+   grants the verified identity, and seeds the menu for it.
 
-To go back to a customer, repeat the snippet with `profile.role = 'customer'`.
+If a `restaurants/*` document already exists with a **different** owner, that
+storefront is considered taken — onboarding fails with `restaurant/already-owned`
+instead of silently creating a second identity the storefront never reads.
 
-## 🔐 Required backend configuration
+## 🔐 Deploying Firestore (rules + indexes)
 
-The client currently persists to the browser (localStorage). Before this grows
-into a production multi-tenant platform, wire it to Firestore and deploy the
-rules in `firestore.rules` at the repository root:
+The app reads/writes Firestore through `src/services/db.js` and the security
+rules in `firestore.rules`. To go live you must deploy those rules (and the
+indexes below) to the project referenced by `.env.local`.
 
 ```bash
-firebase deploy --only firestore:rules
+# one-time: authenticate the Firebase CLI with the Google account that owns the project
+npx firebase login
+
+# deploy security rules AND the composite index together
+npx firebase deploy --only firestore
 ```
 
-Create the collections **`users`**, **`restaurants`**, **`orders`**, **`products`**
-matching the models in this repo (each with `restaurantId`), and:
+What gets deployed:
 
-1. **Roles must exist server-side.** Store `role` on each `users/{uid}` document.
-   Assign elevated/platform roles only via Firebase Custom Claims through a Cloud
-   Function or Admin SDK — never trust a client-supplied role.
-2. **Multi-tenancy.** The rules in `firestore.rules` restrict restaurant data to
-   members of that restaurant (`request.auth.uid` + the `restaurantId` on each
-   document). Do not weaken them.
-3. **Never store passwords or raw card data.** This project has no payment
-   provider configured; cards are only ever represented by provider tokens.
+1. **`firestore.rules`** — multi-tenant isolation:
+   * `products` reads are public (`allow read: if true`) so the menu works for
+     anonymous visitors; writes require membership of the product's restaurant.
+   * `users/{uid}` are readable/writable only by their owner. A create may never
+     claim a restaurant identity (`isSafeProfileCreate`); identity is attached
+     only through `isOwnershipGrant`, which re-verifies the target
+     `restaurants/<id>.ownerId == auth.uid`.
+   * `orders` are created by their `customerId`, read by that customer or the
+     restaurant's members, and only status fields may change afterwards.
+2. **`firestore.indexes.json`** — the composite index
+   `products(restaurantId ASC, sortOrder ASC)`. The app already falls back to a
+   client-side sort when the index is missing, but creating it removes the
+   `FAILED_PRECONDITION` errors (and makes the realtime listeners clean).
+
+### First-run bootstrap
+
+The code never seeds the store from a read path. The catalog and the owner
+identity are created when **an owner registers** at `/owner/register` (which
+claims `restaurant-pizza-demo` and seeds categories + products). After deploying
+rules, just register the owner once and the customer menu will populate.
+
+### Checklist after deploying
+
+- [ ] `npx firebase deploy --only firestore` succeeds for the `resturent-system` project
+- [ ] Register an owner at `/owner/register` → lands on `/admin`, menu seeds
+- [ ] Signed-out visit to `/menu` shows the seeded products (public read works)
+- [ ] The deployment host (e.g. Vercel) has the `REACT_APP_FIREBASE_*` variables
+      from `.env.local` set in its environment settings — otherwise the app
+      throws the missing-configuration error at startup
+
+> The main collections are `users`, `restaurants`, `products`, `orders`, with
+> `restaurants/{id}/categories` as a subcollection. Do not weaken the rules
+> (no `allow write: if true`, no broad signed-in grants) and never store passwords
+> or raw card data — cards are only ever provider tokens.
 
 ---
 

@@ -66,11 +66,18 @@ export async function getRestaurantById(id) {
 }
 
 export async function getOwnerRestaurant(ownerId) {
-  if (!ownerId) return null;
-  const matches = await db.getDocs(COLLECTION, {
+  const matches = await getOwnerRestaurants(ownerId);
+  return matches.length ? matches[0] : null;
+}
+
+// All restaurants that list an ownerId (never just the first match). Called by
+// ownership recovery so ambiguity can be detected and logged explicitly.
+export async function getOwnerRestaurants(ownerId) {
+  if (!ownerId) return [];
+  const docs = await db.getDocs(COLLECTION, {
     where: [{ field: 'ownerId', op: '==', value: ownerId }],
   });
-  return matches.length ? normalize(matches[0]) : null;
+  return docs.map(normalize);
 }
 
 export async function fetchOwnerRestaurant(ownerId) {
@@ -131,11 +138,12 @@ export function subscribeRestaurant(listener, { ownerId } = {}) {
 
 // --- Onboarding: User -> Restaurant -> Owner ------------------------------
 //
-// A new owner either takes over the deployment restaurant (when it exists and
-// is unclaimed) or claims a brand-new restaurant that is fully isolated. Either
-// way the returned restaurant becomes the owner's `restaurantId` and its menu
-// is seeded so the dashboard starts with a working catalog (matching the old
-// localStorage behaviour).
+// The current MVP has ONE restaurant identity (RESTAURANT_ID) — the storefront
+// and the dashboard must always operate against the same restaurant, otherwise
+// an owner manages restaurant A while customers read restaurant B. Ownership
+// scoring is kept multi-tenant-aware (restaurantId/restaurantIds remain), but
+// onboarding itself is deterministic: claim/create RESTAURANT_ID, never a
+// detached random restaurant the storefront would silently ignore.
 
 // Seeds the menu for a restaurant that has already been claimed by its owner.
 // This must run AFTER the owner's `users/{uid}` document carries the
@@ -155,36 +163,44 @@ export async function seedOwnerSetup(restaurantId) {
   }
 }
 
+// Claims the deployment restaurant for a new owner, or returns it when the
+// caller already owns it. When it is owned by someone else, onboarding FAILS
+// instead of silently creating a second restaurant identity that the storefront
+// never reads. Multi-tenant expansion can reuse this service's building blocks
+// (createRestaurant, setRestaurantOwner) later.
 export async function onboardOwnerRestaurant({ ownerId, name }) {
   if (!ownerId) return null;
 
   const claimed = await getRestaurantById(RESTAURANT_ID);
-  let restaurant = null;
 
-  if (claimed && !claimed.ownerId) {
-    restaurant = await setRestaurantOwner(claimed.id, ownerId);
-  } else if (claimed && claimed.ownerId === ownerId) {
-    restaurant = claimed;
-  } else if (claimed && claimed.ownerId) {
-    restaurant = await createRestaurant({
-      ownerId,
-      name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
-    });
-  } else {
-    restaurant = await createRestaurant({
+  if (!claimed) {
+    return createRestaurant({
       ownerId,
       name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
       id: RESTAURANT_ID,
     });
   }
 
-  return restaurant;
+  if (!claimed.ownerId) {
+    return setRestaurantOwner(claimed.id, ownerId);
+  }
+
+  if (claimed.ownerId === ownerId) {
+    return claimed;
+  }
+
+  const error = new Error(
+    `The ${RESTAURANT_SETTINGS.name} storefront already has an owner. Only its owner can manage this deployment.`
+  );
+  error.code = 'restaurant/already-owned';
+  throw error;
 }
 
 const restaurantService = {
   getRestaurants,
   getRestaurantById,
   getOwnerRestaurant,
+  getOwnerRestaurants,
   fetchOwnerRestaurant,
   createRestaurant,
   updateRestaurant,

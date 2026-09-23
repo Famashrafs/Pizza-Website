@@ -32,16 +32,25 @@ describe('owner -> restaurant relationship', () => {
   test('onboarding claims the deployment restaurant for a first owner', async () => {
     const restaurant = await onboardOwnerRestaurant({ ownerId: 'owner-1', name: 'Slice House' });
     expect(restaurant.ownerId).toBe('owner-1');
+    expect(restaurant.id).toBe('restaurant-pizza-demo');
     expect((await getOwnerRestaurant('owner-1'))?.id).toBe(restaurant.id);
   });
 
-  test('a second owner cannot take over a claimed restaurant', async () => {
+  test('onboarding is deterministic — always the single deployment restaurant', async () => {
     await onboardOwnerRestaurant({ ownerId: 'owner-1', name: 'Slice House' });
-    const second = await onboardOwnerRestaurant({ ownerId: 'owner-2', name: 'Slice House' });
+    const again = await onboardOwnerRestaurant({ ownerId: 'owner-1', name: 'Slice House' });
+    expect(again.id).toBe('restaurant-pizza-demo');
+  });
 
-    // owner-1 keeps the deployment restaurant; owner-2 gets a new one.
+  test('a second owner cannot take over a claimed restaurant (no split identity)', async () => {
+    await onboardOwnerRestaurant({ ownerId: 'owner-1', name: 'Slice House' });
+    await expect(
+      onboardOwnerRestaurant({ ownerId: 'owner-2', name: 'Slice House' })
+    ).rejects.toThrow(/already has an owner/i);
+
+    // owner-1 keeps the deployment restaurant; no detached restaurant was
+    // created for owner-2 (the storefront would never read it).
     expect((await getOwnerRestaurant('owner-1'))?.ownerId).toBe('owner-1');
-    expect(second.ownerId).toBe('owner-2');
-    expect(second.id).not.toBe((await getOwnerRestaurant('owner-1'))?.id);
+    expect(await getOwnerRestaurant('owner-2')).toBeNull();
   });
 });

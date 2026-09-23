@@ -240,3 +240,72 @@ test('ownership is never granted from a restaurant owned by someone else', async
   await waitFor(() => expect(window.location.pathname).toBe('/account'));
   expect(db.__getDocs()['users/impostor-1']).toBeUndefined();
 });
+
+test('existing owner profile missing restaurant identity is repaired', async () => {
+  // Post-migration profile exists with the owner role but the restaurant
+  // identity was never written — the owned restaurant restores it.
+  seedUser('owner-partial-1', {
+    role: 'restaurant_owner',
+    email: 'owner.partial@example.com',
+  });
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-partial-1',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'owner-partial-1', email: 'owner.partial@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/admin'));
+  const profile = db.__getDocs()['users/owner-partial-1'];
+  expect(profile.role).toBe('restaurant_owner');
+  expect(profile.restaurantId).toBe('restaurant-pizza-demo');
+  expect(profile.restaurantIds['restaurant-pizza-demo']).toBe(true);
+});
+
+test('a customer role is never silently promoted by recovery', async () => {
+  // Inconsistent data: restaurants/<id>.ownerId == uid but users/<uid>.role is
+  // customer. The profile must NOT be overwritten (rules forbid client role
+  // changes too) — the conflict is logged for manual review.
+  seedUser('cust-but-owned-1', {
+    role: 'customer',
+    email: 'odd@example.com',
+  });
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'cust-but-owned-1',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'cust-but-owned-1', email: 'odd@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/account'));
+  const profile = db.__getDocs()['users/cust-but-owned-1'];
+  expect(profile.role).toBe('customer');
+  expect(profile.restaurantId).toBeUndefined();
+});
+
+test('ambiguous ownership resolves deterministically to the deployment restaurant', async () => {
+  // No profile doc, but the uid owns two restaurants — recovery must prefer
+  // the active deployment restaurant instead of picking arbitrarily.
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-multi-1',
+  });
+  seedRestaurant({
+    id: 'rest-other-1',
+    name: 'Other Branch',
+    ownerId: 'owner-multi-1',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'owner-multi-1', email: 'multi@example.com' });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/admin'));
+  expect(db.__getDocs()['users/owner-multi-1'].restaurantId).toBe(
+    'restaurant-pizza-demo'
+  );
+});

@@ -33,6 +33,8 @@ const FIREBASE_ERRORS = {
     'Verification could not be completed. Please check your Firebase configuration.',
   'auth/missing-or-invalid-nonce':
     'Security verification failed. Please refresh the page and try again.',
+  'restaurant/already-owned':
+    'This storefront already has an owner. Only the active owner can manage this deployment.',
 };
 
 export default function getAuthErrorMessage(code) {

@@ -174,29 +174,9 @@ async function queryProducts(restaurantId) {
 export async function getProductsForRestaurant(restaurantId, { includeArchived = false } = {}) {
   if (!restaurantId) return [];
   const docs = await queryProducts(restaurantId);
-  let visible = docs
+  return docs
     .filter((product) => includeArchived || !product.archived)
     .map(hydrateProduct);
-
-  // First-run recovery for the deployment storefront: when Firestore has no
-  // products for RESTAURANT_ID at all, seed the default catalog before serving
-  // the menu. `ensureDefaultProducts()` is idempotent, never overwrites or
-  // deletes, and is hard-scoped to RESTAURANT_ID. Firestore rules only let a
-  // restaurant *member* perform the seed write, so a signed-out visitor or a
-  // plain customer gets a harmless denied attempt (logged in dev) and the menu
-  // simply reflects whatever is actually readable.
-  if (!includeArchived && restaurantId === RESTAURANT_ID && visible.length === 0) {
-    try {
-      await ensureDefaultProducts();
-      visible = (await queryProducts(restaurantId))
-        .filter((product) => !product.archived)
-        .map(hydrateProduct);
-    } catch (err) {
-      devLog('[menuService] seed-on-read failed (catalog left as-is)', err);
-    }
-  }
-
-  return visible;
 }
 
 export async function getProductById(id) {

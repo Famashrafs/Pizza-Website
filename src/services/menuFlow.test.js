@@ -10,7 +10,9 @@ import {
   deleteProduct,
   getProductById,
   getProductsForRestaurant,
+  ensureDefaultProducts,
 } from './menuService';
+import { seedOwnerSetup } from './restaurantService';
 import { RESTAURANT_ID } from '../config/restaurant';
 
 // These tests exercise the real menu-management flow the dashboard drives:
@@ -122,55 +124,84 @@ describe('menu management flow', () => {
   });
 });
 
-describe('deployment catalog seed-on-read', () => {
-  it('seeds the default catalog when the deployment menu is empty', async () => {
+describe('deployment catalog initialization', () => {
+  it('customer reads are read-only — an empty catalog stays empty with no writes', async () => {
     db.__reset();
     const menu = await getProductsForRestaurant(RESTAURANT_ID);
 
-    expect(menu.length).toBeGreaterThan(0);
-    expect(menu.every((p) => p.restaurantId === RESTAURANT_ID)).toBe(true);
+    expect(menu).toEqual([]);
+    // Reading the menu must never trigger a write (permission-denied seeding
+    // attempts from a customer read are forbidden).
+    expect(Object.keys(db.__getDocs())).toHaveLength(0);
   });
 
-  it('is idempotent — repeated reads never duplicate products', async () => {
+  it('ensureDefaultProducts is explicit, idempotent and scoped to RESTAURANT_ID', async () => {
     db.__reset();
-    const first = await getProductsForRestaurant(RESTAURANT_ID);
-    const second = await getProductsForRestaurant(RESTAURANT_ID);
+    const first = await ensureDefaultProducts();
+    const second = await ensureDefaultProducts();
 
+    expect(first.length).toBeGreaterThan(0);
+    expect(second.length).toBe(first.length);
     const stored = (await db.getDocs('products')).filter(
       (p) => p.restaurantId === RESTAURANT_ID
     );
-    expect(second.length).toBe(first.length);
     expect(stored.length).toBe(first.length);
+    // It never writes into any other restaurant's catalog.
+    expect(
+      (await db.getDocs('products')).every((p) => p.restaurantId === RESTAURANT_ID)
+    ).toBe(true);
   });
 
-  it('never overwrites or duplicates an existing catalog', async () => {
+  it('ensureDefaultProducts never overwrites or duplicates an existing catalog', async () => {
     db.__reset();
-    await db.setDoc('products/prod-existing', {
-      id: 'prod-existing',
-      name: 'Existing Slice',
-      basePrice: 5,
+    await db.setDoc('products/prod-custom', {
+      id: 'prod-custom',
+      name: 'Custom Slice',
+      basePrice: 6,
       restaurantId: RESTAURANT_ID,
       sortOrder: 0,
       available: true,
     });
 
-    const menu = await getProductsForRestaurant(RESTAURANT_ID);
-    expect(menu).toHaveLength(1);
-    expect(menu[0].id).toBe('prod-existing');
+    const seeded = await ensureDefaultProducts();
+    expect(seeded).toHaveLength(1);
+    expect(seeded[0].id).toBe('prod-custom');
   });
 
-  it('is scoped only to RESTAURANT_ID — other restaurants are never auto-seeded', async () => {
+  it('seedOwnerSetup initializes categories and default products for the deployment', async () => {
     db.__reset();
-    const other = await getProductsForRestaurant('rest-other');
-    expect(other).toEqual([]);
-    const seeded = (await db.getDocs('products')).some(
-      (p) => p.restaurantId === 'rest-other'
+    await seedOwnerSetup(RESTAURANT_ID);
+
+    const products = await db.getDocs('products');
+    expect(products.length).toBeGreaterThan(0);
+    expect(products.every((p) => p.restaurantId === RESTAURANT_ID)).toBe(true);
+    const categories = await db.getDocs(
+      `restaurants/${RESTAURANT_ID}/categories`
     );
-    expect(seeded).toBe(false);
+    expect(categories.length).toBeGreaterThan(0);
   });
 
-  it('falls back to a client-sorted read when the ordered query is blocked by a missing index', async () => {
+  it('tags products with the managing restaurant and isolates tenant reads', async () => {
     db.__reset();
+    const a = await createProduct(
+      { name: 'A Special', basePrice: 9, category: 'Starters' },
+      'rest-a'
+    );
+    const b = await createProduct(
+      { name: 'B Special', basePrice: 8, category: 'Starters' },
+      'rest-b'
+    );
+
+    expect(a.restaurantId).toBe('rest-a');
+    expect(b.restaurantId).toBe('rest-b');
+    expect((await getProductsForRestaurant('rest-a')).map((p) => p.id)).toEqual([a.id]);
+    expect((await getProductsForRestaurant('rest-b')).map((p) => p.id)).toEqual([b.id]);
+    expect(await getProductsForRestaurant(RESTAURANT_ID)).toEqual([]);
+  });
+
+  it('falls back to an equality-only read when the ordered query is blocked by a missing index', async () => {
+    db.__reset();
+    await ensureDefaultProducts();
     const realGetDocs = db.getDocs;
     let orderedCalls = 0;
     db.getDocs = async (collectionPath, queryOptions) => {

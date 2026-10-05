@@ -233,10 +233,30 @@ The app reads/writes Firestore through `src/services/db.js` and the security
 rules in `firestore.rules`. To go live you must deploy those rules (and the
 indexes below) to the project referenced by `.env.local`.
 
+### 0. Create the database (required, once per project)
+
+Firestore is not enabled by default. In the Firebase console for your project
+open **Build → Firestore Database → Create database** (Native mode, any region),
+or:
+
 ```bash
 # one-time: authenticate the Firebase CLI with the Google account that owns the project
 npx firebase login
+```
 
+Until a `(default)` database exists, **every** Firestore call fails with
+`NOT_FOUND: The database (default) does not exist`. The sign-in still succeeds,
+but `users/{uid}` can never be read, so the account silently resolves to
+`customer` and `/admin` redirects to `/account` — the dashboard looks "broken"
+with no visible error. The console then prints:
+
+```text
+[app] Could not read users/<uid>: unavailable — the role below falls back to "customer" until Firestore is reachable.
+```
+
+### 1. Deploy rules and indexes
+
+```bash
 # deploy security rules AND the composite index together
 npx firebase deploy --only firestore
 ```
@@ -266,9 +286,13 @@ rules, just register the owner once and the customer menu will populate.
 
 ### Checklist after deploying
 
+- [ ] **A `(default)` Firestore database exists** for the `resturent-system`
+      project (Build → Firestore Database); `npx firebase deploy --only firestore`
+      fails with `NOT_FOUND` while it does not
 - [ ] `npx firebase deploy --only firestore` succeeds for the `resturent-system` project
 - [ ] Register an owner at `/owner/register` → lands on `/admin`, menu seeds
 - [ ] Signed-out visit to `/menu` shows the seeded products (public read works)
+- [ ] The browser console prints no `[app] Could not read users/…` warning
 - [ ] The deployment host (e.g. Vercel) has the `REACT_APP_FIREBASE_*` variables
       from `.env.local` set in its environment settings — otherwise the app
       throws the missing-configuration error at startup

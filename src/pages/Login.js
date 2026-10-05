@@ -4,17 +4,17 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle } from '@fortawesome/free-brands-svg-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { auth } from '../firebase';
-import { getUserData } from '../services/storage';
-import { normalizeRole, roleHasAdminAccess } from '../config/roles';
+import { roleHasAdminAccess } from '../config/roles';
 
 // After a successful sign-in, owners are taken to their dashboard while other
 // users continue to the page they were heading to (default: /account).
-function resolvePostLoginPath(from) {
-  const user = auth.currentUser;
-  const profile = user ? getUserData(user.uid) : null;
-  const role = normalizeRole(profile?.role);
-  return roleHasAdminAccess(role) ? '/admin' : from;
+//
+// The role is read from the Firestore profile the sign-in resolved with — never
+// from device storage. `localStorage` stopped holding `role` when the data layer
+// moved to Firestore, so reading it here classified every owner as a customer
+// and sent them to /account instead of /admin.
+function resolvePostLoginPath(from, profile) {
+  return roleHasAdminAccess(profile?.role) ? '/admin' : from;
 }
 
 function Login({ adminMode = false }) {
@@ -22,7 +22,7 @@ function Login({ adminMode = false }) {
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [action, setAction] = useState(null);
-  const { login, loginWithGoogle, authError, clearError } = useAuth();
+  const { login, loginWithGoogle, authError, clearError, userProfile } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,8 +30,8 @@ function Login({ adminMode = false }) {
 
   // In admin mode only admin-level accounts are allowed through; anyone else is
   // sent to the normal customer account area.
-  const completeLogin = (successMessage) => {
-    const path = resolvePostLoginPath(from);
+  const completeLogin = (successMessage, profile) => {
+    const path = resolvePostLoginPath(from, profile || userProfile);
     if (adminMode && path !== '/admin') {
       showToast('This account does not have admin access.', 'error');
       navigate('/account', { replace: true });
@@ -47,7 +47,7 @@ function Login({ adminMode = false }) {
     const result = await login(email, password, remember);
     setAction(null);
     if (result.success) {
-      completeLogin('Welcome back!');
+      completeLogin('Welcome back!', result.value?.profile);
     }
   };
 
@@ -57,7 +57,7 @@ function Login({ adminMode = false }) {
     const result = await loginWithGoogle();
     setAction(null);
     if (result.success) {
-      completeLogin('Signed in with Google!');
+      completeLogin('Signed in with Google!', result.value?.profile);
     }
   };
 

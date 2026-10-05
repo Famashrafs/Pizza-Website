@@ -47,20 +47,20 @@ service cloud.firestore {
     // scalar `restaurantId` and the `restaurantIds` map so onboarding and the
     // legacy template keep working. `get()` requires the user's own doc to
     // exist — signup/onboarding writes it before any member-scoped write.
+    // The map is type-checked first: calling `.keys()` on a profile that never
+    // had the field is a rules *error* (which denies the whole query), not a
+    // `false`, and that silently emptied the dashboard for such accounts.
     function isMemberOf(restaurantId) {
       return isSignedIn()
         && restaurantId != null
         && (userDoc().restaurantId == restaurantId
-            || userDoc().restaurantIds.keys().hasAny([restaurantId]));
+            || (userDoc().restaurantIds is map
+                && userDoc().restaurantIds.keys().hasAny([restaurantId])));
     }
 
     function canManageRestaurant(restaurantId) {
       return isMemberOf(restaurantId)
         && (hasRole('restaurant_owner') || hasRole('restaurant_admin'));
-    }
-
-    function isSelf() {
-      return isSignedIn() && request.auth.uid == resource.data.uid;
     }
 
     // -----------------------------------------------------------------------
@@ -83,6 +83,20 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role
         && (isRegularProfileUpdate() || isOwnershipGrant());
       allow delete: if isSignedIn() && isSelf();
+
+      // The document path IS the tenant key: `users/{uid}` can only ever be the
+      // caller's own profile. Ownership of that path is authoritative; the
+      // denormalized `uid` field is only cross-checked when it exists, so a
+      // profile written before that field existed stays readable/repairable
+      // instead of locking its owner out of their own account (and, with it,
+      // the dashboard) forever.
+      function isSelf() {
+        return isSignedIn()
+          && request.auth.uid == userId
+          && (resource == null
+              || resource.data.uid == null
+              || resource.data.uid == request.auth.uid);
+      }
 
       function isRegularProfileUpdate() {
         return !request.resource.data.diff(resource.data).affectedKeys()

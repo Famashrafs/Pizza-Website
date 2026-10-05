@@ -35,6 +35,16 @@ const FIREBASE_ERRORS = {
     'Security verification failed. Please refresh the page and try again.',
   'restaurant/already-owned':
     'This storefront already has an owner. Only the active owner can manage this deployment.',
+  // Data-layer failures (Firestore) used to fall through to the generic message
+  // below, which made an unreachable database indistinguishable from a typo.
+  unavailable:
+    'We could not reach the database. Check your connection and try again.',
+  'permission-denied':
+    'Your account is not allowed to perform this action.',
+  'failed-precondition':
+    'A required database setup step is still missing (index or security rules).',
+  'deadline-exceeded':
+    'The database took too long to respond. Please try again.',
 };
 
 export default function getAuthErrorMessage(code) {

@@ -36,9 +36,13 @@ import {
   seedOwnerSetup,
 } from '../services/restaurantService';
 import { RESTAURANT_ID } from '../config/restaurant';
-import { devLog } from '../utils/devLog';
+import { devLog, runtimeWarn } from '../utils/devLog';
 
 const AuthContext = createContext();
+
+// Upper bound for "wait until the auth listener published the profile". Keeps a
+// stalled/failed data layer from blocking navigation indefinitely.
+const PROFILE_WAIT_TIMEOUT_MS = 5000;
 
 export function useAuth() {
   return useContext(AuthContext);
@@ -94,6 +98,18 @@ function hasRestaurantIdentity(profile) {
   return !!(profile && profile.restaurantId && Object.keys(ids).length > 0);
 }
 
+// A failed read and a missing document are different facts and must never be
+// collapsed into one: a read that throws (database unreachable, rules denying the
+// document) used to be treated as "no profile", which silently downgraded an
+// owner to `customer` and made the dashboard unreachable with no visible cause.
+// Keeps the Firebase error code so the real reason is recoverable from a console.
+function describeFailure(err, fallback) {
+  if (!err) return fallback;
+  const code = err.code || 'unknown-error';
+  const detail = String(err.message || '').split('\n')[0].trim();
+  return `${fallback} [${code}${detail ? `: ${detail}` : ''}]`;
+}
+
 // Resolves which restaurant a uid owns. Prefers the active deployment
 // restaurant (deterministic MVP identity) and logs when ownership is ambiguous
 // instead of silently picking.
@@ -102,6 +118,13 @@ async function resolveOwnedRestaurant(uid) {
   try {
     owned = await getOwnerRestaurants(uid);
   } catch (err) {
+    runtimeWarn(
+      'auth.ownership-query-failed',
+      'Could not read the restaurants collection for',
+      uid,
+      '— owner recovery is impossible right now:',
+      err?.code || err
+    );
     devLog('[auth] ownership recovery could not query restaurants', uid, err);
     return null;
   }
@@ -233,31 +256,74 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  // Why the Firestore profile could not be read this session (null = fine). Kept
+  // separate from `authError` (which belongs to explicit form submissions) so a
+  // silent data-layer failure can never be mistaken for a customer account.
+  const [profileError, setProfileError] = useState(null);
   // Guards against two racy async profile loads (session restore + signup
   // write) overwriting each other. Whichever caller bumps the counter last is
   // authoritative.
   const profileSeq = useRef(0);
+  // Sign-in resolves before the auth listener has published the Firestore
+  // profile. Anything that routes on the role (post-login redirect) waits on
+  // this instead of reading a stale/absent profile.
+  const profileWaiters = useRef([]);
 
   const setProfileState = (profile) => {
     profileSeq.current += 1;
     setUserProfile(profile);
   };
 
+  const settleProfileWaiters = (profile) => {
+    const waiters = profileWaiters.current;
+    profileWaiters.current = [];
+    waiters.forEach((resolve) => resolve(profile));
+  };
+
+  // Resolves with the profile published for the session that was just signed in.
+  // The timeout is a safety net: routing must never hang if the listener bails
+  // out, and every route decision re-checks the role through the guard anyway.
+  const waitForProfile = () =>
+    new Promise((resolve) => {
+      let settled = false;
+      const finish = (profile) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(profile || null);
+      };
+      const timer = setTimeout(() => finish(null), PROFILE_WAIT_TIMEOUT_MS);
+      profileWaiters.current.push(finish);
+    });
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (!user) {
         setProfileState(null);
+        setProfileError(null);
         setLoading(false);
+        settleProfileWaiters(null);
         return;
       }
 
       const seq = profileSeq.current;
       let profile = null;
       let doc = null;
+      let readError = null;
       try {
         doc = await db.getDoc(`users/${user.uid}`);
       } catch (err) {
+        readError = err;
+        // Loud in every build: this is the difference between "the account is a
+        // customer" and "we could not ask the database", and only the error code
+        // tells the two apart.
+        runtimeWarn(
+          'auth.profile-read-failed',
+          'Could not read users/' + user.uid + ':',
+          err?.code || err,
+          '— the role below falls back to "customer" until Firestore is reachable.'
+        );
         devLog('[auth] unable to read user profile (will attempt recovery)', user.uid, err);
       }
       if (seq !== profileSeq.current) return; // superseded by a newer write
@@ -278,7 +344,18 @@ export function AuthProvider({ children }) {
       }
       if (seq !== profileSeq.current) return;
       setUserProfile(profile);
+      // A failed read is reported, never silently absorbed: the role below is
+      // only trustworthy when the profile actually came back from Firestore.
+      setProfileError(
+        readError
+          ? describeFailure(
+              readError,
+              `Could not read the profile of ${user.uid} from the database`
+            )
+          : null
+      );
       setLoading(false);
+      settleProfileWaiters(profile);
     });
     return unsubscribe;
   }, []);
@@ -288,8 +365,8 @@ export function AuthProvider({ children }) {
   const run = async (action) => {
     setAuthError('');
     try {
-      await action();
-      return { success: true };
+      const value = await action();
+      return { success: true, value };
     } catch (err) {
       const message = getAuthErrorMessage(err.code);
       setAuthError(message);
@@ -382,20 +459,28 @@ export function AuthProvider({ children }) {
       if (name) await updateProfile(user, { displayName: name });
     });
 
+  // `signInWithEmailAndPassword` resolves as soon as Firebase has a session; the
+  // role and restaurant identity arrive from Firestore a moment later. Waiting
+  // for that profile is what lets the caller route an owner to the dashboard
+  // instead of guessing from a role that has not loaded yet.
   const login = (email, password, remember) =>
     run(async () => {
       await setPersistence(
         auth,
         remember ? browserLocalPersistence : browserSessionPersistence
       );
+      const profileReady = waitForProfile();
       await signInWithEmailAndPassword(auth, email, password);
+      return { profile: await profileReady };
     });
 
   const loginWithGoogle = () =>
     run(async () => {
       await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
+      const profileReady = waitForProfile();
       await signInWithPopup(auth, provider);
+      return { profile: await profileReady };
     });
 
   const forgotPassword = (email) =>
@@ -506,6 +591,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       await signOut(auth);
       setProfileState(null);
+      setProfileError(null);
     });
 
   const value = {
@@ -515,6 +601,9 @@ export function AuthProvider({ children }) {
     isOwner: roleHasAdminAccess(userProfile?.role),
     loading,
     authError,
+    // Non-null when the Firestore profile could not be read this session: the
+    // role above is then a fallback, not a fact about the account.
+    profileError,
     clearError,
     signup,
     signupOwner,

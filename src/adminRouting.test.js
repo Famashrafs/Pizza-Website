@@ -79,6 +79,27 @@ beforeEach(() => {
   goTo('/');
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+// Signs in through the real login form. The mocked firebase/auth module resolves
+// by publishing the auth state, exactly like Firebase does after a credential
+// sign-in, so the routing decision runs against the Firestore profile.
+async function signInThroughForm(email, password, user) {
+  const { signInWithEmailAndPassword } = require('firebase/auth');
+  signInWithEmailAndPassword.mockImplementation(async () => {
+    await act(async () => {
+      await authListener(user);
+    });
+    return { user };
+  });
+
+  fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: email } });
+  fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: password } });
+  fireEvent.click(screen.getByRole('button', { name: /^login$/i }));
+}
+
 test('a checking-authentication state is shown before the profile resolves', async () => {
   goTo('/admin');
   render(<App />);
@@ -308,4 +329,91 @@ test('ambiguous ownership resolves deterministically to the deployment restauran
   expect(db.__getDocs()['users/owner-multi-1'].restaurantId).toBe(
     'restaurant-pizza-demo'
   );
+});
+
+test('an owner signing in through the login form lands on the dashboard', async () => {
+  // The role lives in Firestore, never in localStorage: routing on the stored
+  // (absent) role sent every owner to /account instead of /admin.
+  seedUser('owner-form-1', {
+    role: 'restaurant_owner',
+    restaurantId: 'restaurant-pizza-demo',
+    restaurantIds: { 'restaurant-pizza-demo': true },
+    name: 'Owner Form',
+    email: 'owner.form@example.com',
+  });
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-form-1',
+  });
+  goTo('/login');
+  render(<App />);
+  await resolveAuth(null);
+
+  await signInThroughForm('owner.form@example.com', 'secret123', {
+    uid: 'owner-form-1',
+    email: 'owner.form@example.com',
+    displayName: 'Owner Form',
+  });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/admin'));
+});
+
+test('a customer signing in through the login form stays out of the dashboard', async () => {
+  seedUser('cust-form-1', { role: 'customer', email: 'cust.form@example.com' });
+  goTo('/login');
+  render(<App />);
+  await resolveAuth(null);
+
+  await signInThroughForm('cust.form@example.com', 'secret123', {
+    uid: 'cust-form-1',
+    email: 'cust.form@example.com',
+  });
+
+  await waitFor(() => expect(window.location.pathname).toBe('/account'));
+});
+
+test('a failed profile read is reported instead of silently passing as a customer', async () => {
+  // An unreachable/denied database must be visible: it used to be swallowed and
+  // the account silently looked like a customer, with the dashboard unreachable
+  // and no explanation anywhere. Ownership recovery cannot run either, because
+  // the restaurants query fails as well.
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest
+    .spyOn(db.default, 'getDoc')
+    .mockRejectedValueOnce(Object.assign(new Error('backend unreachable'), {
+      code: 'unavailable',
+    }));
+  jest
+    .spyOn(db.default, 'getDocs')
+    .mockRejectedValueOnce(Object.assign(new Error('backend unreachable'), {
+      code: 'unavailable',
+    }));
+
+  seedRestaurant({
+    id: 'restaurant-pizza-demo',
+    name: 'Demo Pizza',
+    ownerId: 'owner-broken-1',
+  });
+  goTo('/admin');
+  render(<App />);
+  await resolveAuth({ uid: 'owner-broken-1', email: 'broken@example.com' });
+
+  // No access: the role could not be verified …
+  await waitFor(() => expect(window.location.pathname).toBe('/account'));
+  // … but the reason is now reported instead of being absorbed.
+  expect(
+    warn.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === 'string' && arg.includes('Could not read users/'))
+    )
+  ).toBe(true);
+  expect(
+    warn.mock.calls.some((call) =>
+      call.some(
+        (arg) =>
+          typeof arg === 'string' &&
+          arg.includes('Could not read the restaurants collection')
+      )
+    )
+  ).toBe(true);
 });

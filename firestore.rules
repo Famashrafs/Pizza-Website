@@ -39,8 +39,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    // NOTE ON ABSENT FIELDS: reading a field that does not exist is a rules
+    // *evaluation error*, not `null`. An error denies the request — and inside a
+    // query it denies the whole query — so every optional field below is probed
+    // with `in` first. Each probe is equivalent to the null check it replaces:
+    // a missing key and an explicit null both mean "not set".
     function hasRole(role) {
-      return isSignedIn() && userDoc().role == role;
+      return isSignedIn() && 'role' in userDoc() && userDoc().role == role;
     }
 
     // Belongs to a restaurant as an owner/admin/staff member. Accepts both the
@@ -53,9 +58,11 @@ service cloud.firestore {
     function isMemberOf(restaurantId) {
       return isSignedIn()
         && restaurantId != null
-        && (userDoc().restaurantId == restaurantId
-            || (userDoc().restaurantIds is map
-                && userDoc().restaurantIds.keys().hasAny([restaurantId])));
+        && (('restaurantId' in userDoc()
+              && userDoc().restaurantId == restaurantId)
+            || ('restaurantIds' in userDoc()
+              && userDoc().restaurantIds is map
+              && userDoc().restaurantIds.keys().hasAny([restaurantId])));
     }
 
     function canManageRestaurant(restaurantId) {
@@ -93,7 +100,7 @@ service cloud.firestore {
       function isSelf() {
         return isSignedIn()
           && request.auth.uid == userId
-          && (resource == null
+          && (!('uid' in resource.data)
               || resource.data.uid == null
               || resource.data.uid == request.auth.uid);
       }
@@ -105,14 +112,19 @@ service cloud.firestore {
 
       // A profile document is created WITHOUT a restaurant identity — a client
       // can never claim ownership simply by writing to its own user document.
-      // Null/empty defaults (as written by customer signup) are fine; any real
-      // restaurant identity may only be attached later through
-      // `isOwnershipGrant()`, which verifies the target restaurant's `ownerId`.
+      // Owner onboarding writes the identity in a SEPARATE update (see
+      // `signupOwner`), so the created document legitimately omits both fields.
+      // An omitted key and an explicit null/empty value mean the same thing, and
+      // probing with `in` is required: reading an absent key is an evaluation
+      // error, not `null`, which would reject the app's own owner profile write.
       function isSafeProfileCreate() {
-        return (request.resource.data.restaurantId == null
+        return (!('restaurantId' in request.resource.data)
+            || request.resource.data.restaurantId == null
             || request.resource.data.restaurantId == '')
-          && (request.resource.data.restaurantIds == null
-            || request.resource.data.restaurantIds.size() == 0);
+          && (!('restaurantIds' in request.resource.data)
+            || request.resource.data.restaurantIds == null
+            || (request.resource.data.restaurantIds is map
+              && request.resource.data.restaurantIds.size() == 0));
       }
 
       // Ownership grant/refresh: only touches restaurant identity keys, and the
@@ -139,12 +151,15 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid;
 
       // First-time claim of an unowned restaurant, or owner/admin management.
+      // "Unowned" includes a restaurant document that has no `ownerId` key at
+      // all (the shape the deployment restaurant ships with), so the field is
+      // probed before it is compared.
       allow update: if isSignedIn()
         && (isClaim() || canManageRestaurant(restaurantId));
       allow delete: if hasRole('platform_admin');
 
       function isClaim() {
-        return resource.data.ownerId == null
+        return (!('ownerId' in resource.data) || resource.data.ownerId == null)
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['ownerId', 'ownerTakenAt', 'updatedAt']);

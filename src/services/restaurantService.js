@@ -118,11 +118,19 @@ export async function updateRestaurant(id, patch = {}) {
   return getRestaurantById(id);
 }
 
+// Claiming must be a NARROW field update, not a full document rewrite:
+// `updateRestaurant()` re-serializes the whole record (stored Timestamps become
+// ISO strings), so a full write would report `createdAt` as changed and the
+// rules — which only let an unowned restaurant be claimed by touching the
+// ownership fields — would reject the legitimate claim as permission-denied.
 export async function setRestaurantOwner(id, ownerId) {
-  return updateRestaurant(id, {
+  if (!id || !ownerId) return getRestaurantById(id);
+  await db.updateDoc(path(id), {
     ownerId,
     ownerTakenAt: db.serversNow(),
+    updatedAt: db.serversNow(),
   });
+  return getRestaurantById(id);
 }
 
 // Real-time listener over the owner's own restaurants (single-owner apps see

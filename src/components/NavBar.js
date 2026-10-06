@@ -32,7 +32,7 @@ const NAV_LINKS = [
 function NavBar({ isScrolled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { currentUser, isOwner, logout } = useAuth();
+  const { currentUser, isAdmin, logout } = useAuth();
   const { count, openDrawer } = useCart();
   const { showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
@@ -197,7 +197,7 @@ function NavBar({ isScrolled }) {
                       <FontAwesomeIcon icon={faHeart} /> Favorites
                     </NavLink>
 
-                    {isOwner && (
+                    {isAdmin && (
                       <>
                         <div className="account-dropdown-divider" />
                         <NavLink

@@ -1,256 +1,339 @@
 rules_version = '2';
 
-// ===========================================================================
-// Firestore security rules — multi-tenant isolation
-// ===========================================================================
-//
-// Model (matches the same multi-tenant layout the app's services write):
-//
-//   users/{uid}                         profile + role + restaurant ownership
-//   restaurants/{restaurantId}          business settings (owner/admin manage)
-//   restaurants/{restaurantId}/categories/{categoryId}   menu categories
-//   products/{productId}                menu items (restaurantId-tagged)
-//   orders/{orderId}                    orders (restaurantId/customerId-tagged)
-//   coupons/{couponId}                  (reserved) restaurant-scoped
-//   reviews/{reviewId}                  (reserved) customer-scoped
-//
-// Ownership lives on the user's OWN document (`users/{uid}`): either a scalar
-// `restaurantId` or a `restaurantIds` map. Nothing trusts a client-only role.
-//
-// Deployment: put this file at the root of your Firebase project and run
-//   firebase deploy --only firestore:rules
-//
-// Roles: only `customer` and `restaurant_owner` are produced by the client
-// flows today. `platform_admin` is reserved for server-side assignment via
-// Firebase Authentication Custom Claims.
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // -----------------------------------------------------------------------
+    // =========================================================
     // Helpers
-    // -----------------------------------------------------------------------
+    // =========================================================
 
     function isSignedIn() {
       return request.auth != null;
     }
 
     function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data;
     }
 
-    // NOTE ON ABSENT FIELDS: reading a field that does not exist is a rules
-    // *evaluation error*, not `null`. An error denies the request — and inside a
-    // query it denies the whole query — so every optional field below is probed
-    // with `in` first. Each probe is equivalent to the null check it replaces:
-    // a missing key and an explicit null both mean "not set".
     function hasRole(role) {
-      return isSignedIn() && 'role' in userDoc() && userDoc().role == role;
+      return isSignedIn()
+        && 'role' in userDoc()
+        && userDoc().role == role;
     }
 
-    // Belongs to a restaurant as an owner/admin/staff member. Accepts both the
-    // scalar `restaurantId` and the `restaurantIds` map so onboarding and the
-    // legacy template keep working. `get()` requires the user's own doc to
-    // exist — signup/onboarding writes it before any member-scoped write.
-    // The map is type-checked first: calling `.keys()` on a profile that never
-    // had the field is a rules *error* (which denies the whole query), not a
-    // `false`, and that silently emptied the dashboard for such accounts.
     function isMemberOf(restaurantId) {
       return isSignedIn()
         && restaurantId != null
-        && (('restaurantId' in userDoc()
-              && userDoc().restaurantId == restaurantId)
-            || ('restaurantIds' in userDoc()
-              && userDoc().restaurantIds is map
-              && userDoc().restaurantIds.keys().hasAny([restaurantId])));
+        && (
+          (
+            'restaurantId' in userDoc()
+            && userDoc().restaurantId == restaurantId
+          )
+          ||
+          (
+            'restaurantIds' in userDoc()
+            && userDoc().restaurantIds is map
+            && userDoc().restaurantIds.keys().hasAny([restaurantId])
+          )
+        );
     }
 
     function canManageRestaurant(restaurantId) {
       return isMemberOf(restaurantId)
-        && (hasRole('restaurant_owner') || hasRole('restaurant_admin'));
+        && (
+          hasRole('restaurant_owner')
+          || hasRole('restaurant_admin')
+        );
     }
 
-    // -----------------------------------------------------------------------
-    // Users
-    // -----------------------------------------------------------------------
 
-    // A user may only read/update their own document. Writes that change a
-    // role are forbidden from the client — roles come from a trusted backend.
-    // Restaurant identity is special: it can only ever be set to a restaurant
-    // the caller actually owns (see `isOwnershipGrant` below), so one owner
-    // can never grant themselves another restaurant's data.
+    // =========================================================
+    // USERS
+    // =========================================================
+
     match /users/{userId} {
-      allow read: if isSignedIn() && isSelf();
+
+      // IMPORTANT:
+      // Do not inspect resource.data on READ.
+      // The document may not exist yet.
+      allow read: if isSignedIn()
+        && request.auth.uid == userId;
+
+      // Profile creation.
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role in ['customer', 'restaurant_owner']
+        && request.resource.data.role in [
+          'customer',
+          'restaurant_owner'
+        ]
         && isSafeProfileCreate();
-      allow update: if isSignedIn()
-        && isSelf()
-        && request.resource.data.role == resource.data.role
-        && (isRegularProfileUpdate() || isOwnershipGrant());
-      allow delete: if isSignedIn() && isSelf();
 
-      // The document path IS the tenant key: `users/{uid}` can only ever be the
-      // caller's own profile. Ownership of that path is authoritative; the
-      // denormalized `uid` field is only cross-checked when it exists, so a
-      // profile written before that field existed stays readable/repairable
-      // instead of locking its owner out of their own account (and, with it,
-      // the dashboard) forever.
-      function isSelf() {
+      // Profile update.
+      allow update: if isSignedIn()
+        && isSelfDoc()
+        && request.resource.data.role == resource.data.role
+        && (
+          isRegularProfileUpdate()
+          || isOwnershipGrant()
+        );
+
+      // User can delete own profile.
+      allow delete: if isSignedIn()
+        && isSelfDoc();
+
+
+      function isSelfDoc() {
         return isSignedIn()
           && request.auth.uid == userId
-          && (!('uid' in resource.data)
-              || resource.data.uid == null
-              || resource.data.uid == request.auth.uid);
+          && resource != null
+          && (
+            !('uid' in resource.data)
+            || resource.data.uid == null
+            || resource.data.uid == request.auth.uid
+          );
       }
+
 
       function isRegularProfileUpdate() {
-        return !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['role', 'restaurantId', 'restaurantIds']);
+        return !request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasAny([
+            'role',
+            'restaurantId',
+            'restaurantIds'
+          ]);
       }
 
-      // A profile document is created WITHOUT a restaurant identity — a client
-      // can never claim ownership simply by writing to its own user document.
-      // Owner onboarding writes the identity in a SEPARATE update (see
-      // `signupOwner`), so the created document legitimately omits both fields.
-      // An omitted key and an explicit null/empty value mean the same thing, and
-      // probing with `in` is required: reading an absent key is an evaluation
-      // error, not `null`, which would reject the app's own owner profile write.
+
       function isSafeProfileCreate() {
-        return (!('restaurantId' in request.resource.data)
-            || request.resource.data.restaurantId == null
-            || request.resource.data.restaurantId == '')
-          && (!('restaurantIds' in request.resource.data)
-            || request.resource.data.restaurantIds == null
-            || (request.resource.data.restaurantIds is map
-              && request.resource.data.restaurantIds.size() == 0));
+        return (
+          !('restaurantId' in request.resource.data)
+          || request.resource.data.restaurantId == null
+          || request.resource.data.restaurantId == ''
+        )
+        &&
+        (
+          !('restaurantIds' in request.resource.data)
+          || request.resource.data.restaurantIds == null
+          || (
+            request.resource.data.restaurantIds is map
+            && request.resource.data.restaurantIds.size() == 0
+          )
+        );
       }
 
-      // Ownership grant/refresh: only touches restaurant identity keys, and the
-      // target restaurant must list the caller as its owner.
+
       function isOwnershipGrant() {
-        return request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['restaurantId', 'restaurantIds', 'updatedAt'])
-          && request.resource.data.restaurantId != null
-          && get(/databases/$(database)/documents/restaurants/$(request.resource.data.restaurantId))
-              .data.ownerId == request.auth.uid;
+        return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'restaurantId',
+            'restaurantIds',
+            'updatedAt'
+          ])
+
+        // The new document MUST contain restaurantId.
+        && 'restaurantId' in request.resource.data
+        && request.resource.data.restaurantId != null
+
+        // The restaurant must belong to the authenticated owner.
+        && get(
+          /databases/$(database)/documents/restaurants/$(request.resource.data.restaurantId)
+        ).data.ownerId == request.auth.uid;
       }
     }
 
-    // -----------------------------------------------------------------------
-    // Restaurants
-    // -----------------------------------------------------------------------
+
+    // =========================================================
+    // RESTAURANTS
+    // =========================================================
 
     match /restaurants/{restaurantId} {
-      // Profile is public (name, logo, hours) so customers can view it.
+
+      // Authenticated users can read restaurants.
       allow read: if isSignedIn();
 
-      // An owner may register themselves as the owner of a new restaurant.
+      // Owner can create restaurant.
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid;
 
-      // First-time claim of an unowned restaurant, or owner/admin management.
-      // "Unowned" includes a restaurant document that has no `ownerId` key at
-      // all (the shape the deployment restaurant ships with), so the field is
-      // probed before it is compared.
+      // Owner/admin can manage.
+      // Unowned restaurants can be claimed.
       allow update: if isSignedIn()
-        && (isClaim() || canManageRestaurant(restaurantId));
+        && (
+          isClaim()
+          || canManageRestaurant(restaurantId)
+        );
+
+      // Platform admin only.
       allow delete: if hasRole('platform_admin');
 
+
       function isClaim() {
-        return (!('ownerId' in resource.data) || resource.data.ownerId == null)
-          && request.resource.data.ownerId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['ownerId', 'ownerTakenAt', 'updatedAt']);
+        return (
+          !('ownerId' in resource.data)
+          || resource.data.ownerId == null
+        )
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'ownerId',
+            'ownerTakenAt',
+            'updatedAt'
+          ]);
       }
     }
 
-    // -----------------------------------------------------------------------
-    // Categories (restaurant-scoped subcollection)
-    // -----------------------------------------------------------------------
+
+    // =========================================================
+    // CATEGORIES
+    // =========================================================
 
     match /restaurants/{restaurantId}/categories/{categoryId} {
-      allow read: if isSignedIn() && isMemberOf(restaurantId);
+
+      allow read: if isSignedIn()
+        && isMemberOf(restaurantId);
+
       allow create, update, delete: if isSignedIn()
-        && isMemberOf(request.resource.data.restaurantId);
+        && isMemberOf(restaurantId);
     }
 
-    // -----------------------------------------------------------------------
-    // Orders (restaurant-scoped with customer-ownership reads)
-    // -----------------------------------------------------------------------
+
+    // =========================================================
+    // ORDERS
+    // =========================================================
 
     match /orders/{orderId} {
-      // A customer can read their own orders; restaurant members can read the
-      // restaurant's orders. The resource MUST be tagged with restaurantId.
-      allow read: if isSignedIn()
-        && (resource.data.customerId == request.auth.uid
-            || isMemberOf(resource.data.restaurantId));
 
-      // An order is created as itself — customers only, tagged with their uid,
-      // and always starting in the initial `placed` status.
+      // Customer reads own orders.
+      // Restaurant members read restaurant orders.
+      allow read: if isSignedIn()
+        && (
+          resource.data.customerId == request.auth.uid
+          || isMemberOf(resource.data.restaurantId)
+        );
+
+      // Customer creates own order.
       allow create: if isSignedIn()
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.restaurantId != null
         && request.resource.data.orderStatus == 'placed';
 
-      // Updates are limited to the two legitimate flows:
-      //   - the order's customer may cancel their own cancellable order
-      //     (placed/confirmed) with the exact cancellation patch;
-      //   - restaurant staff may ONLY touch status-related fields. The
-      //     immutable creation data (customer, restaurant, items, prices,
-      //     totals, payment) can never change from any client.
+      // Customer cancellation OR restaurant staff update.
       allow update: if isSignedIn()
-        && (isCustomerCancellation() || isStaffOrderUpdate());
+        && (
+          isCustomerCancellation()
+          || isStaffOrderUpdate()
+        );
+
       allow delete: if hasRole('platform_admin');
 
+
       function isCustomerCancellation() {
-        return resource.data.customerId == request.auth.uid
+        return isSignedIn()
+          && resource.data.customerId == request.auth.uid
           && request.resource.data.orderStatus == 'cancelled'
-          && resource.data.orderStatus in ['placed', 'confirmed']
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['orderStatus', 'cancelledAt', 'cancelledBy', 'statusHistory', 'updatedAt']);
+          && resource.data.orderStatus in [
+            'placed',
+            'confirmed'
+          ]
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'orderStatus',
+              'cancelledAt',
+              'cancelledBy',
+              'statusHistory',
+              'updatedAt'
+            ]);
       }
 
-      // Staff of the order's restaurant may only advance status-related fields.
-      // The restaurant and customer identity must remain exactly as created, so
-      // a multi-restaurant member can never reassign an order to themselves.
+
       function isStaffOrderUpdate() {
-        return isMemberOf(resource.data.restaurantId)
-          && request.resource.data.restaurantId == resource.data.restaurantId
-          && request.resource.data.customerId == resource.data.customerId
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['orderStatus', 'statusUpdatedAt', 'statusHistory',
-                      'cancelledAt', 'cancelledBy', 'updatedAt']);
+        return isSignedIn()
+          && isMemberOf(resource.data.restaurantId)
+
+          // Restaurant/customer identity cannot change.
+          && request.resource.data.restaurantId
+              == resource.data.restaurantId
+
+          && request.resource.data.customerId
+              == resource.data.customerId
+
+          // Only status-related fields can change.
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'orderStatus',
+              'statusUpdatedAt',
+              'statusHistory',
+              'cancelledAt',
+              'cancelledBy',
+              'updatedAt'
+            ]);
       }
     }
 
-    // -----------------------------------------------------------------------
-    // Products / menu (restaurant-scoped)
-    // -----------------------------------------------------------------------
+
+    // =========================================================
+    // PRODUCTS
+    // =========================================================
 
     match /products/{productId} {
-      allow read: if true; // the menu is public by design
+
+      // Public menu.
+      allow read: if true;
+
+      // Restaurant members manage products.
       allow create, update, delete: if isSignedIn()
         && isMemberOf(request.resource.data.restaurantId);
     }
 
-    // -----------------------------------------------------------------------
-    // Reserved collections (future phases) — same multi-tenant pattern.
-    // -----------------------------------------------------------------------
+
+    // =========================================================
+    // COUPONS
+    // =========================================================
 
     match /coupons/{couponId} {
-      allow read: if isSignedIn() && isMemberOf(resource.data.restaurantId);
+
+      allow read: if isSignedIn()
+        && isMemberOf(resource.data.restaurantId);
+
       allow create, update: if isSignedIn()
         && isMemberOf(request.resource.data.restaurantId);
     }
 
+
+    // =========================================================
+    // REVIEWS
+    // =========================================================
+
     match /reviews/{reviewId} {
+
       allow read: if isSignedIn();
+
       allow create: if isSignedIn()
         && request.resource.data.customerId == request.auth.uid;
+
       allow update, delete: if isSignedIn()
         && request.resource.data.customerId == request.auth.uid;
+    }
+
+
+    // =========================================================
+    // DEFAULT DENY
+    // =========================================================
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

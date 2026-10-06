@@ -25,7 +25,7 @@ export function RoleProtectedRoute({ children, roles = ADMIN_ROLES }) {
   if (!currentUser) {
     return (
       <Navigate
-        to="/login"
+        to="/admin/login"
         replace
         state={{ from: location.pathname + location.search }}
       />

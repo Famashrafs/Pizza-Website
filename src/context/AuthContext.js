@@ -598,7 +598,7 @@ export function AuthProvider({ children }) {
     currentUser,
     userProfile,
     role: currentUser ? normalizeRole(userProfile?.role) : null,
-    isOwner: roleHasAdminAccess(userProfile?.role),
+    isAdmin: roleHasAdminAccess(userProfile?.role),
     loading,
     authError,
     // Non-null when the Firestore profile could not be read this session: the

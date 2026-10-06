@@ -9,5 +9,17 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [],
+  "collectionGroup": "products",
+  "queryScope": "COLLECTION",
+  "fields": [
+    {
+      "fieldPath": "restaurantId",
+      "order": "ASCENDING"
+    },
+    {
+      "fieldPath": "sortOrder",
+      "order": "ASCENDING"
+    }
+  ]
 }

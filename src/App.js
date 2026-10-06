@@ -27,7 +27,7 @@ import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminSettings from './pages/admin/AdminSettings';
 import OwnerRegister from './pages/owner/OwnerRegister';
 import { faTicket, faStar } from '@fortawesome/free-solid-svg-icons';
-
+import AuthChoice from './pages/AuthChoice';
 // Importing pages
 import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
@@ -132,8 +132,9 @@ function App() {
                 <Route path="/offers" element={<OffersPage />} />
                 <Route path="/menu" element={<MenuPage />} />
                 <Route path="/contact" element={<ContactPage />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                <Route path="/login" element={<AuthChoice />} />
+                <Route path="/login/customer" element={<Login />}/>
+                <Route path="/register/customer"element={<Register />}/>
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/account" element={
                   <RequireAuth title="Login to manage your profile">
@@ -180,7 +181,7 @@ function App() {
                 <Route path="/admin/login" element={<Login adminMode />} />
                 <Route
                   path="/admin/register"
-                  element={<OwnerRegister adminMode />}
+                    element={<OwnerRegister />}
                 />
 
                 <Route

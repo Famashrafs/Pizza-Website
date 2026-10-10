@@ -32,7 +32,7 @@ const NAV_LINKS = [
 function NavBar({ isScrolled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { currentUser, isAdmin, logout } = useAuth();
+  const { currentUser, isAdmin, isGuest, logout } = useAuth();
   const { count, openDrawer } = useCart();
   const { showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
@@ -144,7 +144,7 @@ function NavBar({ isScrolled }) {
               {count > 0 && <span className="cart-badge">{count}</span>}
             </button>
 
-            {currentUser ? (
+            {currentUser && !isGuest ? (
               <div className="account-menu" ref={menuRef}>
                 <button
                   type="button"

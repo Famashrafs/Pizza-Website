@@ -118,7 +118,7 @@ function AdminCustomerDetails() {
         <div className="admin-customer-profile-body">
           <h2>
             {customer.name}
-            {customer.customerId && (
+            {customer.customerId && !customer.isGuest && (
               <span className="admin-badge tone-success admin-badge--inline">
                 <FontAwesomeIcon icon={faCrown} /> Registered
               </span>

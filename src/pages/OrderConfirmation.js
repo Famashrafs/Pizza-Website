@@ -7,11 +7,13 @@ import {
   faStore,
   faClock,
 } from '@fortawesome/free-solid-svg-icons';
+import { useAuth } from '../context/AuthContext';
 import { getEstimatedTime, ORDER_STATUS_LABELS } from '../utils/checkoutLogic';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
 
 function OrderConfirmation() {
   const location = useLocation();
+  const { isGuest } = useAuth();
   const order = location.state?.order;
 
   if (!order) {
@@ -101,18 +103,26 @@ function OrderConfirmation() {
         </p>
 
         <div className="confirmation-actions">
-          <Link
-            to={`/orders/${order.id}`}
-            className="contact-btn confirmation-primary"
-          >
-            Track Order
-          </Link>
-          <Link to="/orders" className="menu-btn">
-            View Orders
-          </Link>
-          <Link to="/menu" className="confirmation-link">
-            Continue Shopping
-          </Link>
+          {isGuest ? (
+            <Link to="/menu" className="contact-btn confirmation-primary">
+              Continue Shopping
+            </Link>
+          ) : (
+            <>
+              <Link
+                to={`/orders/${order.id}`}
+                className="contact-btn confirmation-primary"
+              >
+                Track Order
+              </Link>
+              <Link to="/orders" className="menu-btn">
+                View Orders
+              </Link>
+              <Link to="/menu" className="confirmation-link">
+                Continue Shopping
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </div>

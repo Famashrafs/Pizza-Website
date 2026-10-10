@@ -4079,6 +4079,16 @@ textarea::placeholder {
   color: var(--error);
 }
 
+.checkout-banner--info {
+  background: var(--primary-soft);
+  color: var(--ink);
+}
+
+.checkout-banner--info a {
+  color: var(--primary);
+  font-weight: 700;
+}
+
 .checkout-place-order {
   width: 100%;
   margin-top: 6px;

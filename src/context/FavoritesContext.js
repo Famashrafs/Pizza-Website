@@ -10,7 +10,10 @@ export function useFavorites() {
 
 export function FavoritesProvider({ children }) {
   const { currentUser } = useAuth();
-  const key = currentUser ? currentUser.uid : 'guest';
+  // Anonymous guest sessions share the guest favorites key (same rationale as
+  // the cart): the anonymous identity is only for placing the order.
+  const key =
+    currentUser && !currentUser.isAnonymous ? currentUser.uid : 'guest';
 
   const [favorites, setFavorites] = useState([]);
 

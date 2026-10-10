@@ -140,6 +140,7 @@ export async function recalculateItems(cartItems = [], products = []) {
 
 export async function createOrder({
   customerId = null,
+  customerType = 'customer',
   items: cartItems = [],
   customer = {},
   fulfillmentType = 'delivery',
@@ -156,11 +157,18 @@ export async function createOrder({
     errors.cart = 'Your cart is empty.';
   }
 
-  // Checkout requires an authenticated customer — the UID becomes the order's
-  // owner and the only key under which the customer can ever read it.
+  // Checkout requires an authenticated identity — the UID becomes the order's
+  // owner and the only key under which the customer can ever read it. Guest
+  // checkout satisfies this with a Firebase *anonymous* user (see AuthContext
+  // `ensureGuestSession`), so the UID is always real and the Firestore create
+  // rule (`customerId == request.auth.uid`) keeps holding.
   if (!customerId) {
     errors.auth = 'You must be signed in to place an order.';
   }
+
+  // `customerType` is a display/analytics tag only — it never widens access.
+  // `customerId` stays the sole ownership key, exactly as the rules expect.
+  const resolvedCustomerType = customerType === 'guest' ? 'guest' : 'customer';
 
   const customerErrors = validateCustomerInfo(customer);
   if (Object.keys(customerErrors).length) {
@@ -241,12 +249,15 @@ export async function createOrder({
 
   const orderId = generateOrderId();
 
+  const nowClient = new Date().toISOString();
+
   const order = {
     // Multi-tenant tag: every order belongs to exactly one restaurant. The
     // customer-facing store produces orders for the deployment's restaurant;
     // the admin dashboard reads orders strictly by restaurantId.
     restaurantId,
     customerId,
+    customerType: resolvedCustomerType,
     customer: {
       fullName: String(customer.fullName || '').trim(),
       email: String(customer.email || '').trim(),
@@ -280,7 +291,7 @@ export async function createOrder({
     estimatedTime: getEstimatedTime(fulfillmentType),
     checkoutId: idempotencyKey || null,
     statusHistory: [
-      { status: ORDER_STATUS.PENDING, at: db.serversNow(), changedBy: 'customer' },
+      { status: ORDER_STATUS.PENDING, at: nowClient, changedBy: 'customer' },
     ],
     createdAt: db.serversNow(),
     updatedAt: db.serversNow(),
@@ -395,17 +406,18 @@ export async function cancelOrder(id, uid) {
     };
   }
 
-  const now = db.serversNow();
+  const nowServer = db.serversNow();
+  const nowClient = new Date().toISOString();
   const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   await db.updateDoc(path(id), {
     orderStatus: ORDER_STATUS.CANCELLED,
-    cancelledAt: now,
+    cancelledAt: nowServer,
     cancelledBy: 'customer',
     statusHistory: [
       ...history,
-      { status: ORDER_STATUS.CANCELLED, at: now, changedBy: 'customer' },
+      { status: ORDER_STATUS.CANCELLED, at: nowClient, changedBy: 'customer' },
     ],
-    updatedAt: now,
+    updatedAt: nowServer,
   });
 
   const updated = await db.getDoc(path(id));
@@ -464,22 +476,23 @@ export async function updateOrderStatus(id, status, {
     };
   }
 
-  const now = db.serversNow();
+  const nowServer = db.serversNow();
+  const nowClient = new Date().toISOString();
   const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   const patch = {
     orderStatus: nextStatus,
-    statusUpdatedAt: now,
+    statusUpdatedAt: nowServer,
     statusHistory: [
       ...history,
-      { status: nextStatus, at: now, changedBy, note: note || null },
+      { status: nextStatus, at: nowClient, changedBy, note: note || null },
     ],
-    updatedAt: now,
+    updatedAt: nowServer,
   };
 
   // Cancellation keeps cancelledAt/cancelledBy consistent regardless of which
   // side triggered it (customer via cancelOrder, staff via this helper).
   if (nextStatus === ORDER_STATUS.CANCELLED) {
-    patch.cancelledAt = now;
+    patch.cancelledAt = nowServer;
     patch.cancelledBy = changedBy;
   }
 

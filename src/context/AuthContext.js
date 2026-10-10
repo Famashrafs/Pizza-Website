@@ -15,6 +15,7 @@ import {
   EmailAuthProvider,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -307,6 +308,14 @@ export function AuthProvider({ children }) {
         return;
       }
 
+      if (user.isAnonymous) {
+        setProfileState(null);
+        setProfileError(null);
+        setLoading(false);
+        settleProfileWaiters(null);
+        return;
+      }
+
       const seq = profileSeq.current;
       let profile = null;
       let doc = null;
@@ -587,6 +596,15 @@ export function AuthProvider({ children }) {
       setProfileState(null);
     });
 
+  const ensureGuestSession = () =>
+    run(async () => {
+      if (auth.currentUser) {
+        return auth.currentUser;
+      }
+      const credential = await signInAnonymously(auth);
+      return credential.user;
+    });
+
   const logout = () =>
     run(async () => {
       await signOut(auth);
@@ -594,11 +612,17 @@ export function AuthProvider({ children }) {
       setProfileError(null);
     });
 
+  const isGuest = Boolean(currentUser?.isAnonymous);
+
   const value = {
     currentUser,
     userProfile,
-    role: currentUser ? normalizeRole(userProfile?.role) : null,
+    role:
+      currentUser && !currentUser.isAnonymous
+        ? normalizeRole(userProfile?.role)
+        : null,
     isAdmin: roleHasAdminAccess(userProfile?.role),
+    isGuest,
     loading,
     authError,
     // Non-null when the Firestore profile could not be read this session: the
@@ -618,6 +642,8 @@ export function AuthProvider({ children }) {
     changePassword,
     deleteAccount,
     logout,
+    signInAsGuest: ensureGuestSession,
+    ensureGuestSession,
   };
 
   return (

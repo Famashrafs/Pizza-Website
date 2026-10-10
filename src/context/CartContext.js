@@ -39,7 +39,11 @@ function loadCart(uid) {
 
 export function CartProvider({ children }) {
   const { currentUser } = useAuth();
-  const uid = currentUser ? currentUser.uid : GUEST_UID;
+  // Anonymous (guest checkout) sessions are a backend identity only — they must
+  // NOT move the cart to `cart-{anonUid}`. Treating them as the guest uid keeps
+  // the shopper's cart under `cart-guest` before, during and after checkout.
+  const uid =
+    currentUser && !currentUser.isAnonymous ? currentUser.uid : GUEST_UID;
 
   const [state, setState] = useState(() => loadCart(uid));
   const [isDrawerOpen, setDrawerOpen] = useState(false);

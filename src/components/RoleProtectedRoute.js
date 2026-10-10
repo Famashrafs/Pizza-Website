@@ -19,10 +19,12 @@ import { ADMIN_ROLES, normalizeRole } from '../config/roles';
 // Server-side authorization is documented in `firestore.rules`; client-side
 // guards are never the only line of defense in production.
 export function RoleProtectedRoute({ children, roles = ADMIN_ROLES }) {
-  const { currentUser, role } = useAuth();
+  const { currentUser, role, isGuest } = useAuth();
   const location = useLocation();
 
-  if (!currentUser) {
+  // Anonymous guests have a Firebase session but no role/profile — treat them
+  // as anonymous visitors so they can never reach the admin area.
+  if (!currentUser || isGuest) {
     return (
       <Navigate
         to="/admin/login"

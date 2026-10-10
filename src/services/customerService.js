@@ -62,6 +62,9 @@ function accumulate(customer, order) {
   if (!customer.email && order.customer?.email) customer.email = order.customer.email;
   if (!customer.phone && order.customer?.phone) customer.phone = order.customer.phone;
   if (!customer.customerId && order.customerId) customer.customerId = order.customerId;
+  // Guest checkout orders carry the anonymous Firebase UID as customerId but are
+  // explicitly tagged `customerType: 'guest'` — never label them as registered.
+  if (order.customerType === 'guest') customer.isGuest = true;
   return customer;
 }
 

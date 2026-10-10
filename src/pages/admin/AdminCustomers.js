@@ -171,7 +171,7 @@ function AdminCustomers() {
                     <div className="admin-table-product-meta">
                       <strong>
                         {customer.name}
-                        {customer.customerId && (
+                        {customer.customerId && !customer.isGuest && (
                           <span className="admin-badge tone-success admin-badge--inline">
                             <FontAwesomeIcon icon={faCrown} /> Registered
                           </span>

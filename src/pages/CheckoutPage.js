@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
-import AuthPrompt from '../components/AuthPrompt';
 import CheckoutStepper from '../components/checkout/CheckoutStepper';
 import CustomerInfoStep from '../components/checkout/CustomerInfoStep';
 import FulfillmentStep from '../components/checkout/FulfillmentStep';
@@ -25,7 +24,7 @@ import {
 } from '../utils/checkoutLogic';
 
 function CheckoutPage() {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isGuest, ensureGuestSession } = useAuth();
   const { items, promoCode, count, clearCart } = useCart();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -54,21 +53,39 @@ function CheckoutPage() {
   // mid-submit reuses the same key: repeated/duplicate submissions (double
   // click, refresh, retry after an error) resolve to the original order on the
   // service side instead of creating multiple orders.
+  //
+  // Guests get a stable key of their own (`co-guest-…` under `checkout.id.guest`)
+  // so a guest double-click/retry is idempotent too, and a guest's key can never
+  // collide with a signed-in customer's key.
   const getCheckoutKey = () => {
-    const stKey = `checkout.id.${currentUser?.uid}`;
     if (checkoutKeyRef.current) return checkoutKeyRef.current;
-    let key = currentUser?.uid ? localStorage.getItem(stKey) : null;
+    const accountUid =
+      currentUser && !currentUser.isAnonymous ? currentUser.uid : null;
+    const stKey = accountUid ? `checkout.id.${accountUid}` : 'checkout.id.guest';
+    let key = localStorage.getItem(stKey);
     if (!key) {
-      key = `co-${currentUser?.uid || 'anon'}-${Date.now().toString(36)}`;
-      if (currentUser?.uid) localStorage.setItem(stKey, key);
+      key = accountUid
+        ? `co-${accountUid}-${Date.now().toString(36)}`
+        : `co-guest-${Date.now().toString(36)}`;
+      localStorage.setItem(stKey, key);
     }
     checkoutKeyRef.current = key;
     return key;
   };
 
+  const clearCheckoutKey = () => {
+    const accountUid =
+      currentUser && !currentUser.isAnonymous ? currentUser.uid : null;
+    localStorage.removeItem(
+      accountUid ? `checkout.id.${accountUid}` : 'checkout.id.guest'
+    );
+    checkoutKeyRef.current = null;
+  };
+
   // Prefill customer + address for the signed-in user (and after a late login).
+  // Guests are left blank so they simply type their contact details below.
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || isGuest) return;
     setCustomer((prev) => ({
       fullName: prev.fullName || currentUser.displayName || '',
       email: prev.email || currentUser.email || '',
@@ -90,7 +107,7 @@ function CheckoutPage() {
       }
       return next;
     });
-  }, [currentUser, userProfile]);
+  }, [currentUser, userProfile, isGuest]);
 
   // Load catalog once so we can flag items that are no longer orderable.
   useEffect(() => {
@@ -197,6 +214,7 @@ function CheckoutPage() {
   };
 
   const persistAddress = () => {
+    if (isGuest || !currentUser?.uid) return;
     if (!formatAddress(address)) return;
     const list = getSavedAddresses(currentUser.uid);
     const formatted = formatAddress(address);
@@ -218,8 +236,35 @@ function CheckoutPage() {
     setOrderError('');
 
     try {
+      const idempotencyKey = getCheckoutKey();
+
+      // Signed-in customers order under their own Firebase UID. Everyone else
+      // gets a silent Firebase anonymous session — that UID becomes the order's
+      // customerId so the existing Firestore create rule keeps holding. No
+      // profile document is created and no role is assigned (see AuthContext).
+      let orderCustomerId;
+      let customerType = 'customer';
+      if (currentUser && !currentUser.isAnonymous) {
+        orderCustomerId = currentUser.uid;
+      } else {
+        const guestResult = await ensureGuestSession();
+        if (!guestResult?.success || !guestResult?.value) {
+          console.error(
+            '[checkout] Could not create an anonymous guest session:',
+            guestResult?.error
+          );
+          setOrderError(
+            'Quick order is temporarily unavailable. Please try again or sign in.'
+          );
+          return;
+        }
+        orderCustomerId = guestResult.value.uid;
+        customerType = 'guest';
+      }
+
       const result = await createOrder({
-        customerId: currentUser.uid,
+        customerId: orderCustomerId,
+        customerType,
         items,
         customer,
         fulfillmentType,
@@ -227,7 +272,7 @@ function CheckoutPage() {
         paymentMethod,
         customerNotes: notes,
         promoCode,
-        idempotencyKey: getCheckoutKey(),
+        idempotencyKey,
       });
 
       if (!result.success) {
@@ -245,10 +290,7 @@ function CheckoutPage() {
 
       // The idempotency key has done its job — clear it so the NEXT checkout
       // session gets a fresh key and can never hit this order again.
-      if (currentUser?.uid) {
-        localStorage.removeItem(`checkout.id.${currentUser.uid}`);
-      }
-      checkoutKeyRef.current = null;
+      clearCheckoutKey();
 
       if (saveAddress && fulfillmentType === 'delivery') {
         persistAddress();
@@ -258,6 +300,12 @@ function CheckoutPage() {
       showToast('Order confirmed!');
       navigate('/order-confirmation', { state: { order: result.order } });
     } catch (err) {
+      console.error('[checkout] Failed to place order:', {
+        code: err?.code,
+        message: err?.message,
+        error: err,
+      });
+
       // Keep the cart so the customer can retry.
       setOrderError(
         'Something went wrong while placing your order. Please try again.'
@@ -267,20 +315,6 @@ function CheckoutPage() {
       setSubmitting(false);
     }
   };
-
-  if (!currentUser) {
-    return (
-      <div className="auth-page">
-        <div className="landing-page">
-          <h1 className="landing-title">CHECKOUT</h1>
-        </div>
-        <AuthPrompt
-          title="Login to place your order"
-          message="Your cart is saved. Log in or create an account to finish checkout."
-        />
-      </div>
-    );
-  }
 
   if (items.length === 0 && !placed) {
     return (
@@ -309,6 +343,16 @@ function CheckoutPage() {
       </div>
 
       <div className="checkout-page">
+        {!currentUser && (
+          <div className="checkout-banner checkout-banner--info">
+            <strong>Ordering as a guest?</strong> No account needed — just enter
+            your contact details below. Already have an account?{' '}
+            <Link to="/login/customer" state={{ from: '/checkout' }}>
+              Log in
+            </Link>
+          </div>
+        )}
+
         <CheckoutStepper
           currentStep={step}
           maxStepIndex={maxStepIndex}

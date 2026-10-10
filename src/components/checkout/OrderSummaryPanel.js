@@ -1,6 +1,9 @@
 import React from 'react';
+import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
 function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
+  const currency = RESTAURANT_SETTINGS.currency;
+
   return (
     <div className={`order-summary-panel ${className}`.trim()}>
       <h3>Order Summary</h3>
@@ -21,7 +24,8 @@ function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
               </div>
             </div>
             <span className="order-summary-price">
-              ${(item.lineTotal ?? item.price * item.qty).toFixed(2)}
+              {currency}
+              {(item.lineTotal ?? item.price * item.qty).toFixed(2)}
             </span>
           </div>
         ))}
@@ -30,12 +34,12 @@ function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
       <div className="order-summary-lines">
         <div className="order-summary-line">
           <span>Subtotal</span>
-          <span>${totals.subtotal.toFixed(2)}</span>
+          <span>{currency}{totals.subtotal.toFixed(2)}</span>
         </div>
         {totals.discount > 0 && (
           <div className="order-summary-line order-summary-line--discount">
             <span>Discount{totals.promoCode ? ` (${totals.promoCode})` : ''}</span>
-            <span>-${totals.discount.toFixed(2)}</span>
+            <span>-{currency}{totals.discount.toFixed(2)}</span>
           </div>
         )}
         <div className="order-summary-line">
@@ -45,16 +49,16 @@ function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
               ? 'Pickup'
               : totals.freeDelivery
               ? 'Free'
-              : `$${totals.deliveryFee.toFixed(2)}`}
+              : `${currency}${totals.deliveryFee.toFixed(2)}`}
           </span>
         </div>
         <div className="order-summary-line">
           <span>Tax ({Math.round((totals.taxRate || 0) * 100)}%)</span>
-          <span>${totals.tax.toFixed(2)}</span>
+          <span>{currency}{totals.tax.toFixed(2)}</span>
         </div>
         <div className="order-summary-line order-summary-line--total">
           <span>Total</span>
-          <span>${totals.total.toFixed(2)}</span>
+          <span>{currency}{totals.total.toFixed(2)}</span>
         </div>
       </div>
     </div>

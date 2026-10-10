@@ -1,8 +1,13 @@
 // End-to-end order lifecycle tests at the service layer: creation, access
 // isolation, status transitions, cancellation policy, idempotency, live
 // subscriptions and timestamp handling. They run against the in-memory
-// Firestore mock (`src/services/__mocks__/db.js`) and cover the exact async
-// code paths the UI uses.
+// Firestore mock (`src/services/__mocks__/db.js`).
+//
+// Order *creation* is routed through `orderGateway`, which is mocked with the
+// REAL server-side pricing core (`functions/lib/orderCore.js` + a
+// `checkoutReceipts` receipt flow) — the same logic the production `createOrder`
+// Cloud Function runs. Unit-level money-recomputation assertions for that core
+// live in `functions/lib/orderCore.test.js` (`npm run test:functions`).
 
 import {
   createOrder,
@@ -20,6 +25,7 @@ import { ORDER_STATUS } from '../config/orderStatus';
 import { RESTAURANT_ID } from '../config/restaurant';
 
 jest.mock('./db');
+jest.mock('./orderGateway');
 const db = require('./db');
 
 const OTHER_RESTAURANT = 'restaurant-other';
@@ -432,15 +438,16 @@ describe('timestamp handling', () => {
   it('stores server timestamps and exposes them as ISO strings', async () => {
     const { order } = await placeOrder();
 
+    // The persisted document carries a real (server) timestamp…
     const stored = Object.values(db.__getDocs()).find(
       (doc) =>
         doc.customerId === 'cust-1' && doc.restaurantId === RESTAURANT_ID
     );
     expect(stored.createdAt).toBeInstanceOf(Date);
-    expect(order.createdAt).toBe('2025-01-01T00:00:00.000Z');
-    expect(new Date(order.createdAt).getTime()).toBe(
-      new Date('2025-01-01T00:00:00.000Z').getTime()
-    );
+
+    // …while the response the function returns is already a valid ISO string.
+    expect(typeof order.createdAt).toBe('string');
+    expect(new Date(order.createdAt).getTime()).toBeGreaterThan(0);
     expect(order.updatedAt).toBe(order.createdAt);
   });
 

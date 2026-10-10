@@ -30,7 +30,13 @@ const db = require('./db').default;
 
 jest.setTimeout(60000);
 
-it('places a real order through the real Firestore emulator', async () => {
+// This diagnostic only ever runs against live emulators (Firestore + the
+// createOrder Callable Function), which cannot be assumed in a plain `npm test`
+// run. It skips by default and activates with `REACT_APP_E2E=1`.
+const describeE2E = process.env.REACT_APP_E2E ? describe : describe.skip;
+
+describeE2E('real-emulator e2e order', () => {
+  it('places a real order through the real Firestore emulator', async () => {
   const email = `e2e-${Date.now()}@example.com`;
   const cred = await authMod.createUserWithEmailAndPassword(
     authMod.getAuth(app),
@@ -92,4 +98,5 @@ it('places a real order through the real Firestore emulator', async () => {
   );
 
   expect(result.success).toBe(true);
+  });
 });

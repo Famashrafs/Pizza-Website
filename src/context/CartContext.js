@@ -8,14 +8,13 @@ import React, {
 } from 'react';
 import { useAuth } from './AuthContext';
 import { getCart, saveCart } from '../services/storage';
+import { getRestaurantSettings } from '../services/restaurantService';
 import {
   calculateTotals,
   calculateItemTotal,
   resolveDiscount,
-  DEFAULT_DELIVERY_FEE,
-  DEFAULT_TAX_RATE,
-  FREE_DELIVERY_THRESHOLD,
 } from '../utils/cartPricing';
+import { RESTAURANT_SETTINGS } from '../config/restaurant';
 import {
   addItemToCart,
   updateCartItem,
@@ -47,6 +46,24 @@ export function CartProvider({ children }) {
 
   const [state, setState] = useState(() => loadCart(uid));
   const [isDrawerOpen, setDrawerOpen] = useState(false);
+  // Authoritative restaurant settings (tax, delivery fee, threshold) loaded once
+  // so the cart drawer and cart page display the same totals the checkout page
+  // shows. Falls back to the static config while loading / on failure.
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getRestaurantSettings()
+      .then((value) => {
+        if (active) setSettings(value);
+      })
+      .catch(() => {
+        /* keep the static fallback */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Load the cart for the active user. When signing in, fold any guest cart
   // into the account cart so nothing is lost (sync-ready behaviour).
@@ -95,11 +112,9 @@ export function CartProvider({ children }) {
     () =>
       calculateTotals(items, {
         promoCode: state.promoCode,
-        deliveryFee: DEFAULT_DELIVERY_FEE,
-        taxRate: DEFAULT_TAX_RATE,
-        freeDeliveryThreshold: FREE_DELIVERY_THRESHOLD,
+        settings: settings || RESTAURANT_SETTINGS,
       }),
-    [items, state.promoCode]
+    [items, state.promoCode, settings]
   );
 
   const setItems = useCallback((updater) => {

@@ -35,6 +35,10 @@ jest.mock('firebase/auth', () => ({
   setPersistence: jest.fn(),
   browserLocalPersistence: {},
   browserSessionPersistence: {},
+  signInAnonymously: jest.fn(async () => ({
+    user: { uid: 'anon-guest-1', isAnonymous: true },
+  })),
+  getRedirectResult: jest.fn(),
 }));
 
 jest.mock('./firebase', () => ({
@@ -86,7 +90,7 @@ afterEach(() => {
 // Signs in through the real login form. The mocked firebase/auth module resolves
 // by publishing the auth state, exactly like Firebase does after a credential
 // sign-in, so the routing decision runs against the Firestore profile.
-async function signInThroughForm(email, password, user) {
+async function signInThroughForm(email, password, user, buttonName) {
   const { signInWithEmailAndPassword } = require('firebase/auth');
   signInWithEmailAndPassword.mockImplementation(async () => {
     await act(async () => {
@@ -97,7 +101,7 @@ async function signInThroughForm(email, password, user) {
 
   fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: email } });
   fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: password } });
-  fireEvent.click(screen.getByRole('button', { name: /^login$/i }));
+  fireEvent.click(screen.getByRole('button', { name: buttonName }));
 }
 
 test('a checking-authentication state is shown before the profile resolves', async () => {
@@ -109,12 +113,14 @@ test('a checking-authentication state is shown before the profile resolves', asy
   await resolveAuth(null);
 });
 
-test('anonymous user visiting /admin is redirected to /login', async () => {
+test('anonymous user visiting /admin is redirected to the admin login', async () => {
   goTo('/admin');
   render(<App />);
   await resolveAuth(null);
 
-  await waitFor(() => expect(window.location.pathname).toBe('/login'));
+  // Signed-out visitors are pointed at the dedicated ADMIN login, not the
+  // customer login chooser, so the owner path stays explicit.
+  await waitFor(() => expect(window.location.pathname).toBe('/admin/login'));
 });
 
 test('owner sees a Dashboard entry in the account menu; customer does not', async () => {
@@ -157,7 +163,7 @@ test('admin login and admin signup pages are reachable while signed out', async 
   render(<App />);
   await resolveAuth(null);
   await waitFor(() =>
-    expect(screen.getByText(/Create your admin account/i)).toBeInTheDocument()
+    expect(screen.getByText(/Create Restaurant Admin Account/i)).toBeInTheDocument()
   );
 });
 
@@ -331,7 +337,7 @@ test('ambiguous ownership resolves deterministically to the deployment restauran
   );
 });
 
-test('an owner signing in through the login form lands on the dashboard', async () => {
+test('an owner signing in through the ADMIN login form lands on the dashboard', async () => {
   // The role lives in Firestore, never in localStorage: routing on the stored
   // (absent) role sent every owner to /account instead of /admin.
   seedUser('owner-form-1', {
@@ -346,7 +352,7 @@ test('an owner signing in through the login form lands on the dashboard', async 
     name: 'Demo Pizza',
     ownerId: 'owner-form-1',
   });
-  goTo('/login');
+  goTo('/admin/login');
   render(<App />);
   await resolveAuth(null);
 
@@ -354,21 +360,21 @@ test('an owner signing in through the login form lands on the dashboard', async 
     uid: 'owner-form-1',
     email: 'owner.form@example.com',
     displayName: 'Owner Form',
-  });
+  }, /^Admin Login$/);
 
   await waitFor(() => expect(window.location.pathname).toBe('/admin'));
 });
 
-test('a customer signing in through the login form stays out of the dashboard', async () => {
+test('a customer signing in through the customer login form stays out of the dashboard', async () => {
   seedUser('cust-form-1', { role: 'customer', email: 'cust.form@example.com' });
-  goTo('/login');
+  goTo('/login/customer');
   render(<App />);
   await resolveAuth(null);
 
   await signInThroughForm('cust.form@example.com', 'secret123', {
     uid: 'cust-form-1',
     email: 'cust.form@example.com',
-  });
+  }, /^Customer Login$/);
 
   await waitFor(() => expect(window.location.pathname).toBe('/account'));
 });

@@ -35,11 +35,13 @@ function ReviewStep({
   promoCode,
   onEditStep,
   availabilityIssues = [],
+  priceChanges = [],
   submitting = false,
   onPlaceOrder,
   orderError = '',
 }) {
   const payment = getPaymentMethod(paymentMethod);
+  const currency = RESTAURANT_SETTINGS.currency;
 
   return (
     <section className="checkout-section" aria-labelledby="checkout-review-title">
@@ -52,6 +54,28 @@ function ReviewStep({
         <p className="checkout-banner checkout-banner--error" role="alert">
           <FontAwesomeIcon icon={faTriangleExclamation} /> {orderError}
         </p>
+      )}
+
+      {priceChanges.length > 0 && (
+        <div className="checkout-banner checkout-banner--warning" role="alert">
+          <FontAwesomeIcon icon={faTriangleExclamation} />
+          <div>
+            <strong>Prices changed since you added these items:</strong>
+            <ul>
+              {priceChanges.map((change) => (
+                <li key={change.id}>
+                  {change.name} — {currency}
+                  {change.oldPrice.toFixed(2)} → {currency}
+                  {change.newPrice.toFixed(2)}
+                </li>
+              ))}
+            </ul>
+            <small>
+              The totals shown below reflect the current menu prices that this
+              order will be charged.
+            </small>
+          </div>
+        </div>
       )}
 
       {availabilityIssues.length > 0 && (

@@ -1,13 +1,21 @@
-// Order creation boundary. Everything here is treated as the authoritative
-// "server": it re-fetches the catalog, re-validates the cart and customer,
-// recalculates every price, and only then persists the order. Totals coming
-// from the client are never trusted.
+// Order service for the customer storefront and admin dashboard.
+//
+// ORDER CREATION IS NOT TRUSTED HERE — it is delegated to the `createOrder`
+// Cloud Function (functions/index.js), reached through `orderGateway`. The
+// function recomputes every price from the live catalog and the authoritative
+// restaurant settings document, so browser-side totals are never part of the
+// cost of an order. `firestore.rules` denies client-side `orders` creation, so
+// the only way an order appears is through the function (Admin SDK).
+//
+// Everything else in this module (reads, cancellation, status transitions,
+// subscriptions, reorder) runs client-side against `firestore.rules`, which
+// keep orders scoped to their owner and their restaurant.
 //
 // Orders live in the flat `orders` collection of Firestore. Each order is
 // tagged with `restaurantId` (the restaurant that fulfils it) and `customerId`
-// (the account that placed it). Access is enforced through indexed queries at
-// the service layer AND through `firestore.rules`, so a customer can only ever
-// read their own orders and an owner only their restaurant's orders.
+// (the verified account that placed it). Access is enforced through indexed
+// queries at the service layer AND through `firestore.rules`, so a customer can
+// only ever read their own orders and an owner only their restaurant's orders.
 
 import { fetchProducts } from './menuService.js';
 import { RESTAURANT_ID } from '../config/restaurant';
@@ -21,33 +29,13 @@ import {
   canTransitionToOrderStatus,
 } from '../config/orderStatus.js';
 import { createCartItem, createSimpleCartItem } from '../utils/cartItem.js';
-import { calculateTotals } from '../utils/cartPricing.js';
-import {
-  validateCustomerInfo,
-  validateAddress,
-  formatAddress,
-  getEstimatedTime,
-} from '../utils/checkoutLogic.js';
-import {
-  createPaymentIntent,
-  getPaymentMethod,
-  getInitialPaymentStatus,
-} from './paymentService.js';
+import { placeOrderViaGateway, getGuestOrderViaGateway } from './orderGateway.js';
 import db from './db';
 
 const COLLECTION = 'orders';
 const path = (id) => `${COLLECTION}/${id}`;
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
-
-function generateOrderId() {
-  const stamp = Date.now().toString(36).toUpperCase().slice(-6);
-  const rand = Math.floor(Math.random() * 1296)
-    .toString(36)
-    .toUpperCase()
-    .padStart(2, '0');
-  return `ORD-${stamp}${rand}`;
-}
 
 // Normalizes stored timestamp values into ISO strings (one place, once) and
 // exposes the documented compatibility aliases (`placedAt`, `customerInfo`,
@@ -151,171 +139,50 @@ export async function createOrder({
   restaurantId = RESTAURANT_ID,
   idempotencyKey = null,
 } = {}) {
-  const errors = {};
-
-  if (!cartItems.length) {
-    errors.cart = 'Your cart is empty.';
-  }
-
-  // Checkout requires an authenticated identity — the UID becomes the order's
-  // owner and the only key under which the customer can ever read it. Guest
-  // checkout satisfies this with a Firebase *anonymous* user (see AuthContext
-  // `ensureGuestSession`), so the UID is always real and the Firestore create
-  // rule (`customerId == request.auth.uid`) keeps holding.
-  if (!customerId) {
-    errors.auth = 'You must be signed in to place an order.';
-  }
-
-  // `customerType` is a display/analytics tag only — it never widens access.
-  // `customerId` stays the sole ownership key, exactly as the rules expect.
-  const resolvedCustomerType = customerType === 'guest' ? 'guest' : 'customer';
-
-  const customerErrors = validateCustomerInfo(customer);
-  if (Object.keys(customerErrors).length) {
-    errors.customer = customerErrors;
-  }
-
-  const addressErrors = validateAddress(address || {}, fulfillmentType);
-  if (Object.keys(addressErrors).length) {
-    errors.address = addressErrors;
-  }
-
-  const payment = getPaymentMethod(paymentMethod);
-  if (!payment) {
-    errors.payment = 'Please choose a payment method.';
-  } else if (!payment.enabled) {
-    errors.payment = `${payment.label} is not available yet. Please choose another method.`;
-  }
-
-  // The storefront only ever produces orders for its own restaurant, but the
-  // restaurant is still validated so a stale/wrong id never produces an order.
-  const restaurant = await db.getDoc(`restaurants/${restaurantId}`);
-  if (!restaurant || !restaurantId) {
-    errors.restaurant = 'This store is unavailable right now. Please try again later.';
-  }
-
-  // Rebuild every line from the LIVE catalog scoped to the order's restaurant.
-  const products = await fetchProducts(restaurantId);
-  const { items, issues } = await recalculateItems(cartItems, products);
-  if (issues.length) {
-    errors.items = issues;
-  }
-
-  if (Object.keys(errors).length) {
-    return {
-      success: false,
-      errors,
-      error: 'We could not place your order. Please review the highlighted fields.',
-    };
-  }
-
-  // Idempotency: a repeated submit (double click, refresh after write) with the
-  // same key returns the original order instead of creating a duplicate.
-  if (idempotencyKey && customerId) {
-    const existing = await findOrderByCheckoutId(customerId, idempotencyKey);
-    if (existing) {
-      return { success: true, order: existing, reuse: true };
-    }
-  }
-
-  // Authoritative totals — recomputed from live prices. The client only ever
-  // supplies the item selections and promo code; money is derived here.
-  const totals = calculateTotals(items, { promoCode, fulfillmentType });
-
-  const phone = String(customer.phone || '').trim();
-  const normalizedAddress =
-    fulfillmentType === 'pickup'
-      ? null
-      : {
-          street: String(address.street || '').trim(),
-          area: String(address.area || '').trim(),
-          building: String(address.building || '').trim(),
-          apartment: String(address.apartment || '').trim(),
-          floor: String(address.floor || '').trim(),
-          landmark: String(address.landmark || '').trim(),
-          city: String(address.city || '').trim(),
-          phone: String(address.phone || phone).trim(),
-        };
-
-  let paymentStatus = getInitialPaymentStatus(payment.id);
-  let paymentProvider = payment.provider || null;
-  try {
-    const intent = createPaymentIntent({ method: payment.id });
-    paymentStatus = intent.status;
-    paymentProvider = intent.provider;
-  } catch (err) {
-    paymentStatus = 'pending';
-  }
-
-  const orderId = generateOrderId();
-
-  const nowClient = new Date().toISOString();
-
-  const order = {
-    // Multi-tenant tag: every order belongs to exactly one restaurant. The
-    // customer-facing store produces orders for the deployment's restaurant;
-    // the admin dashboard reads orders strictly by restaurantId.
+  // Orders are ONLY created by the trusted `createOrder` Cloud Function (see
+  // functions/index.js), which the client reaches through `orderGateway`.
+  // `firestore.rules` denies client-side order writes entirely, so no amount of
+  // browser manipulation can influence totals: the function recomputes every
+  // price from the live catalog and the authoritative restaurant settings.
+  //
+  // `customerId` is forwarded only so a development/test double can map
+  // identity; the production function IGNORES it and derives customerId from
+  // the caller's verified Firebase auth (anonymous or registered), so identity
+  // can never be impersonated over the wire.
+  const payload = {
     restaurantId,
     customerId,
-    customerType: resolvedCustomerType,
-    customer: {
-      fullName: String(customer.fullName || '').trim(),
-      email: String(customer.email || '').trim(),
-      phone,
-    },
-    items,
-    subtotal: totals.subtotal,
-    deliveryFee: totals.deliveryFee,
-    discount: totals.discount,
-    tax: totals.tax,
-    total: totals.total,
-    promoCode: totals.promoCode || null,
-    pricing: {
-      subtotal: totals.subtotal,
-      discount: totals.discount,
-      promoCode: totals.promoCode,
-      deliveryFee: totals.deliveryFee,
-      freeDelivery: totals.freeDelivery,
-      tax: totals.tax,
-      taxRate: totals.taxRate,
-      fulfillmentType,
-    },
+    customerType,
+    items: cartItems,
+    customer,
     fulfillmentType,
-    address: normalizedAddress,
-    addressText: normalizedAddress ? formatAddress(normalizedAddress) : null,
-    paymentMethod: payment.id,
-    paymentStatus,
-    paymentProvider,
-    orderStatus: ORDER_STATUS.PENDING,
-    customerNotes: String(customerNotes || '').trim(),
-    estimatedTime: getEstimatedTime(fulfillmentType),
-    checkoutId: idempotencyKey || null,
-    statusHistory: [
-      { status: ORDER_STATUS.PENDING, at: nowClient, changedBy: 'customer' },
-    ],
-    createdAt: db.serversNow(),
-    updatedAt: db.serversNow(),
+    address,
+    paymentMethod,
+    customerNotes,
+    promoCode,
+    idempotencyKey,
   };
 
-  await db.setDoc(path(orderId), order);
+  const result = await placeOrderViaGateway(payload);
 
-  // Read back through the same path the UI uses so server timestamps are
-  // normalized (Timestamp -> ISO) exactly as they will appear everywhere else.
-  const stored = await db.getDoc(path(orderId));
+  if (!result || result.success !== true) {
+    return result;
+  }
+
+  const stored = result.order || {};
+  // Hydrate exactly as the read path does so the returned order matches what
+  // the UI would see after a read-back (ISO timestamps, aliases, statusMeta).
+  // Guest checkout additionally carries a trackingToken that the function
+  // delivered exactly once — the confirmation page needs it for refresh-safe,
+  // server-authorised tracking.
   return {
     success: true,
-    order: normalizeOrder(hydrateOrder(stored || { ...order, id: orderId })),
+    order: normalizeOrder(
+      hydrateOrder({ ...stored, id: stored.id || result.orderId })
+    ),
+    reuse: result.reuse === true,
+    ...(result.trackingToken ? { trackingToken: result.trackingToken } : {}),
   };
-}
-
-// Orders for one customer are fetched once (indexed on customerId) and the
-// idempotency key matched in code, so no composite index is required.
-async function findOrderByCheckoutId(customerId, idempotencyKey) {
-  const docs = await db.getDocs(COLLECTION, {
-    where: [{ field: 'customerId', op: '==', value: customerId }],
-  });
-  const match = docs.find((order) => order.checkoutId === idempotencyKey);
-  return match ? normalizeOrder(hydrateOrder(match)) : null;
 }
 
 // --- Order access (ownership is always enforced here) ---
@@ -328,6 +195,17 @@ export async function getOrderForUser(id, uid) {
   // orders that have no customerId.
   if (!order.customerId || order.customerId !== uid) return null;
   return normalizeOrder(hydrateOrder(order));
+}
+
+// Secure guest-order lookup for the confirmation page. A guest has no account,
+// so instead of a Firestore read we ask the `getGuestOrder` callable, which
+// verifies the high-entropy token the checkout response delivered once. A wrong
+// or missing token is denied server-side before any order data leaves it.
+export async function getGuestOrder(id, token) {
+  if (!id || !token) return null;
+  const result = await getGuestOrderViaGateway({ orderId: id, token });
+  if (!result || result.success !== true || !result.order) return null;
+  return normalizeOrder(hydrateOrder({ ...result.order, id: result.order.id || id }));
 }
 
 export async function getUserOrders(uid) {

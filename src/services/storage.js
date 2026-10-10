@@ -110,3 +110,32 @@ export function removeUserData(uid) {
     }
   });
 }
+
+// Device-local reference to the most recently placed order, used by the order
+// confirmation page to recover after a refresh (React Router state is volatile).
+// For guest checkout this is also the ONLY copy of the high-entropy tracking
+// token, so it is stored on this device and never written back to the server.
+export function getLastOrder() {
+  return readJSON('last-order', null);
+}
+
+export function saveLastOrder(record = null) {
+  if (!record || !record.orderId) {
+    clearLastOrder();
+    return;
+  }
+  writeJSON('last-order', {
+    orderId: record.orderId,
+    ...(record.token ? { token: record.token } : {}),
+    ...(record.uid ? { uid: record.uid } : {}),
+    placedAt: record.placedAt || new Date().toISOString(),
+  });
+}
+
+export function clearLastOrder() {
+  try {
+    localStorage.removeItem('last-order');
+  } catch (err) {
+    /* storage unavailable — nothing to clear */
+  }
+}

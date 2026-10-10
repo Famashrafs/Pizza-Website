@@ -64,12 +64,13 @@ export function resolveDiscount(promoCode, subtotal, promoTable = PROMO_CODES) {
 export function calculateTotals(items = [], options = {}) {
   const {
     fulfillmentType = 'delivery',
-    deliveryFee = DEFAULT_DELIVERY_FEE,
-    freeDeliveryThreshold = FREE_DELIVERY_THRESHOLD,
-    taxRate = DEFAULT_TAX_RATE,
     promoCode = '',
     promoTable = PROMO_CODES,
     settings = RESTAURANT_SETTINGS,
+    deliveryFee = settings.delivery?.baseFee ?? DEFAULT_DELIVERY_FEE,
+    freeDeliveryThreshold =
+      settings.delivery?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD,
+    taxRate = settings.taxRate ?? DEFAULT_TAX_RATE,
   } = options;
 
   const safeItems = items || [];

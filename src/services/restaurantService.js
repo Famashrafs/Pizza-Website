@@ -65,6 +65,46 @@ export async function getRestaurantById(id) {
   return normalize(await db.getDoc(path(id)));
 }
 
+// Resolves the RESTAURANT-SCOPED settings the whole storefront should use for
+// pricing and estimates. The Firestore `restaurants/{id}` document — which the
+// AdminSettings page edits via `updateRestaurant` — is the AUTHORITATIVE source;
+// the static RESTAURANT_SETTINGS constants are only a fallback for fields the
+// document does not carry yet. The trusted `createOrder` Cloud Function reads
+// the same document, so the checkout estimate and the charged amount cannot
+// drift.
+function numberOr(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export async function getRestaurantSettings(restaurantId = RESTAURANT_ID) {
+  const restaurant = await getRestaurantById(restaurantId);
+  const base = RESTAURANT_SETTINGS;
+  return {
+    name: restaurant?.name || base.name,
+    tagline: restaurant?.tagline || base.tagline,
+    phone: restaurant?.phone || base.phone,
+    email: restaurant?.email || base.email,
+    currency: String(restaurant?.currency || base.currency || '$').trim() || '$',
+    taxRate: numberOr(restaurant?.taxRate, base.taxRate),
+    minOrder: numberOr(restaurant?.minOrder, base.minOrder),
+    deliveryEnabled: restaurant ? restaurant.deliveryEnabled !== false : true,
+    delivery: {
+      baseFee: numberOr(restaurant?.deliveryFee, base.delivery.baseFee),
+      freeDeliveryThreshold: numberOr(
+        restaurant?.freeDeliveryThreshold,
+        base.delivery.freeDeliveryThreshold
+      ),
+      estimatedMinutes: base.delivery.estimatedMinutes,
+    },
+    pickup: {
+      address: restaurant?.address || base.pickup.address,
+      hours: restaurant?.openingHours || base.pickup.hours,
+      estimatedMinutes: base.pickup.estimatedMinutes,
+    },
+  };
+}
+
 export async function getOwnerRestaurant(ownerId) {
   const matches = await getOwnerRestaurants(ownerId);
   return matches.length ? matches[0] : null;
@@ -207,6 +247,7 @@ export async function onboardOwnerRestaurant({ ownerId, name }) {
 const restaurantService = {
   getRestaurants,
   getRestaurantById,
+  getRestaurantSettings,
   getOwnerRestaurant,
   getOwnerRestaurants,
   fetchOwnerRestaurant,

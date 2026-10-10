@@ -10,13 +10,18 @@ import PaymentStep from '../components/checkout/PaymentStep';
 import ReviewStep from '../components/checkout/ReviewStep';
 import OrderSummaryPanel from '../components/checkout/OrderSummaryPanel';
 import { fetchProducts } from '../services/menuService';
-import { createOrder } from '../services/orderService';
-import { getSavedAddresses, saveSavedAddresses } from '../services/storage';
+import { getRestaurantSettings } from '../services/restaurantService';
+import { createOrder, recalculateItems } from '../services/orderService';
+import {
+  getSavedAddresses,
+  saveSavedAddresses,
+  saveLastOrder,
+} from '../services/storage';
 import {
   CHECKOUT_STEPS,
   createEmptyAddress,
   createEmptyCustomer,
-  findUnavailableItems,
+  diffCartPrices,
   formatAddress,
   getCheckoutTotals,
   validateAddress,
@@ -45,6 +50,8 @@ function CheckoutPage() {
   const [orderError, setOrderError] = useState('');
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  const [productsFailed, setProductsFailed] = useState(false);
+  const [settings, setSettings] = useState(null);
 
   const submitLock = useRef(false);
   const checkoutKeyRef = useRef(null);
@@ -109,18 +116,26 @@ function CheckoutPage() {
     });
   }, [currentUser, userProfile, isGuest]);
 
-  // Load catalog once so we can flag items that are no longer orderable.
+  // Load the catalog and the AUTHORITATIVE restaurant settings (tax, delivery
+  // fee, free-delivery threshold) so the review totals match what the trusted
+  // order function will actually charge. Products are used to flag items that
+  // are no longer orderable.
   useEffect(() => {
     let active = true;
     setProductsLoading(true);
-    fetchProducts()
-      .then((list) => {
+    setProductsFailed(false);
+    Promise.all([fetchProducts(), getRestaurantSettings()])
+      .then(([list, restaurantSettings]) => {
         if (!active) return;
         setProducts(list);
+        setSettings(restaurantSettings);
         setProductsLoading(false);
       })
       .catch(() => {
-        if (active) setProductsLoading(false);
+        if (active) {
+          setProductsLoading(false);
+          setProductsFailed(true);
+        }
       });
     return () => {
       active = false;
@@ -129,14 +144,34 @@ function CheckoutPage() {
 
   const currentIndex = CHECKOUT_STEPS.findIndex((entry) => entry.id === step);
 
-  const totals = useMemo(
-    () => getCheckoutTotals(items, { promoCode, fulfillmentType }),
-    [items, promoCode, fulfillmentType]
+  // Revalidate the cart against the LIVE catalog (the same rebuild the trusted
+  // order function performs server-side). Lines whose product/config vanished
+  // are reported as issues; surviving lines are repriced from the catalog so
+  // the review shows the amount the function will actually charge.
+  const catalogReady = !productsLoading && !productsFailed;
+  const recalc = useMemo(
+    () => (catalogReady ? recalculateItems(items, products) : null),
+    [catalogReady, items, products]
   );
 
-  const availabilityIssues = useMemo(
-    () => (productsLoading ? [] : findUnavailableItems(items, products)),
-    [items, products, productsLoading]
+  const availabilityIssues = recalc ? recalc.issues : [];
+
+  // Detects unit-price differences between what the shopper added to the cart
+  // and what the menu charges today, so a stale price is never presented as
+  // final without a clear notice.
+  const priceChanges = useMemo(
+    () => (recalc ? diffCartPrices(items, recalc.items) : []),
+    [items, recalc]
+  );
+
+  // Review (and the sticky summary once the catalog is in) shows live prices:
+  // totals recompute from the revalidated lines so the displayed amount matches
+  // what the server will charge. The cart itself keeps the shopper's prices
+  // until an order is actually placed.
+  const displayItems = recalc && recalc.items.length ? recalc.items : items;
+  const displayTotals = useMemo(
+    () => getCheckoutTotals(displayItems, { promoCode, fulfillmentType, settings }),
+    [displayItems, promoCode, fulfillmentType, settings]
   );
 
   const stepErrors = {
@@ -292,6 +327,15 @@ function CheckoutPage() {
       // session gets a fresh key and can never hit this order again.
       clearCheckoutKey();
 
+      // Persist a local reference to the placed order so the confirmation page
+      // survives a refresh (React Router state is volatile). For guests this is
+      // also the ONLY copy of the high-entropy tracking token.
+      saveLastOrder({
+        orderId: result.order.id,
+        ...(result.trackingToken ? { token: result.trackingToken } : {}),
+        ...(orderCustomerId ? { uid: orderCustomerId } : {}),
+      });
+
       if (saveAddress && fulfillmentType === 'delivery') {
         persistAddress();
       }
@@ -399,11 +443,12 @@ function CheckoutPage() {
                 paymentMethod={paymentMethod}
                 notes={notes}
                 onNotesChange={setNotes}
-                items={items}
-                totals={totals}
+                items={displayItems}
+                totals={displayTotals}
                 promoCode={promoCode}
                 onEditStep={handleStepSelect}
                 availabilityIssues={availabilityIssues}
+                priceChanges={priceChanges}
                 submitting={submitting}
                 onPlaceOrder={handlePlaceOrder}
                 orderError={orderError}
@@ -429,8 +474,8 @@ function CheckoutPage() {
           {step !== 'review' && (
             <aside className="checkout-aside">
               <OrderSummaryPanel
-                items={items}
-                totals={totals}
+                items={displayItems}
+                totals={displayTotals}
                 fulfillmentType={fulfillmentType}
                 className="order-summary-panel--sticky"
               />

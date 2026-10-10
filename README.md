@@ -277,6 +277,19 @@ What gets deployed:
    client-side sort when the index is missing, but creating it removes the
    `FAILED_PRECONDITION` errors (and makes the realtime listeners clean).
 
+### 2. Deploy Cloud Functions
+
+Checkout depends on the callable functions in `functions/` — `createOrder`
+(trusted order creation) and `getGuestOrder` (token-verified guest lookup):
+
+```bash
+npx firebase deploy --only functions
+```
+
+This requires the project to be on the **Blaze (pay-as-you-go)** plan. Until the
+functions are deployed, checkout and guest tracking return an
+`internal`/`not-found` callable error.
+
 ### First-run bootstrap
 
 The code never seeds the store from a read path. The catalog and the owner
@@ -290,6 +303,7 @@ rules, just register the owner once and the customer menu will populate.
       project (Build → Firestore Database); `npx firebase deploy --only firestore`
       fails with `NOT_FOUND` while it does not
 - [ ] `npx firebase deploy --only firestore` succeeds for the `resturent-system` project
+- [ ] `npx firebase deploy --only functions` succeeds (Blaze plan required) so checkout + guest tracking work
 - [ ] Register an owner at `/owner/register` → lands on `/admin`, menu seeds
 - [ ] Signed-out visit to `/menu` shows the seeded products (public read works)
 - [ ] The browser console prints no `[app] Could not read users/…` warning
@@ -301,6 +315,97 @@ rules, just register the owner once and the customer menu will populate.
 > `restaurants/{id}/categories` as a subcollection. Do not weaken the rules
 > (no `allow write: if true`, no broad signed-in grants) and never store passwords
 > or raw card data — cards are only ever provider tokens.
+
+---
+
+## 🧾 Ordering Flow (Menu → Cart → Checkout → Confirmation → Tracking)
+
+The ordering journey is **backend-authoritative**: the browser never decides
+prices and never writes orders.
+
+```text
+Menu ──▶ Cart ──▶ Checkout ──▶ createOrder (Cloud Function) ──▶ Confirmation ──▶ Tracking
+```
+
+### Who can order
+
+* **Registered customers** sign in normally and get their orders saved to their
+  account (`/orders`, `/orders/:id`).
+* **Guests** are signed in *anonymously* (`ensureGuestSession`) so they can check
+  out in seconds. Guests are intentionally treated as signed-out for account
+  pages — they can never open `/orders`, `/orders/:id`, `/account`,
+  `/addresses`, or `/favorites`.
+
+### Trusted order creation
+
+* `firestore.rules` denies all client order writes. Orders are created **only**
+  by the `createOrder` Cloud Function (`functions/index.js`), which the client
+  reaches through `src/services/orderGateway.js`.
+* The function recomputes **every** price line, subtotal, tax and delivery fee
+  from the live `products` catalog and the authoritative `restaurants/{id}`
+  settings document. A tampered client price is ignored, not charged.
+* Identity is derived from the caller's verifiable Firebase auth (anonymous or
+  registered); `payload.customerId` is never trusted.
+* Repeated submits are idempotent via a `checkoutReceipts` transaction keyed on
+  the checkout id, so a retry returns the original order instead of duplicating.
+
+### Pricing stays in sync
+
+* Checkout revalidates the cart against the live catalog before submitting. If a
+  product became unavailable, or its price changed after it was added, the
+  customer is warned and the displayed totals switch to the current menu prices.
+* The cart drawer and cart page read the same `restaurants/{id}` settings
+  (tax, delivery fee, free-delivery threshold) as checkout, so displayed totals
+  never disagree with the authoritative amount.
+
+### Payment
+
+* **Cash on delivery / pickup only.** Every order is created with
+  `paymentStatus: 'pending'`; the app never claims a card was charged online.
+
+### Order confirmation & tracking
+
+* Confirmation is **refresh-safe**: the last order reference
+  (`orderId`, and for guests the tracking token) is kept in local storage
+  (`last-order`), so a hard refresh still resolves the order.
+* **Registered** customers recover the order by ownership and receive live
+  status updates through a Firestore subscription.
+* **Guests** recover the order through the `getGuestOrder` callable, which
+  requires a high-entropy `trackingToken` delivered exactly once at checkout.
+  Only its SHA-256 hash (`guestTokenHash`) is stored on the order — the raw
+  token is never persisted, and an order id alone can never unlock an order.
+* If neither path can authorize the viewer, the page shows an honest
+  **“No order found”** state rather than a fake success.
+
+> Order status is defined in `src/config/orderStatus.js`:
+> delivery `placed → confirmed → preparing → out_for_delivery → delivered`,
+> pickup `placed → confirmed → preparing → ready → delivered`.
+
+---
+
+## 🧪 Testing
+
+The project ships unit, service, and app-level tests plus rule/config checks.
+
+```bash
+# Frontend + service + app-level tests (Jest / React Testing Library)
+npm test -- --watchAll=false
+
+# Trusted order core (server-side pricing/validation) — Node's built-in runner
+npm run test:functions
+
+# Static validation of firestore.rules + firestore.indexes.json
+npm run rules:check
+```
+
+Notes:
+
+* Service tests run the **real** server-side pricing core
+  (`functions/lib/orderCore.js`) behind a mocked gateway, so money math is
+  exercised against the same logic the Cloud Function runs.
+* The Firestore-backed e2e suite (`src/services/__e2e.test.js`) is **skipped**
+  unless a live project is configured and `REACT_APP_E2E` is set; it is not part
+  of the default green run.
 
 ---
 

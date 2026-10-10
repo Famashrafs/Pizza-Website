@@ -11,6 +11,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // True when the caller is a Firebase ANONYMOUS session (guest checkout).
+    // Anonymous users may place and manage their own orders, but they are NOT
+    // registered customers: they never get a users/{uid} profile, never hold a
+    // role, and never manage any restaurant resource.
+    function isAnonymous() {
+      return isSignedIn()
+        && 'token' in request.auth
+        && 'firebase' in request.auth.token
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
     function userDoc() {
       return get(
         /databases/$(database)/documents/users/$(request.auth.uid)
@@ -19,6 +30,7 @@ service cloud.firestore {
 
     function hasRole(role) {
       return isSignedIn()
+        && !isAnonymous()
         && 'role' in userDoc()
         && userDoc().role == role;
     }
@@ -41,6 +53,9 @@ service cloud.firestore {
     }
 
     function canManageRestaurant(restaurantId) {
+      // Management requires a REGISTERED account with an owner/admin role.
+      // Anonymous (guest) sessions never satisfy isMemberOf (their users doc is
+      // denied) and never hold a role, so they are excluded twice over.
       return isMemberOf(restaurantId)
         && (
           hasRole('restaurant_owner')
@@ -58,11 +73,15 @@ service cloud.firestore {
       // IMPORTANT:
       // Do not inspect resource.data on READ.
       // The document may not exist yet.
+      // Anonymous guests have no profile document; reading it is denied.
       allow read: if isSignedIn()
+        && !isAnonymous()
         && request.auth.uid == userId;
 
       // Profile creation.
+      // Registered (non-anonymous) accounts only. Guests never create profiles.
       allow create: if isSignedIn()
+        && !isAnonymous()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.role in [
           'customer',
@@ -72,6 +91,7 @@ service cloud.firestore {
 
       // Profile update.
       allow update: if isSignedIn()
+        && !isAnonymous()
         && isSelfDoc()
         && request.resource.data.role == resource.data.role
         && (
@@ -81,6 +101,7 @@ service cloud.firestore {
 
       // User can delete own profile.
       allow delete: if isSignedIn()
+        && !isAnonymous()
         && isSelfDoc();
 
 
@@ -158,12 +179,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       // Owner can create restaurant.
+      // Anonymous (guest) sessions may not provision restaurants.
       allow create: if isSignedIn()
+        && !isAnonymous()
         && request.resource.data.ownerId == request.auth.uid;
 
       // Owner/admin can manage.
-      // Unowned restaurants can be claimed.
+      // Unowned restaurants can be claimed by a REGISTERED account only.
       allow update: if isSignedIn()
+        && !isAnonymous()
         && (
           isClaim()
           || canManageRestaurant(restaurantId)
@@ -200,8 +224,11 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && isMemberOf(restaurantId);
 
+      // Writes are scoped to the PATH's restaurant (no transfer is possible)
+      // and restricted to registered owner/admin members.
       allow create, update, delete: if isSignedIn()
-        && isMemberOf(restaurantId);
+        && !isAnonymous()
+        && canManageRestaurant(restaurantId);
     }
 
 
@@ -219,13 +246,17 @@ service cloud.firestore {
           || isMemberOf(resource.data.restaurantId)
         );
 
-      // Customer creates own order.
-      allow create: if isSignedIn()
-        && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.restaurantId != null
-        && request.resource.data.orderStatus == 'placed';
+      // ORDER CREATION IS A TRUSTED SERVER PATH ONLY.
+      // Direct client writes are DENIED. Orders are created exclusively by the
+      // `createOrder` Cloud Function (Firebase Admin SDK), which recomputes
+      // every price server-side, enforces the authoritative restaurant
+      // settings and dedupes submissions transactionally. The rules never
+      // trust a client-supplied total / items / pricing block.
+      allow create: if false;
 
       // Customer cancellation OR restaurant staff update.
+      // Staff updates require a registered owner/admin of the order's
+      // restaurant; anonymous (guest) sessions may only cancel their own.
       allow update: if isSignedIn()
         && (
           isCustomerCancellation()
@@ -258,7 +289,8 @@ service cloud.firestore {
 
       function isStaffOrderUpdate() {
         return isSignedIn()
-          && isMemberOf(resource.data.restaurantId)
+          && !isAnonymous()
+          && canManageRestaurant(resource.data.restaurantId)
 
           // Restaurant/customer identity cannot change.
           && request.resource.data.restaurantId
@@ -267,7 +299,9 @@ service cloud.firestore {
           && request.resource.data.customerId
               == resource.data.customerId
 
-          // Only status-related fields can change.
+          // Only status-related fields can change — never prices, items,
+          // payment data or paymentStatus (paymentStatus "paid" cannot be
+          // written by staff or customers; only a verified provider would).
           && request.resource.data
             .diff(resource.data)
             .affectedKeys()
@@ -292,9 +326,25 @@ service cloud.firestore {
       // Public menu.
       allow read: if true;
 
-      // Restaurant members manage products.
-      allow create, update, delete: if isSignedIn()
-        && isMemberOf(request.resource.data.restaurantId);
+      // Restaurant owner/admin members manage products.
+      allow create: if isSignedIn()
+        && !isAnonymous()
+        && request.resource.data.restaurantId != null
+        && canManageRestaurant(request.resource.data.restaurantId);
+
+      // Update/delete ownership is checked against the EXISTING document so a
+      // member of one restaurant can never overwrite or re-home another
+      // restaurant's product. restaurantId can never be transferred between
+      // restaurants: the incoming document must reuse the stored one.
+      allow update: if isSignedIn()
+        && !isAnonymous()
+        && request.resource.data.restaurantId
+            == resource.data.restaurantId
+        && canManageRestaurant(resource.data.restaurantId);
+
+      allow delete: if isSignedIn()
+        && !isAnonymous()
+        && canManageRestaurant(resource.data.restaurantId);
     }
 
 
@@ -307,8 +357,18 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && isMemberOf(resource.data.restaurantId);
 
-      allow create, update: if isSignedIn()
-        && isMemberOf(request.resource.data.restaurantId);
+      allow create: if isSignedIn()
+        && !isAnonymous()
+        && request.resource.data.restaurantId != null
+        && canManageRestaurant(request.resource.data.restaurantId);
+
+      // Same existing-document ownership as products: no transfer, no
+      // cross-restaurant overwrite.
+      allow update: if isSignedIn()
+        && !isAnonymous()
+        && request.resource.data.restaurantId
+            == resource.data.restaurantId
+        && canManageRestaurant(resource.data.restaurantId);
     }
 
 
@@ -320,10 +380,16 @@ service cloud.firestore {
 
       allow read: if isSignedIn();
 
+      // Registered customers only, and always against the caller's own uid.
       allow create: if isSignedIn()
+        && !isAnonymous()
         && request.resource.data.customerId == request.auth.uid;
 
+      // Update/delete also pin to the ORIGINAL author so a customer can never
+      // overwrite or remove another customer's review.
       allow update, delete: if isSignedIn()
+        && !isAnonymous()
+        && resource.data.customerId == request.auth.uid
         && request.resource.data.customerId == request.auth.uid;
     }
 

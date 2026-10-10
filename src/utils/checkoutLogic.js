@@ -33,8 +33,11 @@ export const FULFILLMENT_TYPES = [
   },
 ];
 
-export function getCheckoutTotals(items, { promoCode = '', fulfillmentType = 'delivery' } = {}) {
-  return calculateTotals(items, { promoCode, fulfillmentType });
+export function getCheckoutTotals(
+  items,
+  { promoCode = '', fulfillmentType = 'delivery', settings } = {}
+) {
+  return calculateTotals(items, { promoCode, fulfillmentType, settings });
 }
 
 export function getEstimatedTime(fulfillmentType, settings = RESTAURANT_SETTINGS) {
@@ -134,5 +137,23 @@ export function findUnavailableItems(items = [], products = []) {
       return createCartItem(product, { ...item.config, qty: item.qty }) === null;
     }
     return false;
+  });
+}
+
+// Compares the unit prices a shopper added to their cart against the prices of
+// the same lines rebuilt from the live catalog. Any difference (a menu price
+// was edited) is reported so checkout can warn before the authoritative amount
+// is charged. Comparison is in cents to avoid floating-point noise.
+export function diffCartPrices(cartItems = [], liveItems = []) {
+  const liveById = new Map(
+    (liveItems || []).map((item) => [item.id, Number(item.unitPrice) || 0])
+  );
+  const cents = (value) => Math.round((Number(value) || 0) * 100);
+  return (cartItems || []).flatMap((item) => {
+    if (!liveById.has(item.id)) return [];
+    const oldPrice = Number(item.unitPrice) || 0;
+    const newPrice = liveById.get(item.id);
+    if (cents(oldPrice) === cents(newPrice)) return [];
+    return [{ id: item.id, name: item.name, oldPrice, newPrice }];
   });
 }

@@ -27,12 +27,20 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "rules:check": "node scripts/validate-firestore-config.js",
+    "test:rules": "npm run rules:check",
+    "test:functions": "node --test functions/lib/orderCore.test.js"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
+    ]
+  },
+  "jest": {
+    "testMatch": [
+      "<rootDir>/src/**/*.test.js"
     ]
   },
   "browserslist": {

@@ -50,6 +50,28 @@ export function resolvePricingConfig(settings) {
   };
 }
 
+// True only when the AUTHORITATIVE settings document carries the shape the
+// pricing math needs (a non-negative tax rate and a delivery block with a
+// non-negative base fee and free-delivery threshold). Unlike
+// `resolvePricingConfig` — which is deliberately forgiving so an estimate can
+// render — this is a strict gate: a malformed/partial document must never be
+// treated as "ready", or checkout could submit against a silent fallback.
+export function hasUsablePricing(settings) {
+  if (!settings || typeof settings !== 'object') return false;
+  const taxRate = Number(settings.taxRate);
+  if (!Number.isFinite(taxRate) || taxRate < 0) return false;
+  const delivery = settings.delivery;
+  if (!delivery || typeof delivery !== 'object') return false;
+  const baseFee = Number(delivery.baseFee);
+  const threshold = Number(delivery.freeDeliveryThreshold);
+  return (
+    Number.isFinite(baseFee) &&
+    baseFee >= 0 &&
+    Number.isFinite(threshold) &&
+    threshold >= 0
+  );
+}
+
 export function calculateItemTotal(item) {
   const price = Number(item?.price) || 0;
   const qty = Number(item?.qty) || 0;

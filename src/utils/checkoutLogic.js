@@ -4,7 +4,7 @@ import {
   ORDER_STATUS_LABELS,
   getOrderStatusFlow,
 } from '../config/orderStatus.js';
-import { calculateTotals } from './cartPricing.js';
+import { calculateTotals, hasUsablePricing } from './cartPricing.js';
 import { createCartItem } from './cartItem.js';
 
 // Re-exported so existing imports keep working; the source of truth is
@@ -38,6 +38,55 @@ export function getCheckoutTotals(
   { promoCode = '', fulfillmentType = 'delivery', settings } = {}
 ) {
   return calculateTotals(items, { promoCode, fulfillmentType, settings });
+}
+
+// The single, testable definition of "is checkout allowed to price and submit?".
+//
+// Catalog and settings are tracked SEPARATELY (loading / ready / error) so a
+// failure in one is never mislabelled as the other, and neither is treated as
+// ready from a fallback. `reason` names the exact blocker so the UI can show an
+// accurate message instead of a catch-all.
+//
+// An EMPTY catalog is only usable when there is nothing to price. If the cart
+// has items and the catalog is empty, those lines cannot be authoritatively
+// repriced, so pricing is NOT ready (the menu must not silently count as
+// usable just because the request succeeded).
+export function getPricingReadiness({
+  catalogStatus,
+  products,
+  settingsStatus,
+  settings,
+  cartCount = 0,
+} = {}) {
+  const catalogLoaded = catalogStatus === 'ready';
+  const catalogEmpty = !Array.isArray(products) || products.length === 0;
+  const catalogReady = catalogLoaded && !(catalogEmpty && cartCount > 0);
+  const settingsReady = settingsStatus === 'ready' && hasUsablePricing(settings);
+
+  let reason = null;
+  if (catalogStatus === 'error') reason = 'catalog-error';
+  else if (catalogStatus !== 'ready') reason = 'catalog-loading';
+  else if (catalogEmpty && cartCount > 0) reason = 'catalog-empty';
+  else if (settingsStatus === 'error') reason = 'settings-error';
+  else if (settingsStatus !== 'ready') reason = 'settings-loading';
+  else if (!settingsReady) reason = 'settings-invalid';
+
+  return {
+    catalogReady,
+    settingsReady,
+    pricingReady: catalogReady && settingsReady,
+    reason,
+  };
+}
+
+// Normalizes an unknown rejection into a loggable, PII-free descriptor. Only the
+// operation, the error code and the (Firebase-provided) message are captured —
+// never cart contents, contact details or tokens.
+export function describeLoadFailure(scope, error) {
+  const code = (error && error.code) || null;
+  const message =
+    (error && error.message) || (typeof error === 'string' ? error : null);
+  return { scope, code, message };
 }
 
 export function getEstimatedTime(fulfillmentType, settings = RESTAURANT_SETTINGS) {

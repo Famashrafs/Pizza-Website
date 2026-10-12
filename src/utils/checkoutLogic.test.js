@@ -2,11 +2,14 @@
 // and the price-change revalidation used before an order is placed.
 
 import {
+  describeLoadFailure,
   diffCartPrices,
   getCheckoutTotals,
+  getPricingReadiness,
   validateAddress,
   validateCustomerInfo,
 } from './checkoutLogic';
+import { hasUsablePricing } from './cartPricing';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
 
 const item = (id, price, qty = 1) => ({
@@ -124,6 +127,159 @@ describe('price-change revalidation', () => {
     const cart = [item('p1', 10.1, 1), item('gone', 5, 1)];
     const live = [item('p1', 10.1 + 1e-9, 1)];
     expect(diffCartPrices(cart, live)).toEqual([]);
+  });
+});
+
+// The root cause of the "paused checkout" was that a single catch collapsed two
+// independent failures (public catalog read + authenticated settings read) into
+// one flag. These tests pin the separated readiness contract.
+describe('getPricingReadiness', () => {
+  const PRODUCTS = [{ id: 'p1' }];
+
+  it('is not ready while the catalog is still loading', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'loading',
+      products: [],
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1, delivery: { baseFee: 5, freeDeliveryThreshold: 50 } },
+      cartCount: 1,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('catalog-loading');
+  });
+
+  it('is not ready when the catalog read failed (distinct reason)', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'error',
+      products: [],
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1, delivery: { baseFee: 5, freeDeliveryThreshold: 50 } },
+      cartCount: 1,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('catalog-error');
+  });
+
+  it('is not ready while settings are still loading (distinct reason)', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: PRODUCTS,
+      settingsStatus: 'loading',
+      settings: null,
+      cartCount: 1,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('settings-loading');
+  });
+
+  it('is not ready when the settings read failed (distinct reason)', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: PRODUCTS,
+      settingsStatus: 'error',
+      settings: null,
+      cartCount: 1,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('settings-error');
+  });
+
+  it('is not ready when settings are shaped wrongly for pricing', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: PRODUCTS,
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1 }, // no delivery block
+      cartCount: 1,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('settings-invalid');
+  });
+
+  it('is not ready when the catalog is empty but the cart has items', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: [],
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1, delivery: { baseFee: 5, freeDeliveryThreshold: 50 } },
+      cartCount: 2,
+    });
+    expect(r.pricingReady).toBe(false);
+    expect(r.reason).toBe('catalog-empty');
+  });
+
+  it('is ready with a valid catalog, usable settings and a non-empty cart', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: PRODUCTS,
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1, delivery: { baseFee: 5, freeDeliveryThreshold: 50 } },
+      cartCount: 1,
+    });
+    expect(r).toEqual({
+      catalogReady: true,
+      settingsReady: true,
+      pricingReady: true,
+      reason: null,
+    });
+  });
+
+  it('is ready with an empty catalog only when the cart is also empty', () => {
+    const r = getPricingReadiness({
+      catalogStatus: 'ready',
+      products: [],
+      settingsStatus: 'ready',
+      settings: { taxRate: 0.1, delivery: { baseFee: 5, freeDeliveryThreshold: 50 } },
+      cartCount: 0,
+    });
+    expect(r.pricingReady).toBe(true);
+    expect(r.reason).toBeNull();
+  });
+});
+
+describe('hasUsablePricing', () => {
+  it('accepts a well-formed settings document (including zero fees)', () => {
+    expect(
+      hasUsablePricing({
+        taxRate: 0,
+        delivery: { baseFee: 0, freeDeliveryThreshold: 0 },
+      })
+    ).toBe(true);
+  });
+
+  it('rejects null/undefined and partial documents', () => {
+    expect(hasUsablePricing(null)).toBe(false);
+    expect(hasUsablePricing(undefined)).toBe(false);
+    expect(hasUsablePricing({ taxRate: 0.1 })).toBe(false);
+    expect(hasUsablePricing({ delivery: { baseFee: 5 } })).toBe(false);
+    expect(hasUsablePricing({ taxRate: 'x', delivery: { baseFee: 5, freeDeliveryThreshold: 50 } })).toBe(
+      false
+    );
+  });
+});
+
+describe('describeLoadFailure', () => {
+  it('captures only the scope, code and message (no cart/PII)', () => {
+    const err = new Error('Missing or insufficient permissions.');
+    err.code = 'permission-denied';
+    expect(describeLoadFailure('settings', err)).toEqual({
+      scope: 'settings',
+      code: 'permission-denied',
+      message: 'Missing or insufficient permissions.',
+    });
+  });
+
+  it('tolerates non-Error rejections', () => {
+    expect(describeLoadFailure('catalog', 'boom')).toEqual({
+      scope: 'catalog',
+      code: null,
+      message: 'boom',
+    });
+    expect(describeLoadFailure('catalog', undefined)).toEqual({
+      scope: 'catalog',
+      code: null,
+      message: null,
+    });
   });
 });
 

@@ -186,4 +186,142 @@ describe('CheckoutPage pricing safety', () => {
     // $20 subtotal + $5 delivery + $2 tax (10%) = $27.00, matching the server.
     expect(placeOrder).toHaveTextContent('$27.00');
   });
+
+  // ROOT CAUSE REGRESSION: the `restaurants/{id}` settings read requires an
+  // authenticated (incl. anonymous) user. A signed-out guest must therefore
+  // obtain the guest session BEFORE that read, or it is denied and pricing can
+  // never become ready.
+  it('starts a guest session before reading the authenticated settings', async () => {
+    const order = [];
+    const ensureGuestSession = jest.fn(async () => {
+      order.push('guest');
+      return { success: true, user: { uid: 'guest-1' } };
+    });
+    useAuth.mockReturnValue({
+      currentUser: null,
+      userProfile: null,
+      isGuest: false,
+      ensureGuestSession,
+    });
+    getRestaurantSettings.mockImplementation(async () => {
+      order.push('settings');
+      return SETTINGS;
+    });
+    fetchProducts.mockResolvedValue([PRODUCT]);
+
+    renderCheckout();
+
+    await waitFor(() => expect(getRestaurantSettings).toHaveBeenCalled());
+    expect(ensureGuestSession).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['guest', 'settings']);
+  });
+
+  it('surfaces a settings-specific failure (not a menu failure) and stays paused', async () => {
+    useAuth.mockReturnValue({
+      currentUser: {
+        uid: 'cust-1',
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        isAnonymous: false,
+      },
+      userProfile: { phone: '+15551234567', address: '1 Analytical Ave' },
+      isGuest: false,
+      ensureGuestSession: jest.fn(),
+    });
+    const denied = new Error('Missing or insufficient permissions.');
+    denied.code = 'permission-denied';
+    getRestaurantSettings.mockRejectedValue(denied);
+    fetchProducts.mockResolvedValue([PRODUCT]);
+
+    renderCheckout();
+    await advanceToReview();
+
+    expect(
+      await screen.findByText(/couldn't load live pricing settings/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load the live menu/i)).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /confirming prices/i })
+    ).toBeDisabled();
+  });
+
+  it('surfaces a menu-specific failure distinct from a settings failure', async () => {
+    useAuth.mockReturnValue({
+      currentUser: {
+        uid: 'cust-1',
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        isAnonymous: false,
+      },
+      userProfile: { phone: '+15551234567', address: '1 Analytical Ave' },
+      isGuest: false,
+      ensureGuestSession: jest.fn(),
+    });
+    getRestaurantSettings.mockResolvedValue(SETTINGS);
+    fetchProducts.mockRejectedValue(new Error('network down'));
+
+    renderCheckout();
+    await advanceToReview();
+
+    expect(
+      await screen.findByText(/couldn't load the live menu/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/couldn't load live pricing settings/i)
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /confirming prices/i })
+    ).toBeDisabled();
+  });
+
+  it('keeps checkout paused (no crash) when settings are malformed', async () => {
+    useAuth.mockReturnValue({
+      currentUser: {
+        uid: 'cust-1',
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        isAnonymous: false,
+      },
+      userProfile: { phone: '+15551234567', address: '1 Analytical Ave' },
+      isGuest: false,
+      ensureGuestSession: jest.fn(),
+    });
+    getRestaurantSettings.mockResolvedValue({ taxRate: 0.1 }); // missing delivery
+    fetchProducts.mockResolvedValue([PRODUCT]);
+
+    renderCheckout();
+    await advanceToReview();
+
+    const placeOrder = await screen.findByRole('button', {
+      name: /confirming prices/i,
+    });
+    expect(placeOrder).toBeDisabled();
+    fireEvent.click(placeOrder);
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+
+  it('pauses when the live menu is empty but the cart has items', async () => {
+    useAuth.mockReturnValue({
+      currentUser: {
+        uid: 'cust-1',
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        isAnonymous: false,
+      },
+      userProfile: { phone: '+15551234567', address: '1 Analytical Ave' },
+      isGuest: false,
+      ensureGuestSession: jest.fn(),
+    });
+    getRestaurantSettings.mockResolvedValue(SETTINGS);
+    fetchProducts.mockResolvedValue([]);
+
+    renderCheckout();
+    await advanceToReview();
+
+    expect(
+      await screen.findByText(/menu is currently unavailable/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirming prices/i })).toBeDisabled();
+    expect(createOrder).not.toHaveBeenCalled();
+  });
 });

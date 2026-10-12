@@ -21,12 +21,33 @@ import {
   CHECKOUT_STEPS,
   createEmptyAddress,
   createEmptyCustomer,
+  describeLoadFailure,
   diffCartPrices,
   formatAddress,
   getCheckoutTotals,
+  getPricingReadiness,
   validateAddress,
   validateCustomerInfo,
 } from '../utils/checkoutLogic';
+import { devLog, runtimeWarn } from '../utils/devLog';
+
+// One structured place to report a pricing-load failure. The detailed reason
+// (operation + code + message) is logged only in development; production gets a
+// de-duplicated, code-only breadcrumb so an unreachable/denied Firestore is
+// never silent again. No cart contents, contact details or tokens are logged.
+function reportLoadFailure(scope, error) {
+  const { code, message } = describeLoadFailure(scope, error);
+  devLog(`[checkout] ${scope} load failed`, {
+    operation: scope,
+    code,
+    message,
+  });
+  runtimeWarn(
+    `checkout.${scope}-load-failed`,
+    `Could not load checkout ${scope}:`,
+    code || 'unknown error'
+  );
+}
 
 function CheckoutPage() {
   const { currentUser, userProfile, isGuest, ensureGuestSession } = useAuth();
@@ -49,13 +70,27 @@ function CheckoutPage() {
   const [placed, setPlaced] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [products, setProducts] = useState([]);
-  const [productsLoading, setProductsLoading] = useState(true);
-  const [productsFailed, setProductsFailed] = useState(false);
+  // Catalog and settings are tracked SEPARATELY ('loading' | 'ready' | 'error')
+  // so a failure in one is never mislabelled as the other, and neither is ever
+  // considered ready from a fallback.
+  const [catalogStatus, setCatalogStatus] = useState('loading');
+  const [settingsStatus, setSettingsStatus] = useState('loading');
   const [settings, setSettings] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const submitLock = useRef(false);
   const checkoutKeyRef = useRef(null);
+
+  // Kept in refs so the load effect can read the current auth helpers/identity
+  // without re-running (and re-fetching) on every render, and without tripping
+  // the exhaustive-deps lint (a stable context function identity is not
+  // guaranteed).
+  const currentUserRef = useRef(currentUser);
+  const ensureGuestRef = useRef(ensureGuestSession);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+    ensureGuestRef.current = ensureGuestSession;
+  });
 
   // Per-user, per-checkout idempotency key. Kept in localStorage so a refresh
   // mid-submit reuses the same key: repeated/duplicate submissions (double
@@ -121,23 +156,59 @@ function CheckoutPage() {
   // fee, free-delivery threshold) so the review totals match what the trusted
   // order function will actually charge. Products are used to flag items that
   // are no longer orderable.
+  //
+  // The two loads are INDEPENDENT: the public catalog read never depends on the
+  // settings read, and each tracks its own loading/ready/error state. The
+  // settings document is an authenticated read (`restaurants` requires
+  // `isSignedIn()`), so a signed-out guest must first obtain the anonymous
+  // session the rest of checkout already relies on — otherwise that read is
+  // denied and pricing can never become ready.
   useEffect(() => {
     let active = true;
-    setProductsLoading(true);
-    setProductsFailed(false);
-    Promise.all([fetchProducts(), getRestaurantSettings()])
-      .then(([list, restaurantSettings]) => {
-        if (!active) return;
-        setProducts(list);
-        setSettings(restaurantSettings);
-        setProductsLoading(false);
-      })
-      .catch(() => {
-        if (active) {
-          setProductsLoading(false);
-          setProductsFailed(true);
+    setCatalogStatus('loading');
+    setSettingsStatus('loading');
+
+    const settingsPromise = (async () => {
+      if (!currentUserRef.current) {
+        const guest = await ensureGuestRef.current();
+        if (!guest?.success) {
+          const err = new Error(
+            'Could not start a guest session to load pricing settings.'
+          );
+          err.code = 'checkout/guest-session-failed';
+          throw err;
         }
-      });
+      }
+      return getRestaurantSettings();
+    })();
+
+    Promise.allSettled([fetchProducts(), settingsPromise]).then(
+      ([catalog, settingsResult]) => {
+        if (!active) return;
+
+        if (
+          catalog.status === 'fulfilled' &&
+          Array.isArray(catalog.value)
+        ) {
+          setProducts(catalog.value);
+          setCatalogStatus('ready');
+        } else {
+          reportLoadFailure('catalog', catalog.reason);
+          setProducts([]);
+          setCatalogStatus('error');
+        }
+
+        if (settingsResult.status === 'fulfilled') {
+          setSettings(settingsResult.value);
+          setSettingsStatus('ready');
+        } else {
+          reportLoadFailure('settings', settingsResult.reason);
+          setSettings(null);
+          setSettingsStatus('error');
+        }
+      }
+    );
+
     return () => {
       active = false;
     };
@@ -146,20 +217,29 @@ function CheckoutPage() {
   const currentIndex = CHECKOUT_STEPS.findIndex((entry) => entry.id === step);
 
   // Revalidate the cart against the LIVE catalog (the same rebuild the trusted
-  // order function performs server-side). Lines whose product/config vanished
-  // are reported as issues; surviving lines are repriced from the catalog so
-  // the review shows the amount the function will actually charge.
-  const catalogReady = !productsLoading && !productsFailed;
+  // order function performs server-side). `catalogLoaded` gates the rebuild:
+  // only a successfully loaded catalog is used to flag vanished/unavailable
+  // lines, never a failed or partial one.
+  const catalogLoaded = catalogStatus === 'ready';
 
   // The review totals are only trustworthy once the live restaurant settings
-  // (tax, delivery fee, free-delivery threshold) have loaded. Until then — and
-  // if the settings/menu load failed — the displayed amount is an estimate and
-  // Place Order stays disabled, so an order is never submitted against stale or
-  // missing pricing data.
-  const pricingReady = catalogReady && Boolean(settings);
+  // (tax, delivery fee, free-delivery threshold) have loaded AND both loads
+  // succeeded. Until then — and if either load failed — the displayed amount is
+  // an estimate and Place Order stays disabled, so an order is never submitted
+  // against stale or missing pricing data. `readiness.reason` names the exact
+  // blocker for accurate messaging.
+  const readiness = getPricingReadiness({
+    catalogStatus,
+    products,
+    settingsStatus,
+    settings,
+    cartCount: items.length,
+  });
+  const pricingReady = readiness.pricingReady;
+
   const recalc = useMemo(
-    () => (catalogReady ? recalculateItems(items, products) : null),
-    [catalogReady, items, products]
+    () => (catalogLoaded ? recalculateItems(items, products) : null),
+    [catalogLoaded, items, products]
   );
 
   const availabilityIssues = recalc ? recalc.issues : [];
@@ -275,8 +355,15 @@ function CheckoutPage() {
   const handlePlaceOrder = async () => {
     if (submitLock.current || submitting) return;
     if (!pricingReady) {
+      const { reason } = readiness;
       setOrderError(
-        'We are still confirming today\u2019s menu prices. Please wait a moment and try again.'
+        reason === 'catalog-error' ||
+          reason === 'settings-error' ||
+          reason === 'settings-invalid'
+          ? 'We couldn\u2019t confirm today\u2019s prices. Please retry loading the menu above.'
+          : reason === 'catalog-empty'
+          ? 'Some items in your cart can no longer be priced. Please review your cart.'
+          : 'We are still confirming today\u2019s menu prices. Please wait a moment and try again.'
       );
       return;
     }
@@ -401,7 +488,7 @@ function CheckoutPage() {
       </div>
 
       <div className="checkout-page">
-        {!currentUser && (
+        {(!currentUser || isGuest) && (
           <div className="checkout-banner checkout-banner--info">
             <strong>Ordering as a guest?</strong> No account needed — just enter
             your contact details below. Already have an account?{' '}
@@ -411,10 +498,10 @@ function CheckoutPage() {
           </div>
         )}
 
-        {productsFailed && (
+        {catalogStatus === 'error' && (
           <div className="checkout-banner checkout-banner--error" role="alert">
-            <strong>We couldn&apos;t load live menu pricing.</strong> Checkout
-            is paused so you&apos;re never charged from stale totals.{' '}
+            <strong>We couldn&apos;t load the live menu.</strong> Checkout is
+            paused so your items are never priced from an outdated catalog.{' '}
             <button
               type="button"
               className="checkout-banner-link"
@@ -425,11 +512,34 @@ function CheckoutPage() {
           </div>
         )}
 
-        {productsLoading && !productsFailed && (
-          <div className="checkout-banner checkout-banner--info" role="status">
-            Loading current menu prices…
+        {settingsStatus === 'error' && (
+          <div className="checkout-banner checkout-banner--error" role="alert">
+            <strong>We couldn&apos;t load live pricing settings.</strong>{' '}
+            Checkout is paused so you&apos;re never charged from stale totals.{' '}
+            <button
+              type="button"
+              className="checkout-banner-link"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Retry
+            </button>
           </div>
         )}
+
+        {readiness.reason === 'catalog-empty' && (
+          <div className="checkout-banner checkout-banner--error" role="alert">
+            <strong>The menu is currently unavailable.</strong> We can&apos;t
+            price the items in your cart right now — please try again later.
+          </div>
+        )}
+
+        {(catalogStatus === 'loading' || settingsStatus === 'loading') &&
+          catalogStatus !== 'error' &&
+          settingsStatus !== 'error' && (
+            <div className="checkout-banner checkout-banner--info" role="status">
+              Loading current menu prices…
+            </div>
+          )}
 
         <CheckoutStepper
           currentStep={step}

@@ -77,7 +77,12 @@ function hydrateOrder(order) {
 // Rebuilds each cart line from the live catalog so prices and options are
 // always current. Returns the rebuilt lines plus any lines that can no longer
 // be ordered.
-export async function recalculateItems(cartItems = [], products = []) {
+//
+// Pure and synchronous on purpose (no awaits): the checkout consumes the result
+// during render (`useMemo`). It was previously declared `async`, which made the
+// caller's synchronous `recalc.items`/`recalc.issues` reads operate on a
+// Promise and throw as soon as pricing became ready.
+export function recalculateItems(cartItems = [], products = []) {
   const byId = new Map((products || []).map((product) => [product.id, product]));
   const items = [];
   const issues = [];

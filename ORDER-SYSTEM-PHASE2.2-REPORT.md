@@ -1,6 +1,6 @@
 # Pizza-Website — Checkout Pricing Readiness Report (Phase 2.2)
 
-Date: 2026-10-12 · Branch: `master` (working tree on top of `cca34d6`)
+Date: 2026-10-12 · Branch: `master` (commit `9a55314`)
 Scope: diagnose and fix the production symptom *"We couldn't load live menu
 pricing. Checkout is paused so you're never charged from stale totals"* shown on
 `/checkout` with **no visible console or network error**. Minimal fix, structured

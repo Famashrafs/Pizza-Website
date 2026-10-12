@@ -134,8 +134,77 @@ function validateRules() {
   }
 }
 
+// Returns the `{ ... }` block that starts at the first `{` at/after `from`,
+// matching nested braces. Runs on the cleaned (comment/string-stripped) copy.
+function extractBraceBlock(cleaned, from) {
+  const open = cleaned.indexOf('{', from);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let i = open; i < cleaned.length; i += 1) {
+    if (cleaned[i] === '{') depth += 1;
+    else if (cleaned[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return cleaned.slice(open, i + 1);
+    }
+  }
+  return null;
+}
+
+// Guards the reviews rules against the regression where update+delete shared one
+// clause and the delete path read `request.resource` (which is null on delete,
+// so the rule denied every owner delete).
+function validateReviewsRules() {
+  const file = 'firestore.rules';
+  const content = fs.readFileSync(path.join(root, file), 'utf8');
+
+  const marker = 'match /reviews/{reviewId}';
+  const at = content.indexOf(marker);
+  if (at === -1) {
+    fail(file, 'missing match /reviews/{reviewId} block');
+    return;
+  }
+
+  const block = extractBraceBlock(content, at + marker.length);
+  if (!block) {
+    fail(file, 'reviews block braces could not be matched');
+    return;
+  }
+
+  if (/allow\s+update\s*,\s*delete\s*:/.test(block)) {
+    fail(file, 'reviews: update and delete must be separate rules (delete has no request.resource)');
+  }
+  if (!/allow\s+create\s*:/.test(block)) fail(file, 'reviews: missing create rule');
+  if (!/allow\s+update\s*:/.test(block)) fail(file, 'reviews: missing update rule');
+  if (!/allow\s+delete\s*:/.test(block)) fail(file, 'reviews: missing delete rule');
+
+  const deleteMatch = block.match(/allow\s+delete\s*:\s*if([\s\S]*?);/);
+  if (!deleteMatch) {
+    fail(file, 'reviews: delete rule not found');
+  } else {
+    const condition = deleteMatch[1];
+    if (condition.includes('request.resource')) {
+      fail(file, 'reviews delete reads request.resource (null on delete) — owner deletes would always fail');
+    }
+    if (!condition.includes('resource.data.customerId')) {
+      fail(file, 'reviews delete must pin ownership on resource.data.customerId');
+    }
+  }
+
+  const updateMatch = block.match(/allow\s+update\s*:\s*if([\s\S]*?);/);
+  if (updateMatch) {
+    const condition = updateMatch[1];
+    if (
+      !condition.includes('resource.data.customerId') ||
+      !condition.includes('request.resource.data.customerId')
+    ) {
+      fail(file, 'reviews update must pin ownership on both resource.data and request.resource.data');
+    }
+  }
+}
+
 validateIndexes();
 validateRules();
+validateReviewsRules();
 
 if (errors.length) {
   console.error('Firestore config validation FAILED:');

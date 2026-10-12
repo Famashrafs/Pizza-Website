@@ -63,6 +63,25 @@ service cloud.firestore {
         );
     }
 
+    // The allowed shape of a customer review. Ownership (customerId) is checked
+    // separately against the caller; this validates the rest of the schema so a
+    // review document can never carry arbitrary fields. Called with
+    // `request.resource.data` on create and on update (a delete has no
+    // request.resource and must never call this).
+    function isValidReview(data) {
+      return data.rating is int
+        && data.rating >= 1
+        && data.rating <= 5
+        && (
+          !('comment' in data)
+          || (data.comment is string && data.comment.size() <= 1000)
+        )
+        && (
+          !('restaurantId' in data)
+          || (data.restaurantId is string && data.restaurantId.size() > 0)
+        );
+    }
+
 
     // =========================================================
     // USERS
@@ -380,17 +399,33 @@ service cloud.firestore {
 
       allow read: if isSignedIn();
 
-      // Registered customers only, and always against the caller's own uid.
+      // Registered customers only. A review must be attributed to the caller's
+      // own uid; anonymous sessions cannot author reviews. The proposed document
+      // must also satisfy the review schema.
       allow create: if isSignedIn()
         && !isAnonymous()
-        && request.resource.data.customerId == request.auth.uid;
+        && request.resource.data.customerId is string
+        && request.resource.data.customerId == request.auth.uid
+        && isValidReview(request.resource.data);
 
-      // Update/delete also pin to the ORIGINAL author so a customer can never
-      // overwrite or remove another customer's review.
-      allow update, delete: if isSignedIn()
+      // Update: ownership is pinned to the ORIGINAL author (resource) AND to the
+      // proposed document (request.resource), the ownership key itself can never
+      // change — no author transfer, no hijacking another review — and the
+      // proposed document must still satisfy the review schema.
+      allow update: if isSignedIn()
         && !isAnonymous()
         && resource.data.customerId == request.auth.uid
-        && request.resource.data.customerId == request.auth.uid;
+        && request.resource.data.customerId == request.auth.uid
+        && !request.resource.data.diff(resource.data)
+            .affectedKeys().hasAny(['customerId'])
+        && isValidReview(request.resource.data);
+
+      // Delete: ownership is read from the EXISTING document only. There is no
+      // `request.resource` for a delete (it is null), so it must never be
+      // referenced here — only the original author may remove their review.
+      allow delete: if isSignedIn()
+        && !isAnonymous()
+        && resource.data.customerId == request.auth.uid;
     }
 
 

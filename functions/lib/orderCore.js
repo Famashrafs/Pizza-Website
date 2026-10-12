@@ -455,6 +455,58 @@ function verifyGuestToken(token, hash) {
   return crypto.timingSafeEqual(expected, actual);
 }
 
+// --- Idempotency receipt fingerprint -----------------------------------------
+//
+// A checkoutReceipt keys a submit to its order. To keep a replayed idempotency
+// key from silently resolving to an unrelated order (e.g. a stale key reused
+// with a different cart), we store a fingerprint of the LOGICAL checkout with
+// the receipt and only reuse the original order when the fingerprints match.
+
+// Deterministic JSON with object keys sorted recursively, so the same logical
+// object always hashes identically regardless of key insertion order.
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value === undefined ? null : value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .filter((key) => value[key] !== undefined)
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
+}
+
+// SHA-256 fingerprint of the parts of a checkout that define "the same order":
+// the restaurant, the cart lines/config, the contact + address, fulfilment, the
+// payment method, notes and promo. Volatile/meta fields (idempotencyKey,
+// customerId, customerType) are intentionally excluded — identity is verified
+// separately, and the key itself is what we are de-duplicating on.
+function buildRequestSignature(payload = {}) {
+  const customer = payload.customer || {};
+  const canonical = {
+    restaurantId: String(payload.restaurantId || ''),
+    items: (payload.items || []).map((item) => ({
+      productId: item ? item.productId : null,
+      qty: Number(item && item.qty) || 0,
+      config: (item && item.config) || null,
+    })),
+    customer: {
+      fullName: String(customer.fullName || '').trim(),
+      email: String(customer.email || '').trim().toLowerCase(),
+      phone: String(customer.phone || '').trim(),
+    },
+    fulfillmentType: payload.fulfillmentType || 'delivery',
+    address: payload.address || null,
+    paymentMethod: payload.paymentMethod || '',
+    customerNotes: String(payload.customerNotes || '').trim(),
+    promoCode: String(payload.promoCode || '').trim().toUpperCase(),
+  };
+  return sha256hex(stableStringify(canonical));
+}
+
+
 // --- Order document assembly -------------------------------------------------
 
 function generateOrderId() {
@@ -521,7 +573,15 @@ function buildOrder({
     errors.fulfillment = 'Delivery is currently unavailable. Please choose pickup.';
   }
 
-  const { items, issues } = recalculateItems(cartItems, products);
+  // Defense-in-depth tenant scoping: the caller queries products by
+  // restaurantId, but never price a line from a product that belongs to a
+  // DIFFERENT restaurant (or carries no restaurant). Such a product is treated
+  // as "no longer on the menu" by recalculateItems.
+  const scopedProducts = (products || []).filter(
+    (product) =>
+      !product || !product.restaurantId || product.restaurantId === restaurantId
+  );
+  const { items, issues } = recalculateItems(cartItems, scopedProducts);
   if (issues.length) errors.items = issues;
 
   if (Object.keys(errors).length) {
@@ -642,6 +702,8 @@ module.exports = {
   generateGuestToken,
   sha256hex,
   verifyGuestToken,
+  stableStringify,
+  buildRequestSignature,
   PAYMENT_METHODS,
   PROMO_CODES,
 };

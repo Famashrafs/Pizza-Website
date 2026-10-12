@@ -52,6 +52,7 @@ function CheckoutPage() {
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsFailed, setProductsFailed] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const submitLock = useRef(false);
   const checkoutKeyRef = useRef(null);
@@ -140,7 +141,7 @@ function CheckoutPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const currentIndex = CHECKOUT_STEPS.findIndex((entry) => entry.id === step);
 
@@ -149,6 +150,13 @@ function CheckoutPage() {
   // are reported as issues; surviving lines are repriced from the catalog so
   // the review shows the amount the function will actually charge.
   const catalogReady = !productsLoading && !productsFailed;
+
+  // The review totals are only trustworthy once the live restaurant settings
+  // (tax, delivery fee, free-delivery threshold) have loaded. Until then — and
+  // if the settings/menu load failed — the displayed amount is an estimate and
+  // Place Order stays disabled, so an order is never submitted against stale or
+  // missing pricing data.
+  const pricingReady = catalogReady && Boolean(settings);
   const recalc = useMemo(
     () => (catalogReady ? recalculateItems(items, products) : null),
     [catalogReady, items, products]
@@ -266,6 +274,12 @@ function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (submitLock.current || submitting) return;
+    if (!pricingReady) {
+      setOrderError(
+        'We are still confirming today\u2019s menu prices. Please wait a moment and try again.'
+      );
+      return;
+    }
     submitLock.current = true;
     setSubmitting(true);
     setOrderError('');
@@ -397,6 +411,26 @@ function CheckoutPage() {
           </div>
         )}
 
+        {productsFailed && (
+          <div className="checkout-banner checkout-banner--error" role="alert">
+            <strong>We couldn&apos;t load live menu pricing.</strong> Checkout
+            is paused so you&apos;re never charged from stale totals.{' '}
+            <button
+              type="button"
+              className="checkout-banner-link"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {productsLoading && !productsFailed && (
+          <div className="checkout-banner checkout-banner--info" role="status">
+            Loading current menu prices…
+          </div>
+        )}
+
         <CheckoutStepper
           currentStep={step}
           maxStepIndex={maxStepIndex}
@@ -452,6 +486,7 @@ function CheckoutPage() {
                 submitting={submitting}
                 onPlaceOrder={handlePlaceOrder}
                 orderError={orderError}
+                pricingReady={pricingReady}
               />
             )}
 

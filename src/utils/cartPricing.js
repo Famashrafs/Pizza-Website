@@ -17,6 +17,39 @@ export const PROMO_CODES = {
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
+// Coerces a value to a non-negative finite number, otherwise returns the
+// documented fallback. Used so a missing/partial/null settings document can
+// never turn a missing fee into "free" or crash the render.
+const numOr = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
+// Normalizes whatever the caller has for restaurant settings (the loaded
+// `restaurants/{id}` document, `null` while loading, a failed load, or a
+// partial object) into the exact pricing inputs `calculateTotals` needs.
+//
+// Every absent field falls back to the documented static config
+// (`RESTAURANT_SETTINGS`), which mirrors the server's `normalizeSettings()` in
+// functions/lib/orderCore.js — so the on-screen estimate and the authoritative
+// server calculation cannot drift. A null/undefined document is valid input
+// here (it means "not loaded yet"), NOT an error: the totals are an estimate
+// until the backend confirms them.
+export function resolvePricingConfig(settings) {
+  const doc = settings && typeof settings === 'object' ? settings : {};
+  const delivery =
+    doc.delivery && typeof doc.delivery === 'object' ? doc.delivery : {};
+  return {
+    taxRate: numOr(doc.taxRate, DEFAULT_TAX_RATE),
+    deliveryFee: numOr(delivery.baseFee, DEFAULT_DELIVERY_FEE),
+    freeDeliveryThreshold: numOr(
+      delivery.freeDeliveryThreshold,
+      FREE_DELIVERY_THRESHOLD
+    ),
+    deliveryEnabled: doc.deliveryEnabled !== false,
+  };
+}
+
 export function calculateItemTotal(item) {
   const price = Number(item?.price) || 0;
   const qty = Number(item?.qty) || 0;
@@ -66,12 +99,24 @@ export function calculateTotals(items = [], options = {}) {
     fulfillmentType = 'delivery',
     promoCode = '',
     promoTable = PROMO_CODES,
-    settings = RESTAURANT_SETTINGS,
-    deliveryFee = settings.delivery?.baseFee ?? DEFAULT_DELIVERY_FEE,
-    freeDeliveryThreshold =
-      settings.delivery?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD,
-    taxRate = settings.taxRate ?? DEFAULT_TAX_RATE,
+    settings,
+    // Explicit per-call overrides win over the settings doc when supplied.
+    deliveryFee,
+    freeDeliveryThreshold,
+    taxRate,
   } = options;
+
+  const config = resolvePricingConfig(settings);
+  const resolvedDeliveryFee =
+    deliveryFee == null
+      ? config.deliveryFee
+      : numOr(deliveryFee, config.deliveryFee);
+  const resolvedThreshold =
+    freeDeliveryThreshold == null
+      ? config.freeDeliveryThreshold
+      : numOr(freeDeliveryThreshold, config.freeDeliveryThreshold);
+  const resolvedTaxRate =
+    taxRate == null ? config.taxRate : numOr(taxRate, config.taxRate);
 
   const safeItems = items || [];
   const subtotal = calculateSubtotal(safeItems);
@@ -85,14 +130,16 @@ export function calculateTotals(items = [], options = {}) {
     subtotal,
     freeDeliveryPromo: promo.freeDelivery,
     settings: {
-      ...settings,
-      delivery: { baseFee: deliveryFee, freeDeliveryThreshold },
+      delivery: {
+        baseFee: resolvedDeliveryFee,
+        freeDeliveryThreshold: resolvedThreshold,
+      },
     },
   });
 
   const shipping = delivery.fee;
   const qualifiesFreeDelivery = delivery.free;
-  const tax = round2(taxable * taxRate);
+  const tax = round2(taxable * resolvedTaxRate);
   const total = round2(taxable + shipping + tax);
 
   return {
@@ -106,7 +153,7 @@ export function calculateTotals(items = [], options = {}) {
     deliveryReason: delivery.reason,
     fulfillmentType,
     tax,
-    taxRate,
+    taxRate: resolvedTaxRate,
     total,
   };
 }

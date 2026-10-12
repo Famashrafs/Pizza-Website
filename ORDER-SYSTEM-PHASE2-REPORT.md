@@ -213,8 +213,10 @@ Order matters — deploy **rules + functions together**.
   Stripe/PayPal are the natural next milestone (keep payment writes server-side).
 - **Confirmation email**: intentionally not claimed; there is no email service
   yet — wire one (or a shareable receipt link) if desired.
-- **Guest token lifecycle**: tokens never expire and are not rotated; consider a
-  TTL or “resend link” flow for guests who clear storage.
+- **Guest token lifecycle**: tokens never expire. As of Phase 2.1 a legitimate
+  retry rotates the token (the fresh plaintext is re-issued once) — see
+  `ORDER-SYSTEM-PHASE2.1-REPORT.md` — but a TTL or “resend link” flow for guests
+  who clear storage is still future work.
 - **Legacy orders** from the pre-Phase-1 client still lack `customerId` and do
   not surface in history; a one-time backfill is advisable.
 - **Coupons/reviews**: admin sections and server-side coupon redemption remain

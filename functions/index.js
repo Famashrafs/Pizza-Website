@@ -6,7 +6,9 @@
 //   1. re-validates the caller (registered OR anonymous guest — guest checkout
 //      is intentionally supported; the anonymous provider is detected here),
 //   2. recomputes EVERY price server-side from the live catalog and the
-//      AUTHORITATIVE restaurant settings document (never trusts client money),
+//      AUTHORITATIVE restaurant settings document READ INSIDE the transaction
+//      (never trusts client money, never prices against data read before the
+//      transaction began),
 //   3. enforces idempotency CONCURRENTLY via a Firestore transaction backed by
 //      a `checkoutReceipts/{sha1(uid:restaurantId:checkoutId)}` document, so a
 //      double-click / retry can never mint two orders, and
@@ -22,7 +24,7 @@ const { onCall } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const crypto = require('crypto');
-const { buildOrder, verifyGuestToken } = require('./lib/orderCore');
+const { buildOrder, verifyGuestToken, buildRequestSignature, generateGuestToken, sha256hex } = require('./lib/orderCore');
 const { RESTAURANT_ID } = require('./lib/restaurantDefaults');
 
 initializeApp();
@@ -150,32 +152,94 @@ exports.createOrder = onCall(async (first, context) => {
   const payload = sanitize((rawData && rawData.data) || rawData || {}) || {};
   const restaurantId = String(payload.restaurantId || RESTAURANT_ID);
   const checkoutId = String(payload.idempotencyKey || '');
-  const products = [];
 
-  const restaurantSnap = await db.collection('restaurants').doc(restaurantId).get();
+  // Fingerprint of the logical checkout, stored with the idempotency receipt so
+  // a replayed key that carries a DIFFERENT cart/contact can never silently
+  // resolve to the original order.
+  const requestSignature = buildRequestSignature({ ...payload, restaurantId });
 
-  if (restaurantSnap.exists) {
-    const snapshot = await db
-      .collection('products')
-      .where('restaurantId', '==', restaurantId)
-      .get();
-    snapshot.forEach((doc) => products.push({ ...doc.data(), id: doc.id }));
-  }
-
+  const restaurantRef = db.collection('restaurants').doc(restaurantId);
+  const productsQuery = db
+    .collection('products')
+    .where('restaurantId', '==', restaurantId);
   const receiptRef = db.collection('checkoutReceipts').doc(
     receiptId(uid, restaurantId, checkoutId)
   );
 
   const result = await db.runTransaction(async (tx) => {
+    // --- READS (every read must precede any write in a Firestore transaction) --
+    //
+    // The AUTHORITATIVE restaurant settings and the restaurant's catalog are read
+    // INSIDE the transaction. If an owner edits a price, tax rate, delivery fee
+    // or availability while this checkout is in flight, the transaction detects
+    // the read conflict, retries, and rebuilds the order from the NEW values —
+    // so the committed order and its totals can never be computed from stale
+    // pricing read before the transaction began.
+    const restaurantSnap = await tx.get(restaurantRef);
+    const products = [];
+    if (restaurantSnap.exists) {
+      const productsSnap = await tx.get(productsQuery);
+      productsSnap.forEach((doc) => products.push({ ...doc.data(), id: doc.id }));
+    }
+
     const existing = await tx.get(receiptRef);
     if (existing.exists) {
-      const orderRef = db.collection('orders').doc(existing.data().orderId);
+      const receipt = existing.data();
+      // The receipt id already binds `uid:restaurantId:checkoutId`, but pin the
+      // stored identity as well: a receipt may only ever be replayed by the SAME
+      // requester for the SAME restaurant, so another customer/guest cannot
+      // reuse this key to reach someone else's order.
+      if (
+        (receipt.uid && receipt.uid !== uid) ||
+        (receipt.restaurantId && receipt.restaurantId !== restaurantId)
+      ) {
+        return {
+          success: false,
+          error: 'This checkout could not be verified. Please start a new checkout.',
+          errors: {},
+        };
+      }
+      const orderRef = db.collection('orders').doc(receipt.orderId);
       const orderDoc = await tx.get(orderRef);
       if (orderDoc.exists) {
+        // Reuse is ONLY valid for the same logical checkout. A stale or reused
+        // idempotency key carrying a different payload resolves to nothing
+        // rather than to the wrong order. (Legacy receipts have no hash and are
+        // reused as before.)
+        if (receipt.requestHash && receipt.requestHash !== requestSignature) {
+          return {
+            success: false,
+            error:
+              'This checkout could not be verified. Please start a new checkout.',
+            errors: {},
+          };
+        }
+        const orderData = orderDoc.data();
+        // A guest has no account, so refresh-safe tracking relies entirely on
+        // the capability token, of which only the hash is stored. A legitimate
+        // retry after a lost response ROTATES the token: the fresh plaintext is
+        // returned exactly once and the previous token stops working. Rotation
+        // happens inside the transaction, so concurrent retries are serialized
+        // by the lock and cannot leave two live tokens behind.
+        if (orderData.guestTokenHash) {
+          const rotatedToken = generateGuestToken();
+          tx.update(orderRef, {
+            guestTokenHash: sha256hex(rotatedToken),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          return {
+            success: true,
+            reuse: true,
+            orderId: receipt.orderId,
+            order: serializedShaped(orderData),
+            trackingToken: rotatedToken,
+          };
+        }
         return {
+          success: true,
           reuse: true,
-          orderId: existing.data().orderId,
-          order: serializedShaped(orderDoc.data()),
+          orderId: receipt.orderId,
+          order: serializedShaped(orderData),
         };
       }
       // Receipt survived but the order was deleted — recreate below.
@@ -214,6 +278,7 @@ exports.createOrder = onCall(async (first, context) => {
       restaurantId,
       checkoutId,
       orderId: built.orderId,
+      requestHash: requestSignature,
       createdAt: FieldValue.serverTimestamp(),
     });
     tx.set(orderRef, stored);

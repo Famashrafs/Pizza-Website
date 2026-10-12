@@ -127,6 +127,120 @@ describe('guest order tracking credential', () => {
     const owned = await getOrderForUser(result.order.id, 'cust-1');
     expect(owned?.id).toBe(result.order.id);
   });
+
+  it('rotates the token on a replayed guest checkout (lost-response recovery)', async () => {
+    const first = await createOrder(guestPayload());
+    expect(first.success).toBe(true);
+    const originalToken = first.trackingToken;
+
+    // Same idempotency key + identical payload -> the SAME order, fresh token.
+    const retry = await createOrder(guestPayload());
+    expect(retry.success).toBe(true);
+    expect(retry.order.id).toBe(first.order.id);
+    expect(retry.trackingToken).toBeTruthy();
+    expect(retry.trackingToken).not.toBe(originalToken);
+
+    // The fresh token now works; the superseded one no longer does.
+    expect(await getGuestOrder(first.order.id, retry.trackingToken)).toBeTruthy();
+    expect(await getGuestOrder(first.order.id, originalToken)).toBeNull();
+
+    // No duplicate order was minted by the retry.
+    const orders = Object.keys(db.__getDocs()).filter((key) =>
+      key.startsWith('orders/')
+    );
+    expect(orders).toHaveLength(1);
+  });
+
+  it('refuses to reuse a receipt when a different cart reuses the same key', async () => {
+    const first = await createOrder(guestPayload());
+    expect(first.success).toBe(true);
+
+    const mismatched = await createOrder(
+      guestPayload({
+        items: [{ id: 'p1__line', productId: 'p1', name: 'Margherita', qty: 5 }],
+      })
+    );
+    expect(mismatched.success).toBe(false);
+    expect(mismatched.error).toMatch(/could not be verified/i);
+    // The original order and its token are untouched.
+    expect(await getGuestOrder(first.order.id, first.trackingToken)).toBeTruthy();
+  });
+
+  it('serializes two concurrent retries into exactly one order', async () => {
+    // In production a Firestore transaction serializes the submits; the mock
+    // shares one in-flight run per requester+key so the observed contract is
+    // the same: one order, no duplicate side effects.
+    const [a, b] = await Promise.all([
+      createOrder(guestPayload()),
+      createOrder(guestPayload()),
+    ]);
+    expect(a.success).toBe(true);
+    expect(b.success).toBe(true);
+    // Both callers observe the same single order.
+    expect(a.order.id).toBe(b.order.id);
+
+    const orders = Object.keys(db.__getDocs()).filter((key) =>
+      key.startsWith('orders/')
+    );
+    expect(orders).toHaveLength(1);
+  });
+
+  it('refuses a different requester reusing a receipt that points at an order they do not own', async () => {
+    const first = await createOrder(guestPayload());
+    expect(first.success).toBe(true);
+
+    // Craft the receipt that the OTHER requester's key would hash to, but with
+    // the original guest's stored identity. The stored uid must reject the
+    // replay instead of handing over someone else's order.
+    const crypto = require('crypto');
+    const orderCore = require('../../functions/lib/orderCore.js');
+    const otherUid = 'anon-guest-2';
+    const foreignReceiptPath = `checkoutReceipts/${crypto
+      .createHash('sha1')
+      .update(`${otherUid}:${RESTAURANT_ID}:co-guest-test`)
+      .digest('hex')}`;
+    await db.setDoc(foreignReceiptPath, {
+      uid: 'anon-guest-1',
+      restaurantId: RESTAURANT_ID,
+      checkoutId: 'co-guest-test',
+      orderId: first.order.id,
+      requestHash: orderCore.buildRequestSignature({
+        ...guestPayload(),
+        restaurantId: RESTAURANT_ID,
+      }),
+    });
+
+    const attempt = await createOrder(guestPayload({ customerId: otherUid }));
+    expect(attempt.success).toBe(false);
+    expect(attempt.error).toMatch(/could not be verified/i);
+    // The genuine owner's access is untouched.
+    expect(await getGuestOrder(first.order.id, first.trackingToken)).toBeTruthy();
+  });
+
+  it('reuses a registered customer order on retry without issuing a guest token', async () => {
+    const payload = guestPayload({
+      customerId: 'cust-1',
+      customerType: 'customer',
+      idempotencyKey: 'co-registered-retry',
+    });
+    const first = await createOrder(payload);
+    expect(first.success).toBe(true);
+    expect(first.trackingToken).toBeUndefined();
+
+    const retry = await createOrder(payload);
+    expect(retry.success).toBe(true);
+    expect(retry.reuse).toBe(true);
+    expect(retry.order.id).toBe(first.order.id);
+    expect(retry.trackingToken).toBeUndefined();
+
+    // A registered order never carries a guest credential.
+    const stored = db.__getDocs()[`orders/${first.order.id}`];
+    expect(stored.guestTokenHash).toBeUndefined();
+    const orders = Object.keys(db.__getDocs()).filter((key) =>
+      key.startsWith('orders/')
+    );
+    expect(orders).toHaveLength(1);
+  });
 });
 
 describe('device-local last-order reference (refresh recovery)', () => {

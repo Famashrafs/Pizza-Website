@@ -39,6 +39,7 @@ function ReviewStep({
   submitting = false,
   onPlaceOrder,
   orderError = '',
+  pricingReady = true,
 }) {
   const payment = getPaymentMethod(paymentMethod);
   const currency = RESTAURANT_SETTINGS.currency;
@@ -141,15 +142,24 @@ function ReviewStep({
         className="order-summary-panel--inline"
       />
 
+      <p className="review-muted">
+        Estimated total — the final amount is confirmed on our side when the
+        order is placed.
+      </p>
+
       <button
         type="button"
         className="contact-btn checkout-place-order"
         onClick={onPlaceOrder}
-        disabled={submitting || availabilityIssues.length > 0}
+        disabled={submitting || availabilityIssues.length > 0 || !pricingReady}
       >
         {submitting
           ? 'Placing order…'
-          : `Place Order · ${RESTAURANT_SETTINGS.currency}${totals.total.toFixed(2)}`}
+          : !pricingReady
+          ? 'Confirming prices…'
+          : `Place Order · ${RESTAURANT_SETTINGS.currency}${Number(
+              totals?.total || 0
+            ).toFixed(2)}`}
       </button>
     </section>
   );

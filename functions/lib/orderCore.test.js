@@ -18,6 +18,7 @@ const {
   validateCustomerInfo,
   validateAddress,
   verifyGuestToken,
+  buildRequestSignature,
 } = require('./orderCore');
 const { RESTAURANT_ID } = require('./restaurantDefaults');
 
@@ -397,4 +398,59 @@ test('registered orders get no guest tracking credential', () => {
   assert.equal(registered.success, true);
   assert.equal(registered.trackingToken, undefined);
   assert.equal(registered.order.guestTokenHash, undefined);
+});
+
+// --- Idempotency request fingerprint ----------------------------------------
+
+const signaturePayload = (overrides = {}) => ({
+  restaurantId: RESTAURANT_ID,
+  items: [{ productId: 'p1', qty: 2, config: null }],
+  customer: validCustomer(),
+  fulfillmentType: 'delivery',
+  address: validAddress(),
+  paymentMethod: 'cash',
+  customerNotes: '',
+  promoCode: '',
+  ...overrides,
+});
+
+test('buildRequestSignature is stable regardless of object key ordering', () => {
+  const a = buildRequestSignature({
+    paymentMethod: 'cash',
+    restaurantId: RESTAURANT_ID,
+    items: [{ qty: 2, productId: 'p1', config: null }],
+    customer: { phone: '+15551234567', fullName: 'Ada Lovelace', email: 'ada@example.com' },
+    address: validAddress(),
+    fulfillmentType: 'delivery',
+  });
+  const b = buildRequestSignature(signaturePayload());
+  assert.equal(a, b);
+  assert.match(a, /^[0-9a-f]{64}$/);
+});
+
+test('buildRequestSignature changes when the logical checkout changes', () => {
+  const base = buildRequestSignature(signaturePayload());
+  assert.notEqual(
+    base,
+    buildRequestSignature(signaturePayload({ items: [{ productId: 'p1', qty: 3, config: null }] }))
+  );
+  assert.notEqual(
+    base,
+    buildRequestSignature(signaturePayload({ promoCode: 'PIZZA10' }))
+  );
+  assert.notEqual(
+    base,
+    buildRequestSignature(signaturePayload({ customer: validCustomer({ phone: '+15550000000' }) }))
+  );
+});
+
+test('buildRequestSignature ignores volatile idempotency/identity fields', () => {
+  const base = buildRequestSignature(signaturePayload());
+  const withMeta = buildRequestSignature({
+    ...signaturePayload(),
+    idempotencyKey: 'co-abc',
+    customerId: 'someone-else',
+    customerType: 'guest',
+  });
+  assert.equal(base, withMeta);
 });

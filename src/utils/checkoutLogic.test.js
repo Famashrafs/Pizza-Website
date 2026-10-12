@@ -52,6 +52,65 @@ describe('settings-authoritative checkout totals', () => {
   });
 });
 
+// Regression: this previously threw
+// "Cannot read properties of null (reading 'delivery')" because CheckoutPage
+// initialises `settings` to `null` while the live settings are still loading,
+// and a destructuring default only applies to `undefined`, not `null`.
+describe('checkout totals are crash-safe without loaded settings', () => {
+  it('does not throw when settings are null (still loading)', () => {
+    expect(() =>
+      getCheckoutTotals([item('p1', 20, 1)], { settings: null })
+    ).not.toThrow();
+    const totals = getCheckoutTotals([item('p1', 20, 1)], { settings: null });
+    expect(totals.deliveryFee).toBe(RESTAURANT_SETTINGS.delivery.baseFee);
+    expect(totals.taxRate).toBe(RESTAURANT_SETTINGS.taxRate);
+    expect(totals.total).toBeGreaterThan(0);
+  });
+
+  it('does not throw when settings are undefined or a failed load (null)', () => {
+    expect(() => getCheckoutTotals([item('p1', 20)], {})).not.toThrow();
+    expect(() =>
+      getCheckoutTotals([item('p1', 20)], { settings: null })
+    ).not.toThrow();
+  });
+
+  it('fills a partial settings object field-by-field from the static config', () => {
+    const totals = getCheckoutTotals([item('p1', 20)], {
+      settings: { taxRate: 0.1 }, // no delivery object at all
+    });
+    expect(totals.taxRate).toBe(0.1);
+    expect(totals.deliveryFee).toBe(RESTAURANT_SETTINGS.delivery.baseFee);
+  });
+
+  it('handles an empty/absent cart with null settings without throwing', () => {
+    const totals = getCheckoutTotals(undefined, { settings: null });
+    expect(totals.subtotal).toBe(0);
+    expect(totals.total).toBe(0);
+    expect(totals.deliveryFee).toBe(0);
+  });
+
+  it('preserves an explicit zero fee instead of substituting the default', () => {
+    const totals = getCheckoutTotals([item('p1', 20)], {
+      settings: { delivery: { baseFee: 0, freeDeliveryThreshold: 100 } },
+    });
+    expect(totals.deliveryFee).toBe(0);
+  });
+
+  it('honours the free-delivery threshold from settings', () => {
+    const totals = getCheckoutTotals([item('p1', 60)], { settings: SETTINGS });
+    expect(totals.freeDelivery).toBe(true);
+    expect(totals.deliveryFee).toBe(0);
+  });
+
+  it('pickup with null settings is still fee-free', () => {
+    const totals = getCheckoutTotals([item('p1', 20)], {
+      settings: null,
+      fulfillmentType: 'pickup',
+    });
+    expect(totals.deliveryFee).toBe(0);
+  });
+});
+
 describe('price-change revalidation', () => {
   it('reports lines whose live price differs from the cart price', () => {
     const cart = [item('p1', 10, 2), item('p2', 12, 1)];

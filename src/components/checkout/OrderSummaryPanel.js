@@ -1,8 +1,20 @@
 import React from 'react';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
-function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
+function OrderSummaryPanel({ items = [], totals, fulfillmentType, className = '' }) {
   const currency = RESTAURANT_SETTINGS.currency;
+  // Defensive defaults: a missing/partial totals object renders as zero rather
+  // than throwing (the panel can mount before settings finish loading).
+  const t = {
+    subtotal: 0,
+    discount: 0,
+    deliveryFee: 0,
+    tax: 0,
+    taxRate: 0,
+    total: 0,
+    freeDelivery: false,
+    ...(totals || {}),
+  };
 
   return (
     <div className={`order-summary-panel ${className}`.trim()}>
@@ -34,12 +46,12 @@ function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
       <div className="order-summary-lines">
         <div className="order-summary-line">
           <span>Subtotal</span>
-          <span>{currency}{totals.subtotal.toFixed(2)}</span>
+          <span>{currency}{Number(t.subtotal).toFixed(2)}</span>
         </div>
-        {totals.discount > 0 && (
+        {t.discount > 0 && (
           <div className="order-summary-line order-summary-line--discount">
-            <span>Discount{totals.promoCode ? ` (${totals.promoCode})` : ''}</span>
-            <span>-{currency}{totals.discount.toFixed(2)}</span>
+            <span>Discount{t.promoCode ? ` (${t.promoCode})` : ''}</span>
+            <span>-{currency}{Number(t.discount).toFixed(2)}</span>
           </div>
         )}
         <div className="order-summary-line">
@@ -47,18 +59,18 @@ function OrderSummaryPanel({ items, totals, fulfillmentType, className = '' }) {
           <span>
             {fulfillmentType === 'pickup'
               ? 'Pickup'
-              : totals.freeDelivery
+              : t.freeDelivery
               ? 'Free'
-              : `${currency}${totals.deliveryFee.toFixed(2)}`}
+              : `${currency}${Number(t.deliveryFee).toFixed(2)}`}
           </span>
         </div>
         <div className="order-summary-line">
-          <span>Tax ({Math.round((totals.taxRate || 0) * 100)}%)</span>
-          <span>{currency}{totals.tax.toFixed(2)}</span>
+          <span>Tax ({Math.round((t.taxRate || 0) * 100)}%)</span>
+          <span>{currency}{Number(t.tax).toFixed(2)}</span>
         </div>
         <div className="order-summary-line order-summary-line--total">
           <span>Total</span>
-          <span>{currency}{totals.total.toFixed(2)}</span>
+          <span>{currency}{Number(t.total).toFixed(2)}</span>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 # Pizza-Website — Ordering Hardening Report (Phase 2.1)
 
-Date: 2026-10-12 · Branch: `master` (Phase 2.1 changes uncommitted)
+Date: 2026-10-12 · Branch: `master` (commit `31bf60f`)
 Scope: close the correctness/security gaps found after Phase 2 — a checkout
 render crash under missing settings, guest order recovery after a lost response,
 review ownership rules, and server pricing read inside the order transaction. No

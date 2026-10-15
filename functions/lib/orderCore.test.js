@@ -3,7 +3,7 @@
 // catalog and the authoritative restaurant settings document — a client can
 // smuggle anything it wants; the function ignores it.
 //
-// Run: npm run test:functions   (node --test functions/lib)
+// Run: npm run test:functions
 
 'use strict';
 

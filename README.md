@@ -290,6 +290,41 @@ This requires the project to be on the **Blaze (pay-as-you-go)** plan. Until the
 functions are deployed, checkout and guest tracking return an
 `internal`/`not-found` callable error.
 
+### 2b. Free-tier demo backend (Render, no Blaze required)
+
+While the project is on the free Spark plan, the same trusted order engine runs
+as a small HTTP API on Render's free tier. It is a **transport swap, not a fork**:
+
+```text
+                         functions/lib/orderCore.js      (pricing/validation)
+                                     ▲
+                                     │
+        functions/lib/orderServiceCore.js   ◀── single source of truth
+           ▲                       ▲
+           │                       │
+  functions/index.js         server/index.js
+  (callable: createOrder,    (Express: POST /api/orders/create,
+   getGuestOrder)             POST /api/orders/guest-lookup)
+```
+
+* `functions/lib/orderServiceCore.js` holds all order logic (idempotency,
+  guest-token rotation, authoritative pricing). Both hosts inject a Firestore
+  `db` and a `serverTimestamp()` factory into it.
+* `server/` is the Express transport (CORS allowlist, Bearer-token verification,
+  `/health`, `/api/diagnostics`). See `server/README.md` to deploy it.
+* `render.yaml` is a Render Blueprint for the free-tier web service.
+* The client picks the transport from `REACT_APP_API_BASE_URL`:
+  * **unset** → Firebase callable (the production path once on Blaze),
+  * **set** (e.g. `https://pizza-demo-api.onrender.com`) → the demo HTTP API.
+  No other code changes are needed to switch between them.
+
+Security is unchanged: `firestore.rules` still denies all client order writes,
+the backend derives identity from the verified Firebase ID token (never the
+request body), guest access still requires the high-entropy tracking token, and
+the service-account credential lives only in the Render environment (never in
+the repo). The demo API exposes **no** order-mutation endpoints — admin status
+changes stay on Firestore under the rules.
+
 ### First-run bootstrap
 
 The code never seeds the store from a read path. The catalog and the owner
@@ -304,6 +339,7 @@ rules, just register the owner once and the customer menu will populate.
       fails with `NOT_FOUND` while it does not
 - [ ] `npx firebase deploy --only firestore` succeeds for the `resturent-system` project
 - [ ] `npx firebase deploy --only functions` succeeds (Blaze plan required) so checkout + guest tracking work
+  *or*, on the free plan, the demo API is deployed and `REACT_APP_API_BASE_URL` points at it (see `server/README.md`)
 - [ ] Register an owner at `/owner/register` → lands on `/admin`, menu seeds
 - [ ] Signed-out visit to `/menu` shows the seeded products (public read works)
 - [ ] The browser console prints no `[app] Could not read users/…` warning
@@ -394,6 +430,9 @@ npm test -- --watchAll=false
 # Trusted order core (server-side pricing/validation) — Node's built-in runner
 npm run test:functions
 
+# Free-tier demo HTTP API (Express transport, offline) — Node's built-in runner
+npm run test:server
+
 # Static validation of firestore.rules + firestore.indexes.json
 npm run rules:check
 ```
@@ -403,6 +442,9 @@ Notes:
 * Service tests run the **real** server-side pricing core
   (`functions/lib/orderCore.js`) behind a mocked gateway, so money math is
   exercised against the same logic the Cloud Function runs.
+* `npm run test:functions` also covers the shared order engine
+  (`functions/lib/orderServiceCore.js`) with an in-memory Firestore double, so
+  idempotency, identity and guest-token behaviour are verified without a network.
 * The Firestore-backed e2e suite (`src/services/__e2e.test.js`) is **skipped**
   unless a live project is configured and `REACT_APP_E2E` is set; it is not part
   of the default green run.

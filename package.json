@@ -31,7 +31,8 @@
     "rules:check": "node scripts/validate-firestore-config.js",
     "test:rules": "npm run rules:check",
     "test:rules:emulator": "firebase emulators:exec --config firebase.emulator.json --project demo-rules-test --only firestore \"node --test rules-tests/firestore.rules.test.js\"",
-    "test:functions": "node --test functions/lib/orderCore.test.js functions/lib/deployment.test.js"
+    "test:functions": "node --test functions/lib/orderCore.test.js functions/lib/orderServiceCore.test.js functions/lib/deployment.test.js",
+    "test:server": "node --test server/test/app.test.js"
   },
   "eslintConfig": {
     "extends": [

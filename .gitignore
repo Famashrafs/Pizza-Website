@@ -28,3 +28,9 @@ npm-start*.log
 
 dev-server.log
 .env*
+!.env.example
+!**/.env.example
+
+# server (demo API)
+/server/node_modules
+server/.env

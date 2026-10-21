@@ -9,11 +9,16 @@
 //
 // The transport is CONFIGURABLE:
 //
-//   - REACT_APP_API_BASE_URL set   → free-tier demo HTTP API (Express/Render).
+//   - REACT_APP_API_BASE_URL set   → free-tier demo HTTP API (the Cloudflare
+//     Worker in `worker/`; the Express/Render service in `server/` speaks the
+//     same contract).
 //   - REACT_APP_API_BASE_URL unset → Firebase callable (`createOrder` /
 //     `getGuestOrder` v2 onCall), the production path once the project is on
 //     Blaze. Nothing else needs to change to migrate back: deploy the functions
 //     and unset the variable.
+//   - REACT_APP_API_BASE_URL set to something that is NOT a usable http(s)
+//     URL → the gateway refuses to run. It never silently falls back to
+//     Firebase: a typo in the URL must not look like "the backend is down".
 //
 // Both transports return the same JSON body. The public methods
 // (`placeOrderViaGateway`, `getGuestOrderViaGateway`) are unchanged so
@@ -23,8 +28,73 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app, { auth } from '../firebase';
 
 const rawBase = (process.env.REACT_APP_API_BASE_URL || '').trim();
-export const API_BASE_URL = rawBase.replace(/\/+$/, '');
-export const transport = API_BASE_URL ? 'http' : 'callable';
+
+// Parses the configured HTTP API base URL.
+//   { ok: true,  url: '',      reason: 'unset' }      → callable transport
+//   { ok: true,  url: '<url>', reason: 'configured' } → http transport
+//   { ok: false, url: '',      reason: '<why>' }      → hard configuration error
+function parseApiBaseUrl(value) {
+  if (!value) return { ok: true, url: '', reason: 'unset' };
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { ok: false, url: '', reason: 'not-a-valid-url' };
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, url: '', reason: 'unsupported-protocol' };
+  }
+  if (!parsed.hostname) {
+    return { ok: false, url: '', reason: 'missing-hostname' };
+  }
+
+  return { ok: true, url: value.replace(/\/+$/, ''), reason: 'configured' };
+}
+
+const parsedBase = parseApiBaseUrl(rawBase);
+
+// The base URL used for HTTP requests (empty when the callable transport wins).
+export const API_BASE_URL = parsedBase.ok ? parsedBase.url : '';
+// Why the configured URL was rejected (null when it is fine or unset).
+export const API_BASE_URL_ERROR = parsedBase.ok ? null : parsedBase.reason;
+
+// 'callable' → Firebase callables, 'http' → HTTP API, 'invalid' → the
+// configured URL cannot be used (never a silent fallback).
+export const transport = parsedBase.ok
+  ? parsedBase.url
+    ? 'http'
+    : 'callable'
+  : 'invalid';
+
+export const TRANSPORT_CONFIG_ERROR =
+  'The order API URL is misconfigured (REACT_APP_API_BASE_URL). Checkout is blocked until it points at a deployed order API.';
+
+function safeHostname(url) {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+// Safe diagnostic: the selected transport and the configured API hostname.
+// Never tokens, guest tokens, payloads or secrets.
+export function getTransportDiagnostic() {
+  return { transport, apiHost: safeHostname(API_BASE_URL) };
+}
+
+export function logTransportDiagnostic(logger = console) {
+  if (process.env.NODE_ENV === 'production') return;
+  const { transport: active, apiHost } = getTransportDiagnostic();
+  logger.info(`[orderGateway] transport=${active} apiHost=${apiHost || '(none)'}`);
+}
+
+if (process.env.NODE_ENV === 'development') {
+  logTransportDiagnostic();
+}
 
 let callable = null;
 let guestLookupCallable = null;
@@ -88,6 +158,15 @@ async function postHttp(path, body) {
 }
 
 export async function placeOrderViaGateway(payload) {
+  if (transport === 'invalid') {
+    // A configured-but-unusable URL is a configuration bug, not an outage:
+    // report it instead of quietly ordering through a different backend.
+    console.error('[orderGateway] REACT_APP_API_BASE_URL is set but unusable:', {
+      reason: API_BASE_URL_ERROR,
+    });
+    return { success: false, error: TRANSPORT_CONFIG_ERROR };
+  }
+
   try {
     let data;
     if (transport === 'http') {
@@ -133,6 +212,13 @@ export async function placeOrderViaGateway(payload) {
 // high-entropy token the createOrder response delivered once; an order id alone
 // is never enough. Returns the same { success, order, error } shape.
 export async function getGuestOrderViaGateway({ orderId, token }) {
+  if (transport === 'invalid') {
+    console.error('[orderGateway] REACT_APP_API_BASE_URL is set but unusable:', {
+      reason: API_BASE_URL_ERROR,
+    });
+    return { success: false, error: TRANSPORT_CONFIG_ERROR };
+  }
+
   try {
     let data;
     if (transport === 'http') {

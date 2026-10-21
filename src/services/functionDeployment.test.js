@@ -93,6 +93,15 @@ describe('Cloud Functions deployment configuration', () => {
     expect(read('.env.example')).toMatch(/REACT_APP_API_BASE_URL/);
   });
 
+  it('declares the HTTP transport switch in the local env file when one exists', () => {
+    // Without the key, the client silently keeps using the Firebase callable
+    // transport — that is exactly the "checkout still calls
+    // cloudfunctions.net" symptom.
+    const localEnv = path.join(repoRoot, '.env.local');
+    if (!fs.existsSync(localEnv)) return;
+    expect(read('.env.local')).toMatch(/^REACT_APP_API_BASE_URL=/m);
+  });
+
   it('ships a self-contained Render web service for the demo API', () => {
     expect(fs.existsSync(path.join(repoRoot, 'server', 'app.js'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'server', 'index.js'))).toBe(true);

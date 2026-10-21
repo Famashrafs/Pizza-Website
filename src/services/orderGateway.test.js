@@ -84,6 +84,80 @@ describe('transport selection', () => {
     expect(transport).toBe('http');
     expect(API_BASE_URL).toBe('https://api.example');
   });
+
+  it('uses the demo HTTP API when the URL has no trailing slash', () => {
+    const { transport, API_BASE_URL } = loadGateway('https://api.example');
+    expect(transport).toBe('http');
+    expect(API_BASE_URL).toBe('https://api.example');
+  });
+
+  it('treats an empty value as "intentionally unset" and keeps the callable transport', () => {
+    const { transport, API_BASE_URL } = loadGateway('   ');
+    expect(transport).toBe('callable');
+    expect(API_BASE_URL).toBe('');
+  });
+
+  it('rejects a malformed URL instead of falling back to the callable transport', () => {
+    const { transport, API_BASE_URL, API_BASE_URL_ERROR } = loadGateway('not-a-url');
+    expect(transport).toBe('invalid');
+    expect(API_BASE_URL).toBe('');
+    expect(API_BASE_URL_ERROR).toBe('not-a-valid-url');
+  });
+
+  it('rejects a URL without an http(s) scheme', () => {
+    const { transport, API_BASE_URL_ERROR } = loadGateway('ftp://api.example');
+    expect(transport).toBe('invalid');
+    expect(API_BASE_URL_ERROR).toBe('unsupported-protocol');
+  });
+
+  it('never calls the Firebase callable SDK when the configured URL is invalid', async () => {
+    global.fetch = fetchReturning(okResponse({ success: true }));
+
+    const { placeOrderViaGateway, getGuestOrderViaGateway } = loadGateway('not-a-url');
+
+    // Load the mock AFTER the gateway so it is the very instance the gateway
+    // would call (loadGateway resets the module registry).
+    const functionsLib = require('firebase/functions');
+    functionsLib.getFunctions.mockReset();
+    functionsLib.httpsCallable.mockReset();
+
+    const created = await placeOrderViaGateway({ items: [] });
+    const looked = await getGuestOrderViaGateway({ orderId: 'ORD-1', token: 'tok' });
+
+    expect(functionsLib.httpsCallable).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(created.success).toBe(false);
+    expect(created.error).toMatch(/REACT_APP_API_BASE_URL/i);
+    expect(looked.success).toBe(false);
+    expect(looked.error).toMatch(/REACT_APP_API_BASE_URL/i);
+  });
+
+  it('reports the selected transport and the API hostname only (no secrets)', () => {
+    const { getTransportDiagnostic } = loadGateway('https://api.example/api');
+
+    expect(getTransportDiagnostic()).toEqual({ transport: 'http', apiHost: 'api.example' });
+  });
+
+  it('reports no hostname when the API URL is unset', () => {
+    const { getTransportDiagnostic } = loadGateway(undefined);
+
+    expect(getTransportDiagnostic()).toEqual({ transport: 'callable', apiHost: null });
+  });
+
+  it('logs only the transport and the hostname', () => {
+    const { logTransportDiagnostic } = loadGateway('https://api.example');
+    const info = jest.fn();
+
+    logTransportDiagnostic({ info });
+
+    expect(info).toHaveBeenCalledTimes(1);
+    const [message] = info.mock.calls[0];
+    expect(message).toContain('transport=http');
+    expect(message).toContain('apiHost=api.example');
+    expect(message).not.toMatch(/token/i);
+    expect(message).not.toMatch(/secret/i);
+    expect(message).not.toMatch(/id-token/i);
+  });
 });
 
 // --- Callable transport -----------------------------------------------------
@@ -195,6 +269,23 @@ describe('callable transport', () => {
 // --- Demo HTTP transport ----------------------------------------------------
 
 describe('http transport', () => {
+  it('routes both endpoints to the configured order API host', async () => {
+    global.fetch = fetchReturning(okResponse({ success: true, order: { id: 'ORD-3' } }));
+
+    const { placeOrderViaGateway, getGuestOrderViaGateway } = loadGateway(
+      'https://pizza-demo-api.test'
+    );
+
+    await placeOrderViaGateway({ items: [] });
+    await getGuestOrderViaGateway({ orderId: 'ORD-3', token: 'tok' });
+
+    const urls = global.fetch.mock.calls.map(([url]) => url);
+    expect(urls).toEqual([
+      'https://pizza-demo-api.test/api/orders/create',
+      'https://pizza-demo-api.test/api/orders/guest-lookup',
+    ]);
+  });
+
   it('POSTs the payload to /api/orders/create with a Bearer ID token', async () => {
     global.fetch = fetchReturning(okResponse({ success: true, orderId: 'ORD-1' }));
     const payload = { restaurantId: 'restaurant-pizza-demo', items: [{ productId: 'p1', qty: 1 }] };

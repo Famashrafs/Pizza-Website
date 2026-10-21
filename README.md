@@ -313,10 +313,13 @@ as a small HTTP API on Render's free tier. It is a **transport swap, not a fork*
 * `server/` is the Express transport (CORS allowlist, Bearer-token verification,
   `/health`, `/api/diagnostics`). See `server/README.md` to deploy it.
 * `render.yaml` is a Render Blueprint for the free-tier web service.
+* `worker/` is the same transport as a **Cloudflare Worker** (see 2c below).
 * The client picks the transport from `REACT_APP_API_BASE_URL`:
   * **unset** → Firebase callable (the production path once on Blaze),
-  * **set** (e.g. `https://pizza-demo-api.onrender.com`) → the demo HTTP API.
-  No other code changes are needed to switch between them.
+  * **set** (e.g. the deployed Worker or Render URL) → the demo HTTP API.
+  No other code changes are needed to switch between them. A value that is set
+  but not a usable `http(s)` URL blocks checkout with a configuration error — the
+  client never falls back to Firebase silently.
 
 Security is unchanged: `firestore.rules` still denies all client order writes,
 the backend derives identity from the verified Firebase ID token (never the
@@ -324,6 +327,48 @@ request body), guest access still requires the high-entropy tracking token, and
 the service-account credential lives only in the Render environment (never in
 the repo). The demo API exposes **no** order-mutation endpoints — admin status
 changes stay on Firestore under the rules.
+
+### 2c. Free-tier demo backend (Cloudflare Worker)
+
+`worker/` implements the same HTTP contract as the Render service on
+**Cloudflare Workers** (free tier, no card required). It bundles the same
+`functions/lib/orderServiceCore.js` engine, verifies Firebase ID tokens against
+Google's JWKS, and talks to Firestore over its REST API (the Admin SDK cannot
+run on Workers). Endpoints: `POST /api/orders/create`,
+`POST /api/orders/guest-lookup`, `GET /health`, `GET /api/diagnostics`.
+
+The code is complete and its offline suite passes (`npm run test:worker`), but
+**the Worker is not deployed yet** — no Worker URL exists yet, so
+`REACT_APP_API_BASE_URL` must stay empty (callable transport) until it is
+deployed. To deploy it:
+
+```bash
+# 1. Install the Worker toolchain
+npm --prefix worker install
+
+# 2. Put the service-account secret in the Worker (never in the repo)
+npx --prefix worker wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+#    -> paste the service-account JSON as ONE line
+#    (Firebase console > Project settings > Service accounts > Generate new key)
+
+# 3. Set the non-secret vars: FIREBASE_WEB_API_KEY (public web key),
+#    FIREBASE_PROJECT_ID, CORS_ALLOWED_ORIGINS (add the frontend origin,
+#    e.g. http://localhost:3000 for local dev and the Vercel origin for prod)
+#    -> edit worker/wrangler.toml [vars]
+
+# 4. Deploy and note the URL wrangler prints
+npm --prefix worker run deploy
+#    -> https://<worker-name>.<your-account>.workers.dev
+
+# 5. Point the frontend at that URL and RESTART the dev server
+#    (CRA inlines REACT_APP_* at build/start time)
+#    .env.local:  REACT_APP_API_BASE_URL=<the URL from step 4>
+npm start
+```
+
+The browser console prints the active transport at startup:
+`[orderGateway] transport=http apiHost=<host>` (or `transport=callable
+apiHost=(none)`) — it never prints tokens or payloads.
 
 ### First-run bootstrap
 
@@ -339,7 +384,7 @@ rules, just register the owner once and the customer menu will populate.
       fails with `NOT_FOUND` while it does not
 - [ ] `npx firebase deploy --only firestore` succeeds for the `resturent-system` project
 - [ ] `npx firebase deploy --only functions` succeeds (Blaze plan required) so checkout + guest tracking work
-  *or*, on the free plan, the demo API is deployed and `REACT_APP_API_BASE_URL` points at it (see `server/README.md`)
+  *or*, on the free plan, the demo API is deployed and `REACT_APP_API_BASE_URL` points at it (see `server/README.md`, or section 2c for the Cloudflare Worker)
 - [ ] Register an owner at `/owner/register` → lands on `/admin`, menu seeds
 - [ ] Signed-out visit to `/menu` shows the seeded products (public read works)
 - [ ] The browser console prints no `[app] Could not read users/…` warning

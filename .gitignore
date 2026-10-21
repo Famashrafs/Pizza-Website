@@ -34,3 +34,8 @@ dev-server.log
 # server (demo API)
 /server/node_modules
 server/.env
+
+# cloudflare worker (demo API)
+/worker/node_modules
+worker/.dev.vars
+.wrangler/

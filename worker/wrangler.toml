@@ -1,0 +1,38 @@
+# Cloudflare Worker — free-tier demo order API (Phase 2.5).
+#
+# The Worker is a THIN transport: all order pricing, validation, idempotency and
+# guest-token logic lives in the shared engine at ../functions/lib/orderServiceCore.js
+# (bundled by wrangler), exactly as under the Render/Express transport in server/.
+#
+# Runtime notes (verified against https://developers.cloudflare.com docs, Oct 2026):
+#   - Workers Free: 100,000 requests/day, 10 ms CPU per invocation, no wall-clock
+#     limit for HTTP requests, 50 subrequests/request. No credit card required.
+#   - `node:crypto` (used by the shared engine) is fully supported in Workers;
+#     for compatibility_date >= 2026-08-04 nodejs_compat is enabled by default,
+#     and it is listed explicitly below for clarity.
+#
+# Secrets (set with `wrangler secret put <NAME>`, NEVER committed here):
+#   - FIREBASE_SERVICE_ACCOUNT_JSON  full service-account JSON as one line
+# Non-secret vars below may also be overridden in the Cloudflare dashboard.
+
+name = "pizza-demo-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Public Firebase project id (already shipped to the browser via the web config).
+FIREBASE_PROJECT_ID = "resturent-system"
+# Firebase web API key — public by design (it is in the frontend Firebase config);
+# used only to call Identity Toolkit accounts:lookup for token revocation checks.
+FIREBASE_WEB_API_KEY = ""
+# Deployment mode label surfaced by /health and /api/diagnostics.
+DEMO_MODE = "demo"
+# Explicit CORS allowlist (comma-separated). Local dev is included; add the real
+# Vercel frontend origin here once verified, e.g.:
+#   http://localhost:3000,http://127.0.0.1:3000,https://your-app.vercel.app
+CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+
+# Local development only: copy real values into worker/.dev.vars (git-ignored).
+# [vars] above are non-secret; .dev.vars holds the service-account secret and
+# is read by `wrangler dev` automatically.

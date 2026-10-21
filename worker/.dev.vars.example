@@ -1,0 +1,11 @@
+# Local-only secrets for `wrangler dev` (this file is git-ignored; the
+# example below is a template — copy to worker/.dev.vars and fill in).
+#
+# Full Firebase service-account JSON as a SINGLE-LINE string:
+#   https://console.firebase.google.com → Project settings → Service accounts
+#   → Generate new private key → paste the whole JSON on one line.
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"your-project","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-...@your-project.iam.gserviceaccount.com"}
+
+# Optional: point the Firestore adapter at the local emulator instead of the
+# production database (used by npm run test:worker:emulator).
+# FIRESTORE_EMULATOR_HOST=127.0.0.1:8401

@@ -6,9 +6,10 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "test": "node --test test/app.test.js test/cors.test.js test/serviceAccount.test.js test/firebaseAuth.test.js test/firestore.test.js test/wiring.test.js"
+    "dev": "wrangler dev --config wrangler.toml",
+    "deploy": "wrangler deploy --config wrangler.toml --no-autoconfig",
+    "deploy:dry-run": "wrangler deploy --config wrangler.toml --no-autoconfig --dry-run",
+    "test": "node --test test/app.test.js test/startup.test.js test/cors.test.js test/serviceAccount.test.js test/firebaseAuth.test.js test/firestore.test.js test/wiring.test.js test/deployConfig.test.js"
   },
   "dependencies": {
     "jose": "^6.1.0"

@@ -18,7 +18,11 @@
 
 'use strict';
 
-const crypto = require('crypto');
+// `node:` prefixed specifier on purpose — see the note in ./orderCore.js: the
+// Cloudflare Workers runtime only resolves Node builtins under the `node:`
+// namespace, and a bare `require('crypto')` breaks the whole Worker bundle
+// (Cloudflare Error 1101) instead of just this module.
+const crypto = require('node:crypto');
 const {
   buildOrder,
   verifyGuestToken,

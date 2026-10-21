@@ -16,6 +16,8 @@
 
 'use strict';
 
+import { ConfigurationError } from './errors.js';
+
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/datastore';
 const TOKEN_LIFETIME_SEC = 3600;
@@ -24,7 +26,8 @@ const TOKEN_SKEW_SEC = 600;
 
 export function parseServiceAccount(raw) {
   if (!raw) {
-    throw new Error(
+    throw new ConfigurationError(
+      'service_account_missing',
       'FIREBASE_SERVICE_ACCOUNT_JSON is required (wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON).'
     );
   }
@@ -32,10 +35,14 @@ export function parseServiceAccount(raw) {
   try {
     account = typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.');
+    throw new ConfigurationError(
+      'service_account_invalid_json',
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.'
+    );
   }
   if (!account.project_id || !account.private_key || !account.client_email) {
-    throw new Error(
+    throw new ConfigurationError(
+      'service_account_invalid_shape',
       'FIREBASE_SERVICE_ACCOUNT_JSON must contain project_id, client_email and private_key.'
     );
   }

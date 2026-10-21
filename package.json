@@ -33,8 +33,11 @@
     "test:rules:emulator": "firebase emulators:exec --config firebase.emulator.json --project demo-rules-test --only firestore \"node --test rules-tests/firestore.rules.test.js\"",
     "test:functions": "node --test functions/lib/orderCore.test.js functions/lib/orderServiceCore.test.js functions/lib/deployment.test.js",
     "test:server": "node --test server/test/app.test.js",
-    "test:worker": "cd worker && npm install --no-audit --no-fund && cd .. && node --test worker/test/app.test.js worker/test/cors.test.js worker/test/serviceAccount.test.js worker/test/firebaseAuth.test.js worker/test/firestore.test.js worker/test/wiring.test.js",
-    "test:worker:emulator": "firebase emulators:exec --config firebase.emulator.json --project demo-worker-test --only firestore \"node worker/test/emulator.integration.test.js\""
+    "test:worker": "cd worker && npm install --no-audit --no-fund && cd .. && node --test worker/test/app.test.js worker/test/startup.test.js worker/test/cors.test.js worker/test/serviceAccount.test.js worker/test/firebaseAuth.test.js worker/test/firestore.test.js worker/test/wiring.test.js worker/test/deployConfig.test.js",
+    "test:worker:emulator": "firebase emulators:exec --config firebase.emulator.json --project demo-worker-test --only firestore \"node worker/test/emulator.integration.test.js\"",
+    "dev:worker": "npm --prefix worker run dev",
+    "deploy:worker": "npm --prefix worker run deploy",
+    "deploy:worker:dry-run": "npm --prefix worker run deploy:dry-run"
   },
   "eslintConfig": {
     "extends": [

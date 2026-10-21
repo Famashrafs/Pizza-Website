@@ -44,6 +44,16 @@ export function corsHeadersFor(origin) {
   };
 }
 
+// CORS headers for a request origin, or an empty object when the origin is
+// missing (non-browser caller) or not on the allowlist. Used by the Worker
+// entry point so even responses produced OUTSIDE the normal routing (e.g. an
+// unexpected failure) still carry CORS headers for allowed origins — without
+// them the browser reports a CORS error instead of the API error.
+export function corsHeadersForRequest(origin, allowedOrigins) {
+  if (!origin || !isOriginAllowed(origin, allowedOrigins)) return {};
+  return corsHeadersFor(origin);
+}
+
 export function bearerToken(header) {
   const match = /^Bearer\s+(.+)$/i.exec(String(header || '').trim());
   return match ? match[1].trim() : null;

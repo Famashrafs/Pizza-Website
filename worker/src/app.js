@@ -20,6 +20,7 @@ import {
   corsHeadersFor,
   bearerToken,
 } from './cors.js';
+import { isConfigurationError, safeErrorMessage } from './errors.js';
 
 const API_VERSION = '2.5.0';
 const MAX_BODY_BYTES = 100 * 1024; // matches express.json({ limit: '100kb' })
@@ -44,6 +45,9 @@ function json(status, headers, body) {
  * @param {string|null} [deps.projectId] Public Firebase project id (never secret).
  * @param {() => Date} [deps.now] Clock (injectable for tests).
  * @param {(err: Error) => void} [deps.logError] Internal error logger.
+ * @param {() => { firebase: { state: string, code?: string } }} [deps.getServiceStatus]
+ *   Reports the state of the Firebase-backed dependencies WITHOUT initialising
+ *   them (used by /health and /api/diagnostics).
  * @returns {(request: Request) => Promise<Response>}
  */
 export function createWorkerApp({
@@ -53,7 +57,8 @@ export function createWorkerApp({
   mode = 'demo',
   projectId = null,
   now = () => new Date(),
-  logError = (err) => console.error('[api]', err && err.message),
+  logError = (err) => console.error('[api]', safeErrorMessage(err)),
+  getServiceStatus = () => ({ firebase: { state: 'unknown' } }),
 } = {}) {
   if (!orderService || typeof orderService.createOrder !== 'function') {
     throw new Error('createWorkerApp requires an orderService with createOrder/getGuestOrder.');
@@ -85,14 +90,19 @@ export function createWorkerApp({
 
     try {
       // --- Health & diagnostics (no secrets, no customer data) --------------
+      // Neither endpoint initialises Firebase, mints a token or touches
+      // Firestore: they only report the CURRENT state of those dependencies so
+      // a broken deployment is visible without a 1101-style crash.
       if (request.method === 'GET' && url.pathname === '/health') {
+        const status = readServiceStatus(getServiceStatus);
         return json(
           200,
           corsHeaders,
           {
-            status: 'ok',
+            status: status.firebase.state === 'error' ? 'degraded' : 'ok',
             service: 'pizza-demo-api',
             mode,
+            dependencies: status,
             time: now().toISOString(),
           }
         );
@@ -103,11 +113,12 @@ export function createWorkerApp({
         // are already exposed to the browser via the Firebase web config.
         // Secrets, service-account material and customer data are never
         // included.
+        const status = readServiceStatus(getServiceStatus);
         return json(
           200,
           corsHeaders,
           {
-            status: 'ok',
+            status: status.firebase.state === 'error' ? 'degraded' : 'ok',
             service: 'pizza-demo-api',
             apiVersion: API_VERSION,
             mode,
@@ -115,6 +126,7 @@ export function createWorkerApp({
             runtime: 'cloudflare-workers',
             projectId: projectId || null,
             features: { createOrder: true, guestLookup: true, payment: ['cash'] },
+            dependencies: status,
             time: now().toISOString(),
           }
         );
@@ -133,7 +145,10 @@ export function createWorkerApp({
         let decoded;
         try {
           decoded = await verifyToken(token);
-        } catch {
+        } catch (err) {
+          // A configuration failure (missing/broken credentials) is NOT a
+          // client problem: report it as 503, never as "session expired".
+          if (isConfigurationError(err)) throw err;
           // Never surface why a token failed (expired/revoked/malformed).
           return json(
             401,
@@ -180,12 +195,42 @@ export function createWorkerApp({
       return json(404, corsHeaders, { success: false, error: 'Not found.' });
     } catch (err) {
       logError(err);
+      if (isConfigurationError(err)) {
+        // Deployment problem, not a client problem. The message stays generic
+        // (the machine-readable reason is logged server-side and exposed via
+        // /api/diagnostics) but the response DOES carry CORS headers so the
+        // browser can read it.
+        return json(503, corsHeaders, {
+          success: false,
+          error: 'The order service is temporarily unavailable. Please try again.',
+        });
+      }
       return json(500, corsHeaders, {
         success: false,
         error: 'The order server encountered an error.',
       });
     }
   };
+}
+
+// Normalise the dependency report: never leak anything but a state name and a
+// safe, machine-readable code.
+function readServiceStatus(getServiceStatus) {
+  let raw;
+  try {
+    raw = getServiceStatus();
+  } catch {
+    raw = null;
+  }
+  const firebase = raw && raw.firebase ? raw.firebase : {};
+  const state = ['ready', 'configured', 'not_initialized', 'error'].includes(firebase.state)
+    ? firebase.state
+    : 'unknown';
+  const status = { firebase: { state } };
+  if (state === 'error' && typeof firebase.code === 'string' && firebase.code) {
+    status.firebase.code = firebase.code;
+  }
+  return status;
 }
 
 // Bounded JSON body parsing: 100 KB cap (same as the Express transport),

@@ -340,7 +340,22 @@ run on Workers). Endpoints: `POST /api/orders/create`,
 The code is complete and its offline suite passes (`npm run test:worker`), but
 **the Worker is not deployed yet** — no Worker URL exists yet, so
 `REACT_APP_API_BASE_URL` must stay empty (callable transport) until it is
-deployed. To deploy it:
+deployed.
+
+> **Backend only — the storefront stays on Vercel.** The Worker has **no**
+> static-assets binding: it ships `worker/src/**` only (~94 KiB). Never run
+> `wrangler deploy` from the repository root: wrangler's *autoconfig* detects
+> the Create-React-App app and generates `assets.directory = "build"`, which
+> uploads the whole React build to Cloudflare and fails with
+> `Asset too large: build/images/Untitled-1.png (31.1 MiB; maximum 25 MiB)`.
+> The deploy script below pins `--config worker/wrangler.toml` and passes
+> `--no-autoconfig`, so the frontend can never be uploaded by accident.
+
+> The offending file is `public/images/Untitled-1.png` (8 910 × 6 300 px,
+> 31.1 MiB — an unreferenced leftover; Create React App copies `public/`
+> verbatim into `build/`). The original is kept untouched;
+> `public/images/Untitled-1.optimized.png` (1 920 × 1 358 px, 2.3 MiB, lossless
+> PNG, alpha channel preserved) is the deployable copy.
 
 ```bash
 # 1. Install the Worker toolchain
@@ -356,14 +371,29 @@ npx --prefix worker wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 #    e.g. http://localhost:3000 for local dev and the Vercel origin for prod)
 #    -> edit worker/wrangler.toml [vars]
 
-# 4. Deploy and note the URL wrangler prints
-npm --prefix worker run deploy
+# 4. Pre-flight (no upload, no auth): must print "Total Upload: ~94 KiB"
+#    and list ONLY the env-var bindings — no static assets.
+npm run deploy:worker:dry-run
+
+# 5. Deploy and note the URL wrangler prints
+npm run deploy:worker
 #    -> https://<worker-name>.<your-account>.workers.dev
 
-# 5. Point the frontend at that URL and RESTART the dev server
+# 6. Point the frontend at that URL and RESTART the dev server
 #    (CRA inlines REACT_APP_* at build/start time)
-#    .env.local:  REACT_APP_API_BASE_URL=<the URL from step 4>
+#    .env.local:  REACT_APP_API_BASE_URL=<the URL from step 5>
 npm start
+```
+
+Local API smoke test (no deploy, no account needed):
+
+```bash
+npm --prefix worker run dev      # needs worker/.dev.vars (see .dev.vars.example)
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/api/diagnostics
+curl -i -X OPTIONS http://127.0.0.1:8787/api/orders/create \
+     -H "Origin: http://localhost:3000" \
+     -H "Access-Control-Request-Method: POST"
 ```
 
 The browser console prints the active transport at startup:

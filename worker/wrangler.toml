@@ -25,13 +25,14 @@ compatibility_flags = ["nodejs_compat"]
 FIREBASE_PROJECT_ID = "resturent-system"
 # Firebase web API key — public by design (it is in the frontend Firebase config);
 # used only to call Identity Toolkit accounts:lookup for token revocation checks.
-FIREBASE_WEB_API_KEY = ""
+FIREBASE_WEB_API_KEY = "AIzaSyCCyyWpc8U6bWIaduDBjF2AGpiZ1btAoBU"
 # Deployment mode label surfaced by /health and /api/diagnostics.
 DEMO_MODE = "demo"
-# Explicit CORS allowlist (comma-separated). Local dev is included; add the real
-# Vercel frontend origin here once verified, e.g.:
-#   http://localhost:3000,http://127.0.0.1:3000,https://your-app.vercel.app
-CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+# Explicit CORS allowlist (comma-separated). Local dev + the production Vercel
+# aliases of this project (`vercel inspect <production deployment>`) are listed.
+# Preview deployments get a random host per build, so they must be added here
+# individually (or tested against the production alias).
+CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,https://pizza-website-famashrafs-projects.vercel.app,https://pizza-website-taupe.vercel.app"
 
 # Local development only: copy real values into worker/.dev.vars (git-ignored).
 # [vars] above are non-secret; .dev.vars holds the service-account secret and

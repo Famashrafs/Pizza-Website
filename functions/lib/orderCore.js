@@ -20,7 +20,12 @@
 
 'use strict';
 
-const crypto = require('crypto');
+// `node:` prefixed specifier on purpose: the Cloudflare Workers runtime
+// exposes Node builtins under the `node:` namespace only. A bare `require('crypto')`
+// is bundled by esbuild as `import libDefault from "crypto"`, which the Workers
+// module loader cannot resolve and which fails the whole Worker at load time
+// (Cloudflare Error 1101) — including on /health.
+const crypto = require('node:crypto');
 
 const { RESTAURANT_SETTINGS } = require('./restaurantDefaults');
 

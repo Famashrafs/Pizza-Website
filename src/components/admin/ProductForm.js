@@ -8,9 +8,36 @@ import {
   faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import ImagePicker from './ImagePicker';
+import { SUPPORTED_LANGUAGES } from '../../i18n';
+import {
+  DEFAULT_CONTENT_LANGUAGE,
+  TRANSLATED_CONTENT_LANGUAGES,
+  hasOptionTranslation,
+  normalizeTranslations,
+} from '../../utils/menuTranslations';
 
 const newId = (prefix) =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+const withIds = (rows, prefix) =>
+  (rows || []).map((row) => ({ ...row, id: row.id || newId(prefix) }));
+
+const rowField = (section) => (section === 'toppings' ? 'name' : 'label');
+
+const pickOptionTranslations = (map, ids) => {
+  const out = {};
+  if (!map) return out;
+  ids.forEach((id) => {
+    const text = String(map[id] || '').trim();
+    if (text) out[id] = text;
+  });
+  return out;
+};
+
+const rowHasContent = (row, section, translations) => {
+  if (String(row[rowField(section)] || '').trim()) return true;
+  return hasOptionTranslation(translations, section, row.id);
+};
 
 function Toggle({ checked, onChange, label, description }) {
   return (
@@ -40,6 +67,11 @@ function cleanNumber(value) {
 // project's existing customization model (sizes / crusts / toppings) rather than
 // introducing a parallel one — the customer ProductModal reads these exact
 // fields, so anything the owner configures here is immediately purchasable.
+//
+// Multilingual content (Phase 4): the English fields stay the defaults. The
+// language tabs switch which language the name, description and option labels
+// edit, without changing ids, prices or availability. Empty translations fall
+// back to English on the storefront.
 function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
   const { t } = useTranslation();
   const isEdit = Boolean(product?.id);
@@ -56,30 +88,109 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     vegetarian: Boolean(product?.vegetarian),
     popular: Boolean(product?.popular),
     ingredients: (product?.ingredients || []).join(', '),
-    sizes: (product?.sizes || []).map((size) => ({ ...size })),
-    crusts: (product?.crusts || []).map((crust) => ({ ...crust })),
-    toppings: (product?.toppings || []).map((topping) => ({ ...topping })),
+    sizes: withIds(product?.sizes, 'size'),
+    crusts: withIds(product?.crusts, 'crust'),
+    toppings: withIds(product?.toppings, 'topping'),
     maxToppings: product?.maxToppings != null ? String(product.maxToppings) : '',
     defaultSize: product?.defaultSize || '',
     defaultCrust: product?.defaultCrust || '',
+    translations: normalizeTranslations(product?.translations),
   }));
+  const [contentLanguage, setContentLanguage] = useState(DEFAULT_CONTENT_LANGUAGE);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  const isDefaultLanguage = contentLanguage === DEFAULT_CONTENT_LANGUAGE;
+  const activeLanguage =
+    SUPPORTED_LANGUAGES.find((language) => language.code === contentLanguage) ||
+    SUPPORTED_LANGUAGES[0];
+
   const update = (patch) => setForm((prev) => ({ ...prev, ...patch }));
+
+  // --- option row helpers ---------------------------------------------------
+  const updateRow = (key, index, patch) =>
+    setForm((prev) => ({
+      ...prev,
+      [key]: prev[key].map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }));
 
   const sizeLabels = useMemo(
     () => form.sizes.map((size) => size.label).filter(Boolean),
     [form.sizes]
   );
 
-  // --- option row helpers ---------------------------------------------------
-  const updateRow = (key, index, patch) =>
-    update({ [key]: form[key].map((row, i) => (i === index ? { ...row, ...patch } : row)) });
+  // --- language-aware field helpers ----------------------------------------
+  const translationEntry = form.translations[contentLanguage] || {};
 
+  const textValue = (field) =>
+    isDefaultLanguage ? form[field] : translationEntry[field] || '';
+
+  const setTextValue = (field, value) => {
+    if (isDefaultLanguage) {
+      update({ [field]: value });
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      translations: {
+        ...prev.translations,
+        [contentLanguage]: {
+          ...(prev.translations[contentLanguage] || {}),
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const optionValue = (row, section) =>
+    isDefaultLanguage
+      ? row[rowField(section)]
+      : form.translations[contentLanguage]?.[section]?.[row.id] || '';
+
+  const setOptionValue = (section, index, value) => {
+    if (isDefaultLanguage) {
+      updateRow(section, index, { [rowField(section)]: value });
+      return;
+    }
+    setForm((prev) => {
+      const row = prev[section][index];
+      const map = { ...(prev.translations[contentLanguage]?.[section] || {}) };
+      if (value) map[row.id] = value;
+      else delete map[row.id];
+      return {
+        ...prev,
+        translations: {
+          ...prev.translations,
+          [contentLanguage]: {
+            ...(prev.translations[contentLanguage] || {}),
+            [section]: map,
+          },
+        },
+      };
+    });
+  };
+
+  // --- option row helpers ---------------------------------------------------
   const removeRow = (key, index) =>
-    update({ [key]: form[key].filter((_, i) => i !== index) });
+    setForm((prev) => {
+      const row = prev[key][index];
+      const translations = { ...prev.translations };
+      if (row?.id) {
+        Object.keys(translations).forEach((locale) => {
+          const section = translations[locale]?.[key];
+          if (!section || section[row.id] === undefined) return;
+          const copy = { ...section };
+          delete copy[row.id];
+          translations[locale] = { ...translations[locale], [key]: copy };
+        });
+      }
+      return {
+        ...prev,
+        translations,
+        [key]: prev[key].filter((_, i) => i !== index),
+      };
+    });
 
   const addSize = () =>
     update({ sizes: [...form.sizes, { id: newId('size'), label: '', adjust: 0 }] });
@@ -99,6 +210,16 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     if (!form.categoryId && !form.newCategory.trim()) {
       next.category = t('admin.errorCategoryRequired');
     }
+    const missingDefaultLabel = ['sizes', 'crusts', 'toppings'].some((section) =>
+      form[section].some(
+        (row) =>
+          !String(row[rowField(section)] || '').trim() &&
+          hasOptionTranslation(form.translations, section, row.id)
+      )
+    );
+    if (missingDefaultLabel) {
+      next.options = t('admin.errorOptionDefaultLabelRequired');
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -108,7 +229,7 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     const categoryName = form.newCategory.trim() || selectedCategory?.name || '';
 
     const sizes = form.sizes
-      .filter((size) => String(size.label).trim())
+      .filter((size) => rowHasContent(size, 'sizes', form.translations))
       .map((size) => ({
         id: size.id || newId('size'),
         label: String(size.label).trim(),
@@ -116,7 +237,7 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
       }));
 
     const crusts = form.crusts
-      .filter((crust) => String(crust.label).trim())
+      .filter((crust) => rowHasContent(crust, 'crusts', form.translations))
       .map((crust) => ({
         id: crust.id || newId('crust'),
         label: String(crust.label).trim(),
@@ -125,7 +246,7 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
       }));
 
     const toppings = form.toppings
-      .filter((topping) => String(topping.name).trim())
+      .filter((topping) => rowHasContent(topping, 'toppings', form.translations))
       .map((topping) => ({
         id: topping.id || newId('topping'),
         name: String(topping.name).trim(),
@@ -133,12 +254,31 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
         available: topping.available !== false,
       }));
 
+    const sizeIds = sizes.map((size) => size.id);
+    const crustIds = crusts.map((crust) => crust.id);
+    const toppingIds = toppings.map((topping) => topping.id);
+
+    const translations = normalizeTranslations(
+      TRANSLATED_CONTENT_LANGUAGES.reduce((acc, locale) => {
+        const entry = form.translations?.[locale] || {};
+        acc[locale] = {
+          name: entry.name || '',
+          description: entry.description || '',
+          sizes: pickOptionTranslations(entry.sizes, sizeIds),
+          crusts: pickOptionTranslations(entry.crusts, crustIds),
+          toppings: pickOptionTranslations(entry.toppings, toppingIds),
+        };
+        return acc;
+      }, {})
+    );
+
     const sizeLabelSet = new Set(sizes.map((size) => size.label));
     const crustIdSet = new Set(crusts.map((crust) => crust.id));
 
     return {
       name: form.name.trim(),
       description: form.description.trim(),
+      translations,
       image: form.image,
       categoryId: form.newCategory.trim() ? null : form.categoryId || null,
       category: categoryName,
@@ -179,6 +319,10 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     }
   };
 
+  const languageSuffix = isDefaultLanguage ? null : (
+    <span className="admin-muted"> · {activeLanguage.label}</span>
+  );
+
   return (
     <form className="admin-form" onSubmit={handleSubmit} noValidate>
       <button type="button" className="admin-back-link" onClick={onCancel}>
@@ -187,28 +331,71 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
 
       <section className="admin-panel">
         <div className="admin-panel-head">
+          <h3>{t('admin.contentLanguage')}</h3>
+          <p className="admin-panel-sub">{t('admin.contentLanguageHint')}</p>
+        </div>
+        <div className="admin-tabs" role="tablist" aria-label={t('admin.contentLanguage')}>
+          {SUPPORTED_LANGUAGES.map((language) => (
+            <button
+              key={language.code}
+              type="button"
+              role="tab"
+              aria-selected={contentLanguage === language.code}
+              className={`admin-tab${contentLanguage === language.code ? ' active' : ''}`}
+              onClick={() => setContentLanguage(language.code)}
+            >
+              {language.label}
+              {language.code === DEFAULT_CONTENT_LANGUAGE && (
+                <span className="admin-tab-count">{t('admin.defaultLanguage')}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {!isDefaultLanguage && (
+          <p className="admin-panel-sub">
+            {t('admin.editTranslationHint', { language: activeLanguage.label })}
+          </p>
+        )}
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-head">
           <h3>{t('admin.formBasicInfo')}</h3>
         </div>
         <div className="admin-form-grid">
           <label className="admin-field admin-field--full">
-            <span>{t('admin.fieldProductName')}</span>
+            <span>
+              {t('admin.fieldProductName')}
+              {languageSuffix}
+            </span>
             <input
               type="text"
-              value={form.name}
-              onChange={(event) => update({ name: event.target.value })}
-              placeholder={t('admin.phProductName')}
+              dir="auto"
+              value={textValue('name')}
+              onChange={(event) => setTextValue('name', event.target.value)}
+              placeholder={
+                isDefaultLanguage ? t('admin.phProductName') : form.name || t('admin.phProductName')
+              }
               maxLength={80}
             />
             {errors.name && <small className="admin-field-error">{errors.name}</small>}
           </label>
 
           <label className="admin-field admin-field--full">
-            <span>{t('admin.fieldDescription')}</span>
+            <span>
+              {t('admin.fieldDescription')}
+              {languageSuffix}
+            </span>
             <textarea
               rows={3}
-              value={form.description}
-              onChange={(event) => update({ description: event.target.value })}
-              placeholder={t('admin.phDescription')}
+              dir="auto"
+              value={textValue('description')}
+              onChange={(event) => setTextValue('description', event.target.value)}
+              placeholder={
+                isDefaultLanguage
+                  ? t('admin.phDescription')
+                  : form.description || t('admin.phDescription')
+              }
               maxLength={400}
             />
           </label>
@@ -319,8 +506,13 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
         <div className="admin-panel-head">
           <h3>{t('admin.formCustomization')}</h3>
           <p className="admin-panel-sub">
-            {t('admin.formCustomizationSub')}
+            {isDefaultLanguage
+              ? t('admin.formCustomizationSub')
+              : t('admin.optionsLanguageHint')}
           </p>
+          {errors.options && (
+            <small className="admin-field-error">{errors.options}</small>
+          )}
         </div>
 
         {/* Sizes */}
@@ -336,9 +528,12 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
             <div className="admin-option-row" key={size.id || index}>
               <input
                 type="text"
-                value={size.label}
-                placeholder={t('admin.phSizeLabel')}
-                onChange={(event) => updateRow('sizes', index, { label: event.target.value })}
+                dir="auto"
+                value={optionValue(size, 'sizes')}
+                placeholder={
+                  isDefaultLanguage ? t('admin.phSizeLabel') : size.label || t('admin.phSizeLabel')
+                }
+                onChange={(event) => setOptionValue('sizes', index, event.target.value)}
               />
               <input
                 type="number"
@@ -372,9 +567,12 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
             <div className="admin-option-row" key={crust.id || index}>
               <input
                 type="text"
-                value={crust.label}
-                placeholder={t('admin.phCrustLabel')}
-                onChange={(event) => updateRow('crusts', index, { label: event.target.value })}
+                dir="auto"
+                value={optionValue(crust, 'crusts')}
+                placeholder={
+                  isDefaultLanguage ? t('admin.phCrustLabel') : crust.label || t('admin.phCrustLabel')
+                }
+                onChange={(event) => setOptionValue('crusts', index, event.target.value)}
               />
               <input
                 type="number"
@@ -418,9 +616,14 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
             <div className="admin-option-row" key={topping.id || index}>
               <input
                 type="text"
-                value={topping.name}
-                placeholder={t('admin.phToppingName')}
-                onChange={(event) => updateRow('toppings', index, { name: event.target.value })}
+                dir="auto"
+                value={optionValue(topping, 'toppings')}
+                placeholder={
+                  isDefaultLanguage
+                    ? t('admin.phToppingName')
+                    : topping.name || t('admin.phToppingName')
+                }
+                onChange={(event) => setOptionValue('toppings', index, event.target.value)}
               />
               <input
                 type="number"

@@ -14,6 +14,10 @@ import {
   pluralizeCategory,
 } from '../utils/menuLogic';
 import { createCartItem } from '../utils/cartItem';
+import {
+  getCategoryLabels,
+  localizedProductName,
+} from '../utils/menuTranslations';
 import MenuToolbar from '../components/MenuToolbar';
 import MenuFilters from '../components/MenuFilters';
 import ProductCard from '../components/ProductCard';
@@ -26,7 +30,7 @@ const SKELETON_COUNT = 8;
 
 function MenuPage() {
   const location = useLocation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('loading');
   const [query, setQuery] = useState('');
@@ -60,14 +64,27 @@ function MenuPage() {
     loadProducts();
   }, [loadProducts]);
 
-  const categories = useMemo(() => getCategories(products), [products]);
+  // Category values (used for filtering) always stay the default/English
+  // `product.category`; only the label is translated for display.
+  const categoryLabels = useMemo(
+    () => getCategoryLabels(products, i18n.language),
+    [products, i18n.language]
+  );
+  const categories = useMemo(
+    () =>
+      getCategories(products).map((value) => ({
+        value,
+        label: categoryLabels.get(value) || value,
+      })),
+    [products, categoryLabels]
+  );
   const priceLimits = useMemo(() => getPriceLimits(products), [products]);
 
   const visibleProducts = useMemo(() => {
-    const searched = searchProducts(products, query);
+    const searched = searchProducts(products, query, i18n.language);
     const filtered = filterProducts(searched, filters);
     return sortProducts(filtered, sortKey);
-  }, [products, query, filters, sortKey]);
+  }, [products, query, filters, sortKey, i18n.language]);
 
   const activeFilterCount = countActiveFilters(filters);
 
@@ -89,15 +106,17 @@ function MenuPage() {
       return;
     }
     addItem(item);
-    showToast(t('menu.toastAddedToCart', { name: customizing.name }));
+    showToast(t('menu.toastAddedToCart', { name: localizedProductName(customizing, i18n.language) }));
     setCustomizing(null);
   };
 
+  const activeCategory =
+    filters.category === 'All' ? null : categoryLabels.get(filters.category) || filters.category;
   const emptyMessage = query
     ? t('menu.emptySearch', {
-        category: pluralizeCategory(
-          filters.category === 'All' ? null : filters.category
-        ),
+        category: i18n.language.startsWith('en')
+          ? pluralizeCategory(activeCategory)
+          : activeCategory || t('common.units.items'),
         query,
       })
     : t('menu.emptyNoMatch');
@@ -132,13 +151,13 @@ function MenuPage() {
           >
             {t('menu.allCategories')}
           </button>
-          {categories.map((category) => (
+          {categories.map(({ value, label }) => (
             <button
-              key={category}
-              className={filters.category === category ? 'active' : ''}
-              onClick={() => selectCategory(category)}
+              key={value}
+              className={filters.category === value ? 'active' : ''}
+              onClick={() => selectCategory(value)}
             >
-              {category}
+              {label}
             </button>
           ))}
         </nav>

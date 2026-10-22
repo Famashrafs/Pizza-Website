@@ -23,6 +23,13 @@ import {
 } from '../../services/categoryService';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES } from '../../i18n';
+import {
+  DEFAULT_CONTENT_LANGUAGE,
+  TRANSLATED_CONTENT_LANGUAGES,
+  mergeCategoryTranslations,
+  normalizeCategoryTranslations,
+} from '../../utils/menuTranslations';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
@@ -40,7 +47,8 @@ function CategoryManager() {
 
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
+  const [editNames, setEditNames] = useState({});
+  const [editLanguage, setEditLanguage] = useState(DEFAULT_CONTENT_LANGUAGE);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -65,27 +73,52 @@ function CategoryManager() {
 
   const startEdit = (category) => {
     setEditingId(category.id);
-    setEditName(category.name);
+    setEditLanguage(DEFAULT_CONTENT_LANGUAGE);
+    setEditNames(
+      TRANSLATED_CONTENT_LANGUAGES.reduce(
+        (acc, locale) => ({
+          ...acc,
+          [locale]: category.translations?.[locale]?.name || '',
+        }),
+        { [DEFAULT_CONTENT_LANGUAGE]: category.name }
+      )
+    );
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditName('');
+    setEditNames({});
+    setEditLanguage(DEFAULT_CONTENT_LANGUAGE);
   };
 
   const saveEdit = async (category) => {
-    const name = editName.trim();
+    const name = String(editNames[DEFAULT_CONTENT_LANGUAGE] || '').trim();
     if (!name) {
       showToast(t('admin.errorCategoryNameRequired'), 'error');
       return;
     }
-    if (name === category.name) {
+
+    const translations = mergeCategoryTranslations(category.translations, {
+      ar: { name: editNames.ar || '' },
+      it: { name: editNames.it || '' },
+    });
+    const sameName = name === category.name;
+    const sameTranslations =
+      JSON.stringify(translations) ===
+      JSON.stringify(normalizeCategoryTranslations(category.translations));
+    if (sameName && sameTranslations) {
       cancelEdit();
       return;
     }
+
     try {
-      await updateCategory(category.id, { name }, restaurantId);
-      showToast(t('admin.toastCategoryRenamed'));
+      // Only send translations when they changed, so a pure rename does not
+      // rewrite every product's denormalized category labels.
+      const patch = sameTranslations ? { name } : { name, translations };
+      await updateCategory(category.id, patch, restaurantId);
+      showToast(
+        sameName ? t('admin.toastCategoryUpdated') : t('admin.toastCategoryRenamed')
+      );
       cancelEdit();
     } catch (err) {
       showToast(err.message || t('admin.errorRenameCategory'), 'error');
@@ -185,21 +218,59 @@ function CategoryManager() {
                   </div>
 
                   {isEditing ? (
-                    <div className="admin-category-edit">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(event) => setEditName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            saveEdit(category);
+                    <div className="admin-category-edit is-multilingual">
+                      <div className="admin-category-edit-fields">
+                        <div
+                          className="admin-tabs admin-tabs--sm"
+                          role="tablist"
+                          aria-label={t('admin.contentLanguage')}
+                        >
+                          {SUPPORTED_LANGUAGES.map((language) => (
+                            <button
+                              key={language.code}
+                              type="button"
+                              role="tab"
+                              aria-selected={editLanguage === language.code}
+                              className={`admin-tab${
+                                editLanguage === language.code ? ' active' : ''
+                              }`}
+                              onClick={() => setEditLanguage(language.code)}
+                            >
+                              {language.label}
+                              {language.code === DEFAULT_CONTENT_LANGUAGE && (
+                                <span className="admin-tab-count">
+                                  {t('admin.defaultLanguage')}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          dir="auto"
+                          value={editNames[editLanguage] ?? ''}
+                          onChange={(event) =>
+                            setEditNames((prev) => ({
+                              ...prev,
+                              [editLanguage]: event.target.value,
+                            }))
                           }
-                          if (event.key === 'Escape') cancelEdit();
-                        }}
-                        autoFocus
-                        maxLength={40}
-                      />
+                          placeholder={
+                            editLanguage === DEFAULT_CONTENT_LANGUAGE
+                              ? t('admin.phNewCategoryName')
+                              : category.name
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              saveEdit(category);
+                            }
+                            if (event.key === 'Escape') cancelEdit();
+                          }}
+                          autoFocus
+                          maxLength={40}
+                        />
+                      </div>
                       <button
                         type="button"
                         className="admin-icon-btn is-success"

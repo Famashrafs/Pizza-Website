@@ -1,3 +1,9 @@
+import {
+  localizedProductCategory,
+  localizedProductDescription,
+  localizedProductName,
+} from './menuTranslations';
+
 export const DEFAULT_FILTERS = {
   category: 'All',
   priceMin: null,
@@ -7,7 +13,6 @@ export const DEFAULT_FILTERS = {
   popular: false,
   featured: false,
 };
-
 export const SORT_OPTIONS = [
   { value: 'featured', label: 'Featured' },
   { value: 'price-asc', label: 'Price: Low to High' },
@@ -27,7 +32,10 @@ export function normalizeQuery(query) {
   return fold(query).trim();
 }
 
-export function searchProducts(products, query) {
+// `language` adds the localized content of the active storefront language to
+// the haystack, so customers can search for what they actually see. Category
+// filter values always remain the default `product.category`.
+export function searchProducts(products, query, language = 'en') {
   const q = normalizeQuery(query);
   const tokens = q.split(/\s+/).filter(Boolean);
   if (!tokens.length) {
@@ -38,6 +46,9 @@ export function searchProducts(products, query) {
       product.name,
       product.description,
       product.category,
+      localizedProductName(product, language),
+      localizedProductDescription(product, language),
+      localizedProductCategory(product, language),
       ...(product.ingredients || []),
     ]
       .map(fold)

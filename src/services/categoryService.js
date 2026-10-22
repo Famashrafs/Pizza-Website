@@ -7,6 +7,11 @@
 
 import { CATEGORY_ORDER } from '../data/categories';
 import db from './db';
+import { normalizeCategoryTranslations } from '../utils/menuLocalization.js';
+import {
+  mergeCategoryTranslations,
+  normalizeCategoryTranslations,
+} from '../utils/menuTranslations';
 
 const categoriesPath = (restaurantId) => `restaurants/${restaurantId}/categories`;
 const categoryPath = (restaurantId, id) => `${categoriesPath(restaurantId)}/${id}`;
@@ -26,9 +31,13 @@ function hydrate(category) {
     id: category.id,
     restaurantId: category.restaurantId,
     name: normalizeName(category.name) || 'Category',
+    // Optional per-language names (Phase 4). Missing/empty values fall back to
+    // the default `name` on the storefront.
+    translations: normalizeCategoryTranslations(category.translations),
     description: category.description || '',
     image: category.image || '',
     sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : 0,
+    translations: category.translations,
     createdAt: db.timestampToISO(category.createdAt) || category.createdAt || null,
     updatedAt: db.timestampToISO(category.updatedAt) || category.updatedAt || null,
   };
@@ -101,7 +110,13 @@ export async function resolveCategory({ restaurantId, categoryId, name }) {
   return null;
 }
 
-export async function createCategory({ restaurantId, name, description = '', image = '' } = {}) {
+export async function createCategory({
+  restaurantId,
+  name,
+  description = '',
+  image = '',
+  translations = {},
+} = {}) {
   const clean = normalizeName(name);
   if (!restaurantId) throw new Error('A restaurant is required to create a category.');
   if (!clean) throw new Error('Category name is required.');
@@ -118,10 +133,12 @@ export async function createCategory({ restaurantId, name, description = '', ima
     ? Math.max(...siblings.map((c) => c.sortOrder)) + 1
     : 0;
   const id = generateId();
+  const nextTranslations = normalizeCategoryTranslations(translations);
 
   await db.setDoc(categoryPath(restaurantId, id), {
     restaurantId,
     name: clean,
+    translations: nextTranslations,
     description: String(description || '').trim(),
     image: String(image || '').trim(),
     sortOrder,
@@ -129,7 +146,15 @@ export async function createCategory({ restaurantId, name, description = '', ima
     updatedAt: db.serversNow(),
   });
 
-  return hydrate({ id, restaurantId, name: clean, description, image, sortOrder });
+  return hydrate({
+    id,
+    restaurantId,
+    name: clean,
+    translations: nextTranslations,
+    description,
+    image,
+    sortOrder,
+  });
 }
 
 export async function updateCategory(id, patch = {}, restaurantId) {
@@ -150,14 +175,50 @@ export async function updateCategory(id, patch = {}, restaurantId) {
   }
 
   const { id: _ignoredId, ...safePatch } = patch;
+  const translations =
+    safePatch.translations !== undefined
+      ? mergeCategoryTranslations(existing.translations, safePatch.translations)
+      : existing.translations;
   const next = {
     ...existing,
     ...safePatch,
+    translations,
     name: patch.name != null ? normalizeName(patch.name) : existing.name,
     updatedAt: db.serversNow(),
   };
   await db.setDoc(categoryPath(restaurantId, id), next);
+
+  // Products carry a denormalized copy of the category name translations so
+  // the public storefront can localize category labels without read access to
+  // the owner-only categories collection. Keep those copies in sync.
+  if (patch.translations !== undefined) {
+    await syncProductCategoryTranslations({
+      restaurantId,
+      category: { id, name: next.name },
+      translations,
+    });
+  }
+
   return hydrate({ ...next, id, restaurantId });
+}
+
+async function syncProductCategoryTranslations({ restaurantId, category, translations }) {
+  const products = await db.getDocs('products', {
+    where: [{ field: 'restaurantId', op: '==', value: restaurantId }],
+  });
+  const affected = products.filter(
+    (product) =>
+      product.categoryId === category.id ||
+      (!product.categoryId && product.category === category.name)
+  );
+  await Promise.all(
+    affected.map((product) =>
+      db.updateDoc(`products/${product.id}`, {
+        categoryTranslations: translations,
+        updatedAt: db.serversNow(),
+      })
+    )
+  );
 }
 
 // Deletion is blocked while products still reference the category so a menu can

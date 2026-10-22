@@ -37,13 +37,13 @@ function MenuFilters({
           >
             {t('menu.allCategories')}
           </button>
-          {categories.map((category) => (
+          {categories.map(({ value, label }) => (
             <button
-              key={category}
-              className={filters.category === category ? 'active' : ''}
-              onClick={() => set({ category })}
+              key={value}
+              className={filters.category === value ? 'active' : ''}
+              onClick={() => set({ category: value })}
             >
-              {category}
+              {label}
             </button>
           ))}
         </div>

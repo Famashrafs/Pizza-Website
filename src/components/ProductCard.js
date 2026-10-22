@@ -11,6 +11,11 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { createSimpleCartItem, hasCustomization } from '../utils/cartItem';
 import { formatMoney } from '../i18n/format';
+import {
+  localizedProductCategory,
+  localizedProductDescription,
+  localizedProductName,
+} from '../utils/menuTranslations';
 
 function ProductCard({ product, onCustomize }) {
   const { t, i18n } = useTranslation();
@@ -20,6 +25,10 @@ function ProductCard({ product, onCustomize }) {
 
   const customizable = hasCustomization(product);
   const favorite = isFavorite(product.id);
+  // Display-only translations; price, ids and the filter value stay untouched.
+  const name = localizedProductName(product, i18n.language);
+  const description = localizedProductDescription(product, i18n.language);
+  const category = localizedProductCategory(product, i18n.language);
 
   const handleAdd = () => {
     if (!product.available) return;
@@ -28,7 +37,7 @@ function ProductCard({ product, onCustomize }) {
       return;
     }
     addItem(createSimpleCartItem(product));
-    showToast(t('menu.toastAddedToCart', { name: product.name }));
+    showToast(t('menu.toastAddedToCart', { name }));
   };
 
   const handleFavorite = () => {
@@ -40,15 +49,15 @@ function ProductCard({ product, onCustomize }) {
     });
     showToast(
       added
-        ? t('menu.toastAddedToFavorites', { name: product.name })
-        : t('menu.toastRemovedFromFavorites', { name: product.name })
+        ? t('menu.toastAddedToFavorites', { name })
+        : t('menu.toastRemovedFromFavorites', { name })
     );
   };
 
   return (
     <article className={`product-card ${product.available ? '' : 'unavailable'}`}>
       <div className="product-media">
-        <img src={product.image} alt={product.name} loading="lazy" />
+        <img src={product.image} alt={name} loading="lazy" />
         <div className="card-badges">
           {product.featured && (
             <span className="tag tag-featured">{t('menu.badgeFeatured')}</span>
@@ -74,13 +83,13 @@ function ProductCard({ product, onCustomize }) {
 
       <div className="product-body">
         <div className="product-meta">
-          <span className="product-category">{product.category}</span>
+          <span className="product-category">{category}</span>
           <span className="product-rating">
             <FontAwesomeIcon icon={faStar} /> {product.rating.toFixed(1)}
           </span>
         </div>
-        <h4>{product.name}</h4>
-        <p className="product-desc">{product.description}</p>
+        <h4>{name}</h4>
+        <p className="product-desc">{description}</p>
         <div className="product-foot">
           <span className="price">
             {customizable

@@ -16,6 +16,12 @@ import {
   validateConfiguration,
 } from '../utils/cartItem';
 import { formatMoney } from '../i18n/format';
+import {
+  localizedOptionLabel,
+  localizedProductCategory,
+  localizedProductDescription,
+  localizedProductName,
+} from '../utils/menuTranslations';
 
 const MAX_INSTRUCTIONS = 200;
 const FOCUSABLE =
@@ -54,6 +60,14 @@ function ProductModal({
     () => initialConfig?.instructions || ''
   );
   const [showErrors, setShowErrors] = useState(false);
+
+  // Display-only translations. The option objects kept in state (and handed to
+  // onConfirm) stay the originals so cart identity and prices never change.
+  const displayName = localizedProductName(product, i18n.language);
+  const displayDescription = localizedProductDescription(product, i18n.language);
+  const displayCategory = localizedProductCategory(product, i18n.language);
+  const optionLabel = (section, option) =>
+    localizedOptionLabel(product, section, option, i18n.language);
 
   const instructionSuggestions = [
     t('menu.suggestionNoOnions'),
@@ -236,19 +250,19 @@ function ProductModal({
         </button>
 
         <div className="modal-media">
-          <img src={product.image} alt={product.name} />
+          <img src={product.image} alt={displayName} />
         </div>
 
         <div className="modal-content">
           <div className="modal-scroll">
             <div className="product-meta">
-              <span className="product-category">{product.category}</span>
+              <span className="product-category">{displayCategory}</span>
               <span className="product-rating">
                 <FontAwesomeIcon icon={faStar} /> {product.rating.toFixed(1)}
               </span>
             </div>
-            <h3 id="product-modal-title">{product.name}</h3>
-            <p className="product-desc">{product.description}</p>
+            <h3 id="product-modal-title">{displayName}</h3>
+            <p className="product-desc">{displayDescription}</p>
 
             {product.ingredients && product.ingredients.length > 0 && (
               <div className="ingredient-chips">
@@ -282,7 +296,7 @@ function ProductModal({
                           }}
                         />
                         <span className="option-face">
-                          <span className="option-label">{option.label}</span>
+                          <span className="option-label">{optionLabel('sizes', option)}</span>
                           <small className="option-price">
                             {formatAdjust(option.adjust)}
                           </small>
@@ -316,7 +330,7 @@ function ProductModal({
                           }}
                         />
                         <span className="option-face">
-                          <span className="option-label">{option.label}</span>
+                          <span className="option-label">{optionLabel('crusts', option)}</span>
                           <small className="option-price">
                             {formatAdjust(option.price)}
                           </small>
@@ -358,12 +372,14 @@ function ProductModal({
                           aria-label={
                             unavailable
                               ? t('menu.ariaToppingUnavailable', {
-                                  name: option.name,
+                                  name: optionLabel('toppings', option),
                                 })
-                              : option.name
+                              : optionLabel('toppings', option)
                           }
                         />
-                        <span className="topping-name">{option.name}</span>
+                        <span className="topping-name">
+                          {optionLabel('toppings', option)}
+                        </span>
                         <small className="topping-price">
                           {unavailable
                             ? t('menu.soldOut')

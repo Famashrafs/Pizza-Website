@@ -18,6 +18,25 @@ import { RESTAURANT_ID } from '../config/restaurant';
 import db from './db';
 import { resolveCategory } from './categoryService';
 import { devLog } from '../utils/devLog';
+import { normalizeTranslations, normalizeCategoryTranslations } from '../utils/menuLocalization.js';
+function mergeTranslations(existing, incoming) {
+  const base = normalizeTranslations(existing) || {};
+  if (incoming === null || incoming === undefined) return base;
+  const norm = normalizeTranslations(incoming) || {};
+  const merged = { ...base };
+  for (const loc of ['en', 'ar', 'it']) {
+    if (norm[loc]) {
+      merged[loc] = { ...(merged[loc] || {}), ...norm[loc] };
+    }
+  }
+  const cleaned = normalizeTranslations(merged);
+  return cleaned || undefined;
+}
+import {
+  mergeTranslations,
+  normalizeCategoryTranslations,
+  normalizeTranslations,
+} from '../utils/menuTranslations';
 
 const COLLECTION = 'products';
 const NOT_CATEGORIZED = 'Uncategorized';
@@ -49,6 +68,12 @@ function hydrateProduct(product) {
     restaurantId: product.restaurantId || RESTAURANT_ID,
     category: categoryName,
     categoryId: product.categoryId || null,
+    // Optional per-language content (Phase 4). Legacy documents without these
+    // maps keep rendering their default English content.
+    translations: normalizeTranslations(product.translations),
+    categoryTranslations: normalizeCategoryTranslations(
+      product.categoryTranslations
+    ),
     name: String(product.name || 'Untitled item').trim() || 'Untitled item',
     description: String(product.description || '').trim(),
     image: product.image || DEFAULT_PRODUCT_IMAGE,
@@ -71,6 +96,7 @@ function hydrateProduct(product) {
       product.defaultSize != null ? product.defaultSize : defaults.defaultSize,
     defaultCrust:
       product.defaultCrust != null ? product.defaultCrust : defaults.defaultCrust,
+    translations: product.translations,
     createdAt: stamp,
     updatedAt: db.timestampToISO(product.updatedAt) || product.updatedAt || stamp,
   };
@@ -217,6 +243,13 @@ async function buildProduct(input, restaurantId, { insertFirst = false } = {}) {
     restaurantId,
     category: category ? category.name : input.category,
     categoryId: category ? category.id : input.categoryId || null,
+    // The category document is the source of truth for translated category
+    // names; products carry a denormalized copy so the public storefront can
+    // label tabs without reading the owner-only categories collection.
+    translations: normalizeTranslations(input.translations),
+    categoryTranslations: normalizeCategoryTranslations(
+      category ? category.translations : input.categoryTranslations
+    ),
     sortOrder: input.sortOrder != null ? input.sortOrder : sortOrder,
     createdAt: input.createdAt || db.serversNow(),
     updatedAt: db.serversNow(),
@@ -249,6 +282,15 @@ export async function createProduct(input, restaurantId = RESTAURANT_ID) {
     { insertFirst: true }
   );
   const { id, ...data } = product;
+  // Normalize translations if provided
+  try {
+    const { normalizeTranslations } = await import('../utils/menuLocalization.js');
+    const norm = normalizeTranslations(input?.translations);
+    if (norm) data.translations = norm;
+    else if (input && Object.prototype.hasOwnProperty.call(input, 'translations') && input.translations == null) {
+      // allow explicit null/empty to clear? but we don't want to overwrite existing if missing
+    }
+  } catch (e) {}
   await db.setDoc(`${COLLECTION}/${id}`, data);
   return (await getProductById(id)) || product;
 }
@@ -258,10 +300,18 @@ export async function updateProduct(id, patch = {}) {
   if (!existing) return null;
 
   const { id: _ignoredId, ...safePatch } = patch;
+  // Merge per-language content instead of replacing the map, so a form that
+  // edits one language (or an older client that sends no translations at all)
+  // can never erase the other translations.
+  const translations =
+    safePatch.translations !== undefined
+      ? mergeTranslations(existing.translations, safePatch.translations)
+      : existing.translations;
   const merged = await buildProduct(
     {
       ...existing,
       ...safePatch,
+      translations,
       id,
       restaurantId: existing.restaurantId,
       createdAt: existing.createdAt || db.nowISO(),

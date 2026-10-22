@@ -26,6 +26,12 @@ import { formatMoney } from '../i18n/format';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { hasCustomization, createCartItem, createSimpleCartItem } from '../utils/cartItem';
+import {
+  getCategoryLabels,
+  localizedProductCategory,
+  localizedProductDescription,
+  localizedProductName,
+} from '../utils/menuTranslations';
 import ProductModal from '../components/ProductModal';
 import SkeletonCard from '../components/SkeletonCard';
 import EmptyState from '../components/EmptyState';
@@ -109,7 +115,18 @@ function HomePage() {
     loadProducts();
   }, [loadProducts]);
 
-  const categories = useMemo(() => getCategories(products), [products]);
+  const categoryLabels = useMemo(
+    () => getCategoryLabels(products, i18n.language),
+    [products, i18n.language]
+  );
+  const categories = useMemo(
+    () =>
+      getCategories(products).map((value) => ({
+        value,
+        label: categoryLabels.get(value) || value,
+      })),
+    [products, categoryLabels]
+  );
 
   const featured = useMemo(
     () =>
@@ -134,7 +151,12 @@ function HomePage() {
       return;
     }
     addItem(createSimpleCartItem(product));
-    showToast(t('toastAddedToCart', { ns: 'home', name: product.name }));
+    showToast(
+      t('toastAddedToCart', {
+        ns: 'home',
+        name: localizedProductName(product, i18n.language),
+      })
+    );
   };
 
   const handleConfirmCustomization = (config) => {
@@ -144,7 +166,12 @@ function HomePage() {
       return;
     }
     addItem(item);
-    showToast(t('toastAddedToCart', { ns: 'home', name: customizing.name }));
+    showToast(
+      t('toastAddedToCart', {
+        ns: 'home',
+        name: localizedProductName(customizing, i18n.language),
+      })
+    );
     setCustomizing(null);
   };
 
@@ -259,42 +286,47 @@ function HomePage() {
 
           {status === 'ready' && (
             <div className="featured-grid">
-              {featured.map((product) => (
-                <article key={product.id} className="mini-card">
-                  <div className="mini-card-media">
-                    <img src={product.image} alt={product.name} loading="lazy" />
-                  </div>
-                  <div className="mini-card-body">
-                    <div className="mini-card-meta">
-                      <span>{product.category}</span>
-                      <span className="rating">
-                        <FontAwesomeIcon icon={faStar} /> {product.rating.toFixed(1)}
-                      </span>
+              {featured.map((product) => {
+                const name = localizedProductName(product, i18n.language);
+                const description = localizedProductDescription(product, i18n.language);
+                const category = localizedProductCategory(product, i18n.language);
+                return (
+                  <article key={product.id} className="mini-card">
+                    <div className="mini-card-media">
+                      <img src={product.image} alt={name} loading="lazy" />
                     </div>
-                    <h3>{product.name}</h3>
-                    <p>{product.description}</p>
-                    <div className="mini-card-foot">
-                      <span className="price">
-                        {hasCustomization(product)
-                          ? t('priceFrom', {
-                              ns: 'home',
-                              price: formatMoney(product.basePrice, i18n.language),
-                            })
-                          : formatMoney(product.basePrice, i18n.language)}
-                      </span>
-                      <button
-                        type="button"
-                        className="mini-card-add"
-                        onClick={() => handleAdd(product)}
-                        disabled={!product.available}
-                        aria-label={t('ariaAddToCart', { ns: 'home', name: product.name })}
-                      >
-                        <FontAwesomeIcon icon={faPlus} />
-                      </button>
+                    <div className="mini-card-body">
+                      <div className="mini-card-meta">
+                        <span>{category}</span>
+                        <span className="rating">
+                          <FontAwesomeIcon icon={faStar} /> {product.rating.toFixed(1)}
+                        </span>
+                      </div>
+                      <h3>{name}</h3>
+                      <p>{description}</p>
+                      <div className="mini-card-foot">
+                        <span className="price">
+                          {hasCustomization(product)
+                            ? t('priceFrom', {
+                                ns: 'home',
+                                price: formatMoney(product.basePrice, i18n.language),
+                              })
+                            : formatMoney(product.basePrice, i18n.language)}
+                        </span>
+                        <button
+                          type="button"
+                          className="mini-card-add"
+                          onClick={() => handleAdd(product)}
+                          disabled={!product.available}
+                          aria-label={t('ariaAddToCart', { ns: 'home', name })}
+                        >
+                          <FontAwesomeIcon icon={faPlus} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -308,19 +340,19 @@ function HomePage() {
             <h2 className="section-title">{t('findYourCraving', { ns: 'home' })}</h2>
           </div>
           <div className="category-rail">
-            {categories.map((category) => (
+            {categories.map(({ value, label }) => (
               <button
-                key={category}
+                key={value}
                 type="button"
                 className="category-tile"
-                onClick={() => openCategory(category)}
+                onClick={() => openCategory(value)}
               >
                 <span className="category-tile-icon">
                   <FontAwesomeIcon
-                    icon={CATEGORY_ICONS[category] || faUtensils}
+                    icon={CATEGORY_ICONS[value] || faUtensils}
                   />
                 </span>
-                <span>{category}</span>
+                <span>{label}</span>
               </button>
             ))}
           </div>

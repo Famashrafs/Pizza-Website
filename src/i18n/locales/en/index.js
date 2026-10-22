@@ -11,4 +11,6 @@ import account from './account.json';
 import orders from './orders.json';
 import admin from './admin.json';
 
-export default { common, nav, home, menu, cart, checkout, auth, account, orders, admin };
+const resources = { common, nav, home, menu, cart, checkout, auth, account, orders, admin };
+
+export default resources;

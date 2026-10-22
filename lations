@@ -1,0 +1,19 @@
+warning: in the working copy of 'src/components/checkout/ReviewStep.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/locales/ar/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/locales/en/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/locales/it/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/HomePage.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/admin/AdminMenu.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/services/categoryService.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/services/menuService.js', LF will be replaced by CRLF the next time Git touches it
+ src/components/CartItemEditor.js      |   9 [32m+[m[31m-[m
+ src/components/checkout/ReviewStep.js |   1 [31m-[m
+ src/i18n/locales/ar/index.js          |   4 [32m+[m[31m-[m
+ src/i18n/locales/en/index.js          |   4 [32m+[m[31m-[m
+ src/i18n/locales/it/index.js          |   4 [32m+[m[31m-[m
+ src/pages/HomePage.js                 | 116 [32m++++++++++++++++[m[31m---------[m
+ src/pages/admin/AdminMenu.js          |   9 [32m+[m[31m-[m
+ src/services/categoryService.js       |   8 [32m+[m[31m-[m
+ src/services/menuService.js           |  24 [31m-----[m
+ src/utils/menuLocalization.js         | 159 [31m----------------------------------[m
+ 10 files changed, 104 insertions(+), 234 deletions(-)

@@ -18,20 +18,6 @@ import { RESTAURANT_ID } from '../config/restaurant';
 import db from './db';
 import { resolveCategory } from './categoryService';
 import { devLog } from '../utils/devLog';
-import { normalizeTranslations, normalizeCategoryTranslations } from '../utils/menuLocalization.js';
-function mergeTranslations(existing, incoming) {
-  const base = normalizeTranslations(existing) || {};
-  if (incoming === null || incoming === undefined) return base;
-  const norm = normalizeTranslations(incoming) || {};
-  const merged = { ...base };
-  for (const loc of ['en', 'ar', 'it']) {
-    if (norm[loc]) {
-      merged[loc] = { ...(merged[loc] || {}), ...norm[loc] };
-    }
-  }
-  const cleaned = normalizeTranslations(merged);
-  return cleaned || undefined;
-}
 import {
   mergeTranslations,
   normalizeCategoryTranslations,
@@ -96,7 +82,6 @@ function hydrateProduct(product) {
       product.defaultSize != null ? product.defaultSize : defaults.defaultSize,
     defaultCrust:
       product.defaultCrust != null ? product.defaultCrust : defaults.defaultCrust,
-    translations: product.translations,
     createdAt: stamp,
     updatedAt: db.timestampToISO(product.updatedAt) || product.updatedAt || stamp,
   };
@@ -282,15 +267,6 @@ export async function createProduct(input, restaurantId = RESTAURANT_ID) {
     { insertFirst: true }
   );
   const { id, ...data } = product;
-  // Normalize translations if provided
-  try {
-    const { normalizeTranslations } = await import('../utils/menuLocalization.js');
-    const norm = normalizeTranslations(input?.translations);
-    if (norm) data.translations = norm;
-    else if (input && Object.prototype.hasOwnProperty.call(input, 'translations') && input.translations == null) {
-      // allow explicit null/empty to clear? but we don't want to overwrite existing if missing
-    }
-  } catch (e) {}
   await db.setDoc(`${COLLECTION}/${id}`, data);
   return (await getProductById(id)) || product;
 }

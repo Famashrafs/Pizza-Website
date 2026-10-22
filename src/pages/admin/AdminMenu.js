@@ -70,7 +70,11 @@ function AdminMenu() {
       if (availability === 'available' && !product.available) return false;
       if (availability === 'unavailable' && product.available) return false;
       if (!q) return true;
+      const transTexts = Object.values(product.translations || {}).flatMap((tr) =>
+        tr && typeof tr === 'object' ? [tr.name, tr.description] : []
+      );
       return [product.name, product.description, product.category]
+        .concat(transTexts)
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(q));
     });
@@ -258,7 +262,10 @@ function AdminMenu() {
                     />
                     <div className="admin-table-product-meta">
                       <strong>{product.name}</strong>
-                      <span>{product.description || '—'}</span>
+                      <span>{product.description || ''}</span>
+                      {product.translations && Object.values(product.translations).some((tr) => tr && (tr.name || tr.description)) ? (
+                        <span className="admin-pill" style={{ marginTop: 4, display: 'inline-block' }}>{t('admin.hasTranslations', { defaultValue: 'Translations' })}</span>
+                      ) : null}
                     </div>
                   </div>
 

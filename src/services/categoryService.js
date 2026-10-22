@@ -7,7 +7,6 @@
 
 import { CATEGORY_ORDER } from '../data/categories';
 import db from './db';
-import { normalizeCategoryTranslations } from '../utils/menuLocalization.js';
 import {
   mergeCategoryTranslations,
   normalizeCategoryTranslations,
@@ -37,7 +36,6 @@ function hydrate(category) {
     description: category.description || '',
     image: category.image || '',
     sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : 0,
-    translations: category.translations,
     createdAt: db.timestampToISO(category.createdAt) || category.createdAt || null,
     updatedAt: db.timestampToISO(category.updatedAt) || category.updatedAt || null,
   };
@@ -192,6 +190,12 @@ export async function updateCategory(id, patch = {}, restaurantId) {
   // the public storefront can localize category labels without read access to
   // the owner-only categories collection. Keep those copies in sync.
   if (patch.translations !== undefined) {
+    await syncProductCategoryTranslations({
+      restaurantId,
+      category: { id, name: next.name },
+      translations,
+    });
+  } else if (patch.name != null) {
     await syncProductCategoryTranslations({
       restaurantId,
       category: { id, name: next.name },

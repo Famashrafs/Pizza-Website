@@ -51,7 +51,6 @@ function ReviewStep({
     ? (PAYMENT_METHOD_LABEL_KEYS[payment.id] ? t(PAYMENT_METHOD_LABEL_KEYS[payment.id]) : payment.label)
     : t('checkout.notSelected');
   const methodLabel = t(fulfillmentType === 'pickup' ? 'checkout.fulfillmentPickup' : 'checkout.fulfillmentDelivery');
-  const methodLower = fulfillmentType === 'pickup' ? 'pickup' : 'delivery';
 
   return (
     <section className="checkout-section" aria-labelledby="checkout-review-title">

@@ -4,10 +4,11 @@ import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { fetchProductById } from '../services/menuService';
 import { createCartItem, hasCustomization } from '../utils/cartItem';
+import { localizedProductName } from '../utils/menuTranslations';
 import ProductModal from './ProductModal';
 
 function CartItemEditor({ item, onClose }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { updateItem } = useCart();
   const { showToast } = useToast();
   const [product, setProduct] = useState(null);
@@ -55,7 +56,11 @@ function CartItemEditor({ item, onClose }) {
       return;
     }
     updateItem(item.id, next);
-    showToast(t('cart.toastUpdated', { name: product.name }));
+    showToast(
+      t('cart.toastUpdated', {
+        name: localizedProductName(product, i18n.language),
+      })
+    );
     onClose();
   };
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useOrder } from '../hooks/useOrder';
 import { reorder, cancelOrder } from '../services/orderService';
@@ -9,8 +10,10 @@ import OrderStatusTracker from '../components/OrderStatusTracker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { formatAddress } from '../utils/checkoutLogic';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
+import { formatDateTime, formatMoney } from '../i18n/format';
 
 function OrderDetails() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { currentUser } = useAuth();
   const uid = currentUser?.uid;
@@ -24,7 +27,7 @@ function OrderDetails() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">TRACK ORDER</h1>
+          <h1 className="landing-title">{t('orders.trackTitle')}</h1>
         </div>
         <div className="order-detail order-detail--skeleton" />
       </div>
@@ -35,15 +38,15 @@ function OrderDetails() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">ORDER</h1>
+          <h1 className="landing-title">{t('orders.orderTitle')}</h1>
         </div>
         <div className="auth-card">
-          <h2>Order not found</h2>
+          <h2>{t('orders.notFoundTitle')}</h2>
           <p className="auth-subtitle">
-            We couldn&apos;t find that order on your account.
+            {t('orders.notFoundText')}
           </p>
           <Link to="/orders" className="contact-btn empty-cart-btn">
-            View Orders
+            {t('orders.viewOrders')}
           </Link>
         </div>
       </div>
@@ -54,13 +57,13 @@ function OrderDetails() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">TRACK ORDER</h1>
+          <h1 className="landing-title">{t('orders.trackTitle')}</h1>
         </div>
         <div className="auth-card empty-cart">
-          <h2>Something went wrong</h2>
+          <h2>{t('orders.errorTitle')}</h2>
           <p className="auth-subtitle">{error}</p>
           <button type="button" className="contact-btn empty-cart-btn" onClick={reload}>
-            Try Again
+            {t('common.actions.retry')}
           </button>
         </div>
       </div>
@@ -70,6 +73,17 @@ function OrderDetails() {
   const isPickup = order.fulfillmentType === 'pickup';
   const canCancel = order.canCancel && !order.isCancelled;
 
+  // The stored payment method key is data; only the label shown next to it is
+  // translated, with the raw key kept as the fallback for unknown methods.
+  const paymentMethodLabel =
+    order.paymentMethod === 'cash'
+      ? t('orders.paymentMethodCash')
+      : order.paymentMethod === 'card'
+      ? t('orders.paymentMethodCard')
+      : order.paymentMethod === 'online'
+      ? t('orders.paymentMethodOnline')
+      : order.paymentMethod;
+
   const handleReorder = async () => {
     setBusy(true);
     try {
@@ -77,14 +91,14 @@ function OrderDetails() {
       items.forEach((item) => addItem(item));
       if (unavailable.length) {
         showToast(
-          `${unavailable.length} item(s) could not be reordered and were skipped.`,
+          t('orders.toastItemsSkipped', { count: unavailable.length }),
           'warning'
         );
       } else {
-        showToast('Items added to your cart.');
+        showToast(t('orders.toastItemsAdded'));
       }
     } catch (err) {
-      showToast('We could not reorder this order. Please try again.', 'error');
+      showToast(t('orders.toastReorderFailed'), 'error');
     } finally {
       setBusy(false);
     }
@@ -96,13 +110,13 @@ function OrderDetails() {
     try {
       const result = await cancelOrder(order.id, uid);
       if (result.success) {
-        showToast('Your order was cancelled.');
+        showToast(t('orders.toastCancelled'));
         reload();
       } else {
-        showToast(result.error || 'We could not cancel this order.', 'error');
+        showToast(result.error || t('orders.toastCancelFailed'), 'error');
       }
     } catch (err) {
-      showToast('We could not cancel this order. Please try again.', 'error');
+      showToast(t('orders.toastCancelFailedRetry'), 'error');
     } finally {
       setBusy(false);
     }
@@ -111,7 +125,7 @@ function OrderDetails() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">TRACK ORDER</h1>
+        <h1 className="landing-title">{t('orders.trackTitle')}</h1>
       </div>
 
       <div className="order-detail">
@@ -119,8 +133,12 @@ function OrderDetails() {
           <div>
             <h2>{order.id}</h2>
             <p>
-              Placed{' '}
-              {new Date(order.createdAt || order.placedAt).toLocaleString()}
+              {t('orders.placedOn', {
+                date: formatDateTime(
+                  order.createdAt || order.placedAt,
+                  i18n.language
+                ),
+              })}
             </p>
           </div>
           <span
@@ -128,7 +146,9 @@ function OrderDetails() {
               order.isCancelled ? 'is-cancelled' : `is-${order.statusMeta.tone}`
             }`}
           >
-            {order.statusMeta.label}
+            {t(order.statusMeta.labelKey, {
+              defaultValue: order.statusMeta.label,
+            })}
           </span>
         </div>
 
@@ -136,40 +156,52 @@ function OrderDetails() {
 
         <div className="order-detail-grid">
           <div className="order-detail-panel">
-            <h3>{isPickup ? 'Pickup' : 'Delivery'} details</h3>
+            <h3>
+              {isPickup
+                ? t('orders.pickupDetails')
+                : t('orders.deliveryDetails')}
+            </h3>
             {isPickup ? (
               <p>{RESTAURANT_SETTINGS.pickup.address}</p>
             ) : (
               <p>{order.addressText || formatAddress(order.address)}</p>
             )}
-            <p className="review-muted">Estimated: {order.estimatedTime || ''}</p>
+            <p className="review-muted">
+              {t('orders.estimated', { time: order.estimatedTime || '' })}
+            </p>
             {order.customerNotes && (
-              <p className="review-muted">Notes: {order.customerNotes}</p>
+              <p className="review-muted">
+                {t('orders.notes', { notes: order.customerNotes })}
+              </p>
             )}
             <p className="review-muted">
-              Name: {order.customer?.fullName || '-'}
+              {t('orders.customerName', {
+                name: order.customer?.fullName || '-',
+              })}
             </p>
-            <p className="review-muted">Phone: {order.customer?.phone || '-'}</p>
+            <p className="review-muted">
+              {t('orders.customerPhone', {
+                phone: order.customer?.phone || '-',
+              })}
+            </p>
           </div>
 
           <div className="order-detail-panel">
-            <h3>Payment</h3>
-            <p style={{ textTransform: 'capitalize' }}>
-              {order.paymentMethod === 'cash'
-                ? 'Cash on delivery'
-                : order.paymentMethod}
-            </p>
+            <h3>{t('orders.payment')}</h3>
+            <p style={{ textTransform: 'capitalize' }}>{paymentMethodLabel}</p>
             <p className="review-muted" style={{ textTransform: 'capitalize' }}>
-              Status:{' '}
+              {t('orders.paymentStatusLabel')}{' '}
               <span className={`order-payment-badge is-${order.paymentMeta.tone}`}>
-                {order.paymentMeta.label}
+                {t(order.paymentMeta.labelKey, {
+                  defaultValue: order.paymentMeta.label,
+                })}
               </span>
             </p>
           </div>
         </div>
 
         <div className="order-detail-panel">
-          <h3>Items</h3>
+          <h3>{t('orders.items')}</h3>
           {order.items.map((item) => (
             <div className="order-summary-item" key={item.id}>
               <div className="order-summary-item-main">
@@ -180,56 +212,46 @@ function OrderDetails() {
                 </div>
               </div>
               <span className="order-summary-price">
-                {RESTAURANT_SETTINGS.currency}
-                {(item.lineTotal ?? item.price * item.qty).toFixed(2)}
+                {formatMoney(item.lineTotal ?? item.price * item.qty, i18n.language)}
               </span>
             </div>
           ))}
 
           <div className="order-summary-lines">
             <div className="order-summary-line">
-              <span>Subtotal</span>
-              <span>
-                {RESTAURANT_SETTINGS.currency}
-                {Number(order.subtotal || 0).toFixed(2)}
-              </span>
+              <span>{t('orders.subtotal')}</span>
+              <span>{formatMoney(Number(order.subtotal || 0), i18n.language)}</span>
             </div>
             {Number(order.discount) > 0 && (
               <div className="order-summary-line order-summary-line--discount">
-                <span>Discount</span>
-                <span>-{RESTAURANT_SETTINGS.currency}{Number(order.discount).toFixed(2)}</span>
+                <span>{t('orders.discount')}</span>
+                <span>-{formatMoney(Number(order.discount), i18n.language)}</span>
               </div>
             )}
             <div className="order-summary-line">
-              <span>Delivery fee</span>
+              <span>{t('orders.deliveryFee')}</span>
               <span>
                 {isPickup
-                  ? 'Pickup'
+                  ? t('orders.pickup')
                   : Number(order.deliveryFee) > 0
-                  ? `${RESTAURANT_SETTINGS.currency}${Number(order.deliveryFee).toFixed(2)}`
-                  : 'Free'}
+                  ? formatMoney(Number(order.deliveryFee), i18n.language)
+                  : t('orders.free')}
               </span>
             </div>
             <div className="order-summary-line">
-              <span>Tax</span>
-              <span>
-                {RESTAURANT_SETTINGS.currency}
-                {Number(order.tax || 0).toFixed(2)}
-              </span>
+              <span>{t('orders.tax')}</span>
+              <span>{formatMoney(Number(order.tax || 0), i18n.language)}</span>
             </div>
             <div className="order-summary-line order-summary-line--total">
-              <span>Total</span>
-              <span>
-                {RESTAURANT_SETTINGS.currency}
-                {Number(order.total || 0).toFixed(2)}
-              </span>
+              <span>{t('orders.total')}</span>
+              <span>{formatMoney(Number(order.total || 0), i18n.language)}</span>
             </div>
           </div>
         </div>
 
         <div className="order-detail-actions">
           <Link to="/orders" className="menu-btn">
-            All Orders
+            {t('orders.allOrders')}
           </Link>
           <button
             type="button"
@@ -237,7 +259,7 @@ function OrderDetails() {
             onClick={handleReorder}
             disabled={busy}
           >
-            {busy ? 'Working…' : 'Order Again'}
+            {busy ? t('orders.working') : t('orders.orderAgain')}
           </button>
           {canCancel && (
             <button
@@ -246,20 +268,20 @@ function OrderDetails() {
               onClick={() => setConfirmingCancel(true)}
               disabled={busy}
             >
-              Cancel Order
+              {t('orders.cancelOrder')}
             </button>
           )}
           <Link to="/menu" className="contact-btn">
-            Continue Shopping
+            {t('orders.continueShopping')}
           </Link>
         </div>
       </div>
 
       {confirmingCancel && (
         <ConfirmDialog
-          title="Cancel this order?"
-          message={`Order ${order.id} will be cancelled and its items will not be prepared.`}
-          confirmLabel="Cancel Order"
+          title={t('orders.cancelDialogTitle')}
+          message={t('orders.cancelDialogMessage', { id: order.id })}
+          confirmLabel={t('orders.cancelOrder')}
           danger
           onConfirm={handleCancel}
           onCancel={() => setConfirmingCancel(false)}

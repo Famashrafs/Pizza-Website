@@ -13,23 +13,31 @@ import {
   faBars,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 
-export const ACCOUNT_SECTIONS = [
-  { to: '/account', end: true, label: 'Overview', icon: faGaugeHigh },
-  { to: '/account/profile', label: 'Profile', icon: faUser },
-  { to: '/account/security', label: 'Security', icon: faShieldHalved },
-  { to: '/account/payments', label: 'Payments', icon: faWallet },
-  { to: '/account/addresses', label: 'Addresses', icon: faLocationDot },
-  { to: '/account/orders', label: 'Orders', icon: faBoxArchive },
-  { to: '/account/favorites', label: 'Favorites', icon: faHeart },
-  { to: '/account/settings', label: 'Settings', icon: faGear },
-];
+// The routes and icons are stable identifiers; only the visible labels are
+// translated, so the list is built from the active language at render time.
+export function getAccountSections(t) {
+  return [
+    { to: '/account', end: true, label: t('account.navOverview'), icon: faGaugeHigh },
+    { to: '/account/profile', label: t('account.navProfile'), icon: faUser },
+    { to: '/account/security', label: t('account.navSecurity'), icon: faShieldHalved },
+    { to: '/account/payments', label: t('account.navPayments'), icon: faWallet },
+    { to: '/account/addresses', label: t('account.navAddresses'), icon: faLocationDot },
+    { to: '/account/orders', label: t('account.navOrders'), icon: faBoxArchive },
+    { to: '/account/favorites', label: t('account.navFavorites'), icon: faHeart },
+    { to: '/account/settings', label: t('account.navSettings'), icon: faGear },
+  ];
+}
 
 function AccountSidebar() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
+  const sections = getAccountSections(t);
+
   return (
-    <nav className="dash-sidebar" aria-label="Account navigation">
+    <nav className="dash-sidebar" aria-label={t('account.accountNavigation')}>
       <button
         type="button"
         className="dash-sidebar-toggle"
@@ -37,10 +45,10 @@ function AccountSidebar() {
         aria-expanded={open}
       >
         <FontAwesomeIcon icon={open ? faXmark : faBars} />
-        {open ? 'Hide sections' : 'Account sections'}
+        {open ? t('account.hideSections') : t('account.accountSections')}
       </button>
       <ul className={`dash-sidebar-list ${open ? 'open' : ''}`}>
-        {ACCOUNT_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <li key={section.to}>
             <NavLink
               to={section.to}

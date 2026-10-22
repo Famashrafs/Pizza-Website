@@ -1,11 +1,13 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
 function OrderSummaryPanel({ items = [], totals, fulfillmentType, className = '' }) {
+  const { t } = useTranslation();
   const currency = RESTAURANT_SETTINGS.currency;
   // Defensive defaults: a missing/partial totals object renders as zero rather
   // than throwing (the panel can mount before settings finish loading).
-  const t = {
+  const summary = {
     subtotal: 0,
     discount: 0,
     deliveryFee: 0,
@@ -18,7 +20,7 @@ function OrderSummaryPanel({ items = [], totals, fulfillmentType, className = ''
 
   return (
     <div className={`order-summary-panel ${className}`.trim()}>
-      <h3>Order Summary</h3>
+      <h3>{t('checkout.orderSummary')}</h3>
 
       <div className="order-summary-items">
         {items.map((item) => (
@@ -30,7 +32,7 @@ function OrderSummaryPanel({ items = [], totals, fulfillmentType, className = ''
                 {item.desc && <small>{item.desc}</small>}
                 {item.instructions && (
                   <small className="order-summary-note">
-                    Note: “{item.instructions}”
+                    {t('checkout.itemNote', { note: item.instructions })}
                   </small>
                 )}
               </div>
@@ -45,32 +47,40 @@ function OrderSummaryPanel({ items = [], totals, fulfillmentType, className = ''
 
       <div className="order-summary-lines">
         <div className="order-summary-line">
-          <span>Subtotal</span>
-          <span>{currency}{Number(t.subtotal).toFixed(2)}</span>
+          <span>{t('checkout.subtotal')}</span>
+          <span>{currency}{Number(summary.subtotal).toFixed(2)}</span>
         </div>
-        {t.discount > 0 && (
+        {summary.discount > 0 && (
           <div className="order-summary-line order-summary-line--discount">
-            <span>Discount{t.promoCode ? ` (${t.promoCode})` : ''}</span>
-            <span>-{currency}{Number(t.discount).toFixed(2)}</span>
+            <span>
+              {summary.promoCode
+                ? t('checkout.discountWithCode', { code: summary.promoCode })
+                : t('checkout.discount')}
+            </span>
+            <span>
+              {t('checkout.negativeAmount', {
+                amount: `${currency}${Number(summary.discount).toFixed(2)}`,
+              })}
+            </span>
           </div>
         )}
         <div className="order-summary-line">
-          <span>Delivery fee</span>
+          <span>{t('checkout.deliveryFee')}</span>
           <span>
             {fulfillmentType === 'pickup'
-              ? 'Pickup'
-              : t.freeDelivery
-              ? 'Free'
-              : `${currency}${Number(t.deliveryFee).toFixed(2)}`}
+              ? t('checkout.fulfillmentPickup')
+              : summary.freeDelivery
+              ? t('checkout.free')
+              : `${currency}${Number(summary.deliveryFee).toFixed(2)}`}
           </span>
         </div>
         <div className="order-summary-line">
-          <span>Tax ({Math.round((t.taxRate || 0) * 100)}%)</span>
-          <span>{currency}{Number(t.tax).toFixed(2)}</span>
+          <span>{t('checkout.taxWithRate', { rate: Math.round((summary.taxRate || 0) * 100) })}</span>
+          <span>{currency}{Number(summary.tax).toFixed(2)}</span>
         </div>
         <div className="order-summary-line order-summary-line--total">
-          <span>Total</span>
-          <span>{currency}{Number(t.total).toFixed(2)}</span>
+          <span>{t('checkout.total')}</span>
+          <span>{currency}{Number(summary.total).toFixed(2)}</span>
         </div>
       </div>
     </div>

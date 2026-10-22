@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faCartShopping } from '@fortawesome/free-solid-svg-icons';
 import { CHECKOUT_STEPS } from '../../utils/checkoutLogic';
 
 function CheckoutStepper({ currentStep, maxStepIndex, onStepSelect, stepErrors = {}, cartCount = 0 }) {
+  const { t } = useTranslation();
   const currentIndex = CHECKOUT_STEPS.findIndex((step) => step.id === currentStep);
 
   const renderCart = () => (
@@ -14,14 +16,16 @@ function CheckoutStepper({ currentStep, maxStepIndex, onStepSelect, stepErrors =
           <FontAwesomeIcon icon={faCartShopping} />
         </span>
         <span className="checkout-step-label">
-          Cart{cartCount > 0 ? ` (${cartCount})` : ''}
+          {cartCount > 0
+            ? t('checkout.cartStepWithCount', { count: cartCount })
+            : t('checkout.cartStep')}
         </span>
       </Link>
     </li>
   );
 
   return (
-    <ol className="checkout-stepper" aria-label="Checkout progress">
+    <ol className="checkout-stepper" aria-label={t('checkout.ariaCheckoutProgress')}>
       {renderCart()}
       {CHECKOUT_STEPS.map((step, index) => {
         const isActive = step.id === currentStep;
@@ -53,7 +57,7 @@ function CheckoutStepper({ currentStep, maxStepIndex, onStepSelect, stepErrors =
               <span className="checkout-step-index">
                 {isDone ? <FontAwesomeIcon icon={faCheck} /> : index + 1}
               </span>
-              <span className="checkout-step-label">{step.label}</span>
+              <span className="checkout-step-label">{t(step.labelKey)}</span>
             </button>
           </li>
         );

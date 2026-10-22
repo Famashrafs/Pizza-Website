@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { normalizeAccount } from '../services/accountService';
 import AccountSidebar from '../components/account/AccountSidebar';
 import AccountHeader from '../components/account/AccountHeader';
 
 function Account() {
+  const { t } = useTranslation();
   const { currentUser, userProfile } = useAuth();
   const account = useMemo(
     () => normalizeAccount(currentUser?.uid, currentUser, userProfile),
@@ -17,7 +19,7 @@ function Account() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">MY ACCOUNT</h1>
+        <h1 className="landing-title">{t('account.pageTitle')}</h1>
       </div>
       <div className="dashboard-shell">
         <AccountSidebar />

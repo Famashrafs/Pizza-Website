@@ -2,13 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../context/ToastContext';
 import SectionTitle from '../../components/account/SectionTitle';
 import { fetchProducts } from '../../services/menuService';
+import { formatMoney } from '../../i18n/format';
 
 function FavoritesSection() {
+  const { t, i18n } = useTranslation();
   const { favorites, removeFavorite } = useFavorites();
   const { addItem } = useCart();
   const { showToast } = useToast();
@@ -37,30 +40,30 @@ function FavoritesSection() {
 
   const handleAddToCart = (fav) => {
     addItem(fav);
-    showToast(`${fav.name} added to cart.`);
+    showToast(t('account.toastFavoriteAddedToCart', { name: fav.name }));
   };
 
   const handleRemove = (fav) => {
     removeFavorite(fav.id);
-    showToast(`${fav.name} removed from favorites.`);
+    showToast(t('account.toastFavoriteRemoved', { name: fav.name }));
   };
 
   if (favorites.length === 0) {
     return (
       <div className="dash-section">
         <SectionTitle
-          title="Favorites"
-          subtitle="Dishes you have saved"
+          title={t('account.navFavorites')}
+          subtitle={t('account.favoritesSubtitle')}
         />
         <div className="dash-card">
           <div className="dash-empty">
             <FontAwesomeIcon icon={faHeart} className="dash-empty-icon" />
-            <p>You have no favorite dishes yet.</p>
+            <p>{t('account.noFavoriteDishes')}</p>
             <p className="dash-form-note">
-              Tap the heart on any dish to save it here.
+              {t('account.favoritesHint')}
             </p>
             <Link to="/menu" className="menu-btn dash-btn-sm">
-              Browse Menu
+              {t('account.browseMenu')}
             </Link>
           </div>
         </div>
@@ -71,8 +74,8 @@ function FavoritesSection() {
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Favorites"
-        subtitle="Dishes you have saved"
+        title={t('account.navFavorites')}
+        subtitle={t('account.favoritesSubtitle')}
       />
 
       {loading && (
@@ -92,15 +95,19 @@ function FavoritesSection() {
                 <div className="dash-fav-media">
                   <img src={fav.image} alt={fav.name} />
                   {isUnavailable && (
-                    <span className="tag tag-soldout">Currently unavailable</span>
+                    <span className="tag tag-soldout">
+                      {t('account.currentlyUnavailable')}
+                    </span>
                   )}
                 </div>
                 <div className="dash-fav-body">
                   <h4>{fav.name}</h4>
-                  <p className="dash-fav-price">${fav.price.toFixed(2)}</p>
+                  <p className="dash-fav-price">
+                    {formatMoney(fav.price, i18n.language)}
+                  </p>
                   <div className="dash-fav-actions">
                     <Link to="/menu" className="menu-btn dash-btn-xs">
-                      View Product
+                      {t('account.viewProduct')}
                     </Link>
                     <button
                       type="button"
@@ -108,15 +115,20 @@ function FavoritesSection() {
                       disabled={isUnavailable}
                       onClick={() => handleAddToCart(fav)}
                     >
-                      {isUnavailable ? 'Unavailable' : 'Add to Cart'}
+                      {isUnavailable
+                        ? t('account.unavailable')
+                        : t('account.addToCart')}
                     </button>
                     <button
                       type="button"
                       className="menu-btn dash-btn-xs is-danger"
-                      aria-label={`Remove ${fav.name} from favorites`}
+                      aria-label={t('account.ariaRemoveFromFavorites', {
+                        name: fav.name,
+                      })}
                       onClick={() => handleRemove(fav)}
                     >
-                      <FontAwesomeIcon icon={faHeart} /> Remove
+                      <FontAwesomeIcon icon={faHeart} />{' '}
+                      {t('common.actions.remove')}
                     </button>
                   </div>
                 </div>

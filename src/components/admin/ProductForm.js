@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faPlus,
   faTrash,
@@ -40,6 +41,7 @@ function cleanNumber(value) {
 // introducing a parallel one — the customer ProductModal reads these exact
 // fields, so anything the owner configures here is immediately purchasable.
 function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
+  const { t } = useTranslation();
   const isEdit = Boolean(product?.id);
 
   const [form, setForm] = useState(() => ({
@@ -88,14 +90,14 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
 
   const validate = () => {
     const next = {};
-    if (!form.name.trim()) next.name = 'Product name is required.';
+    if (!form.name.trim()) next.name = t('admin.errorProductNameRequired');
     if (form.basePrice === '' || Number.isNaN(Number(form.basePrice))) {
-      next.basePrice = 'Enter a valid price.';
+      next.basePrice = t('admin.errorInvalidPrice');
     } else if (Number(form.basePrice) < 0) {
-      next.basePrice = 'Price cannot be negative.';
+      next.basePrice = t('admin.errorNegativePrice');
     }
     if (!form.categoryId && !form.newCategory.trim()) {
-      next.category = 'Choose a category or create a new one.';
+      next.category = t('admin.errorCategoryRequired');
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -168,10 +170,10 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     try {
       const result = await onSubmit(buildPayload());
       if (result && result.success === false) {
-        setSubmitError(result.error || 'Could not save the product.');
+        setSubmitError(result.error || t('admin.errorSaveProduct'));
       }
     } catch (err) {
-      setSubmitError(err.message || 'Could not save the product.');
+      setSubmitError(err.message || t('admin.errorSaveProduct'));
     } finally {
       setSaving(false);
     }
@@ -180,39 +182,39 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit} noValidate>
       <button type="button" className="admin-back-link" onClick={onCancel}>
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to menu
+        <FontAwesomeIcon icon={faArrowLeft} /> {t('admin.backToMenu')}
       </button>
 
       <section className="admin-panel">
         <div className="admin-panel-head">
-          <h3>Basic information</h3>
+          <h3>{t('admin.formBasicInfo')}</h3>
         </div>
         <div className="admin-form-grid">
           <label className="admin-field admin-field--full">
-            <span>Product name</span>
+            <span>{t('admin.fieldProductName')}</span>
             <input
               type="text"
               value={form.name}
               onChange={(event) => update({ name: event.target.value })}
-              placeholder="e.g. Pepperoni Pizza"
+              placeholder={t('admin.phProductName')}
               maxLength={80}
             />
             {errors.name && <small className="admin-field-error">{errors.name}</small>}
           </label>
 
           <label className="admin-field admin-field--full">
-            <span>Description</span>
+            <span>{t('admin.fieldDescription')}</span>
             <textarea
               rows={3}
               value={form.description}
               onChange={(event) => update({ description: event.target.value })}
-              placeholder="What makes this item special?"
+              placeholder={t('admin.phDescription')}
               maxLength={400}
             />
           </label>
 
           <label className="admin-field">
-            <span>Category</span>
+            <span>{t('admin.fieldCategory')}</span>
             <select
               value={form.newCategory ? '__new__' : form.categoryId}
               onChange={(event) => {
@@ -229,13 +231,13 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
                   {category.name}
                 </option>
               ))}
-              <option value="__new__">+ New category…</option>
+              <option value="__new__">{t('admin.newCategoryOption')}</option>
             </select>
             {errors.category && <small className="admin-field-error">{errors.category}</small>}
           </label>
 
           <label className="admin-field">
-            <span>Price</span>
+            <span>{t('admin.fieldPrice')}</span>
             <input
               type="number"
               min="0"
@@ -249,30 +251,30 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
 
           {form.newCategory !== '' && (
             <label className="admin-field admin-field--full">
-              <span>New category name</span>
+              <span>{t('admin.fieldNewCategoryName')}</span>
               <input
                 type="text"
                 value={form.newCategory.trim()}
                 onChange={(event) => update({ newCategory: event.target.value })}
-                placeholder="e.g. Salads"
+                placeholder={t('admin.phNewCategory')}
                 maxLength={40}
               />
             </label>
           )}
 
           <label className="admin-field admin-field--full">
-            <span>Ingredients (comma separated)</span>
+            <span>{t('admin.fieldIngredients')}</span>
             <input
               type="text"
               value={form.ingredients}
               onChange={(event) => update({ ingredients: event.target.value })}
-              placeholder="Tomato, Mozzarella, Basil"
+              placeholder={t('admin.phIngredients')}
             />
           </label>
 
           <div className="admin-field admin-field--full">
             <ImagePicker
-              label="Product image"
+              label={t('admin.fieldProductImage')}
               value={form.image}
               onChange={(url) => update({ image: url })}
               path="products"
@@ -283,73 +285,73 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
 
       <section className="admin-panel">
         <div className="admin-panel-head">
-          <h3>Product settings</h3>
+          <h3>{t('admin.formProductSettings')}</h3>
         </div>
         <div className="admin-toggle-grid">
           <Toggle
             checked={form.available}
             onChange={(value) => update({ available: value })}
-            label="Available"
-            description="Customers can order this item"
+            label={t('admin.available')}
+            description={t('admin.toggleAvailableDesc')}
           />
           <Toggle
             checked={form.featured}
             onChange={(value) => update({ featured: value })}
-            label="Featured"
-            description="Highlight at the top of the menu"
+            label={t('admin.featured')}
+            description={t('admin.toggleFeaturedDesc')}
           />
           <Toggle
             checked={form.popular}
             onChange={(value) => update({ popular: value })}
-            label="Popular"
-            description="Show a popular badge"
+            label={t('admin.statPopular')}
+            description={t('admin.togglePopularDesc')}
           />
           <Toggle
             checked={form.vegetarian}
             onChange={(value) => update({ vegetarian: value })}
-            label="Vegetarian"
-            description="Show a veg badge"
+            label={t('admin.statVegetarian')}
+            description={t('admin.toggleVegetarianDesc')}
           />
         </div>
       </section>
 
       <section className="admin-panel">
         <div className="admin-panel-head">
-          <h3>Customization options</h3>
+          <h3>{t('admin.formCustomization')}</h3>
           <p className="admin-panel-sub">
-            These appear on the customer product dialog and affect the price.
+            {t('admin.formCustomizationSub')}
           </p>
         </div>
 
         {/* Sizes */}
         <div className="admin-options-block">
           <div className="admin-options-head">
-            <h4>Sizes</h4>
+            <h4>{t('admin.fieldSizes')}</h4>
             <button type="button" className="admin-btn admin-btn--ghost" onClick={addSize}>
-              <FontAwesomeIcon icon={faPlus} /> Add size
+              <FontAwesomeIcon icon={faPlus} /> {t('admin.addSize')}
             </button>
           </div>
-          {form.sizes.length === 0 && <p className="admin-options-empty">No sizes.</p>}
+          {form.sizes.length === 0 && <p className="admin-options-empty">{t('admin.noSizes')}</p>}
           {form.sizes.map((size, index) => (
             <div className="admin-option-row" key={size.id || index}>
               <input
                 type="text"
                 value={size.label}
-                placeholder="Label (e.g. Large)"
+                placeholder={t('admin.phSizeLabel')}
                 onChange={(event) => updateRow('sizes', index, { label: event.target.value })}
               />
               <input
                 type="number"
                 step="0.01"
                 value={size.adjust}
-                placeholder="Price +/−"
+                placeholder={t('admin.phPriceAdjust')}
                 onChange={(event) => updateRow('sizes', index, { adjust: event.target.value })}
               />
               <button
                 type="button"
                 className="admin-icon-danger"
                 onClick={() => removeRow('sizes', index)}
-                aria-label="Remove size"
+                aria-label={t('admin.ariaRemoveSize')}
               >
                 <FontAwesomeIcon icon={faTrash} />
               </button>
@@ -360,25 +362,25 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
         {/* Crusts */}
         <div className="admin-options-block">
           <div className="admin-options-head">
-            <h4>Crusts</h4>
+            <h4>{t('admin.fieldCrusts')}</h4>
             <button type="button" className="admin-btn admin-btn--ghost" onClick={addCrust}>
-              <FontAwesomeIcon icon={faPlus} /> Add crust
+              <FontAwesomeIcon icon={faPlus} /> {t('admin.addCrust')}
             </button>
           </div>
-          {form.crusts.length === 0 && <p className="admin-options-empty">No crusts.</p>}
+          {form.crusts.length === 0 && <p className="admin-options-empty">{t('admin.noCrusts')}</p>}
           {form.crusts.map((crust, index) => (
             <div className="admin-option-row" key={crust.id || index}>
               <input
                 type="text"
                 value={crust.label}
-                placeholder="Label (e.g. Stuffed)"
+                placeholder={t('admin.phCrustLabel')}
                 onChange={(event) => updateRow('crusts', index, { label: event.target.value })}
               />
               <input
                 type="number"
                 step="0.01"
                 value={crust.price}
-                placeholder="Price"
+                placeholder={t('admin.fieldPrice')}
                 onChange={(event) => updateRow('crusts', index, { price: event.target.value })}
               />
               <label className="admin-option-available">
@@ -389,13 +391,13 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
                     updateRow('crusts', index, { available: event.target.checked })
                   }
                 />
-                Available
+                {t('admin.available')}
               </label>
               <button
                 type="button"
                 className="admin-icon-danger"
                 onClick={() => removeRow('crusts', index)}
-                aria-label="Remove crust"
+                aria-label={t('admin.ariaRemoveCrust')}
               >
                 <FontAwesomeIcon icon={faTrash} />
               </button>
@@ -406,25 +408,25 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
         {/* Toppings */}
         <div className="admin-options-block">
           <div className="admin-options-head">
-            <h4>Toppings</h4>
+            <h4>{t('admin.fieldToppings')}</h4>
             <button type="button" className="admin-btn admin-btn--ghost" onClick={addTopping}>
-              <FontAwesomeIcon icon={faPlus} /> Add topping
+              <FontAwesomeIcon icon={faPlus} /> {t('admin.addTopping')}
             </button>
           </div>
-          {form.toppings.length === 0 && <p className="admin-options-empty">No toppings.</p>}
+          {form.toppings.length === 0 && <p className="admin-options-empty">{t('admin.noToppings')}</p>}
           {form.toppings.map((topping, index) => (
             <div className="admin-option-row" key={topping.id || index}>
               <input
                 type="text"
                 value={topping.name}
-                placeholder="Name (e.g. Extra Cheese)"
+                placeholder={t('admin.phToppingName')}
                 onChange={(event) => updateRow('toppings', index, { name: event.target.value })}
               />
               <input
                 type="number"
                 step="0.01"
                 value={topping.price}
-                placeholder="Price"
+                placeholder={t('admin.fieldPrice')}
                 onChange={(event) => updateRow('toppings', index, { price: event.target.value })}
               />
               <label className="admin-option-available">
@@ -435,13 +437,13 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
                     updateRow('toppings', index, { available: event.target.checked })
                   }
                 />
-                Available
+                {t('admin.available')}
               </label>
               <button
                 type="button"
                 className="admin-icon-danger"
                 onClick={() => removeRow('toppings', index)}
-                aria-label="Remove topping"
+                aria-label={t('admin.ariaRemoveTopping')}
               >
                 <FontAwesomeIcon icon={faTrash} />
               </button>
@@ -451,18 +453,18 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
 
         <div className="admin-form-grid">
           <label className="admin-field">
-            <span>Max toppings</span>
+            <span>{t('admin.fieldMaxToppings')}</span>
             <input
               type="number"
               min="0"
               step="1"
               value={form.maxToppings}
               onChange={(event) => update({ maxToppings: event.target.value })}
-              placeholder="0 = unlimited"
+              placeholder={t('admin.phUnlimited')}
             />
           </label>
           <label className="admin-field">
-            <span>Default size</span>
+            <span>{t('admin.fieldDefaultSize')}</span>
             <select
               value={form.defaultSize}
               onChange={(event) => update({ defaultSize: event.target.value })}
@@ -476,7 +478,7 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
             </select>
           </label>
           <label className="admin-field">
-            <span>Default crust</span>
+            <span>{t('admin.fieldDefaultCrust')}</span>
             <select
               value={form.defaultCrust}
               onChange={(event) => update({ defaultCrust: event.target.value })}
@@ -505,11 +507,15 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
           onClick={onCancel}
           disabled={saving}
         >
-          Cancel
+          {t('common.actions.cancel')}
         </button>
         <button type="submit" className="admin-btn admin-btn--primary" disabled={saving}>
           <FontAwesomeIcon icon={faFloppyDisk} />
-          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
+          {saving
+            ? t('admin.saving')
+            : isEdit
+            ? t('common.actions.saveChanges')
+            : t('admin.createProduct')}
         </button>
       </div>
     </form>

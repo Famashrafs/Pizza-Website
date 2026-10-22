@@ -17,8 +17,9 @@ import {
   setAvailability as setProductAvailability,
   DEFAULT_PRODUCT_IMAGE,
 } from '../../services/menuService';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatMoney } from '../../i18n/format';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
@@ -44,9 +45,9 @@ function TableSkeleton() {
 }
 
 function AdminMenu() {
+  const { t, i18n } = useTranslation();
   const { restaurant, restaurantLoading } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
 
   const { status, products, error, reload } = useRestaurantProducts(restaurantId);
   const { categories } = useRestaurantCategories(restaurantId);
@@ -85,11 +86,11 @@ function AdminMenu() {
       await setProductAvailability(product.id, !product.available);
       showToast(
         product.available
-          ? `${product.name} marked unavailable.`
-          : `${product.name} is now available.`
+          ? t('admin.toastMarkedUnavailable', { name: product.name })
+          : t('admin.toastNowAvailable', { name: product.name })
       );
     } catch (err) {
-      showToast('Could not update availability.', 'error');
+      showToast(t('admin.errorUpdateAvailability'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -105,14 +106,14 @@ function AdminMenu() {
       if (result.success) {
         showToast(
           result.mode === 'archived'
-            ? `${product.name} archived (it appears in past orders).`
-            : `${product.name} deleted.`
+            ? t('admin.toastArchived', { name: product.name })
+            : t('admin.toastDeleted', { name: product.name })
         );
       } else {
-        showToast(result.error || 'Could not delete the product.', 'error');
+        showToast(result.error || t('admin.errorDeleteProduct'), 'error');
       }
     } catch (err) {
-      showToast('Could not delete the product.', 'error');
+      showToast(t('admin.errorDeleteProduct'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -124,21 +125,21 @@ function AdminMenu() {
     <div className="admin-overview">
       <div className="admin-page-head">
         <SectionTitle
-          title="Menu Management"
+          title={t('admin.menuManagement')}
           subtitle={
             restaurantLoading
-              ? 'Loading your restaurant…'
+              ? t('admin.loadingRestaurant')
               : hasProducts
-              ? `${products.length} item${products.length === 1 ? '' : 's'} on your menu`
-              : 'Create and organize your menu'
+              ? t('admin.menuItemsCount', { count: products.length })
+              : t('admin.menuSubtitle')
           }
         />
         <div className="admin-page-actions">
           <Link to="/admin/menu/categories" className="admin-btn admin-btn--ghost">
-            <FontAwesomeIcon icon={faTag} /> Categories
+            <FontAwesomeIcon icon={faTag} /> {t('admin.navCategories')}
           </Link>
           <Link to="/admin/menu/new" className="admin-btn admin-btn--primary">
-            <FontAwesomeIcon icon={faPlus} /> Add Product
+            <FontAwesomeIcon icon={faPlus} /> {t('admin.addProduct')}
           </Link>
         </div>
       </div>
@@ -149,7 +150,7 @@ function AdminMenu() {
             <FontAwesomeIcon icon={faMagnifyingGlass} />
             <input
               type="search"
-              placeholder="Search products…"
+              placeholder={t('admin.searchProducts')}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -164,9 +165,9 @@ function AdminMenu() {
               setCategoryFilter(event.target.value);
               setPage(1);
             }}
-            aria-label="Filter by category"
+            aria-label={t('admin.ariaFilterCategory')}
           >
-            <option value="all">All categories</option>
+            <option value="all">{t('admin.allCategories')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -180,11 +181,11 @@ function AdminMenu() {
               setAvailability(event.target.value);
               setPage(1);
             }}
-            aria-label="Filter by availability"
+            aria-label={t('admin.ariaFilterAvailability')}
           >
-            <option value="all">All statuses</option>
-            <option value="available">Available</option>
-            <option value="unavailable">Unavailable</option>
+            <option value="all">{t('admin.allStatuses')}</option>
+            <option value="available">{t('admin.available')}</option>
+            <option value="unavailable">{t('admin.unavailable')}</option>
           </select>
         </div>
       )}
@@ -201,9 +202,9 @@ function AdminMenu() {
         <div className="admin-panel">
           <AdminEmptyState
             icon={faUtensils}
-            title="Your menu is empty"
-            message="Add your first product to start selling."
-            actionLabel="Add Product"
+            title={t('admin.menuEmptyTitle')}
+            message={t('admin.menuEmptyMessage')}
+            actionLabel={t('admin.addProduct')}
             actionTo="/admin/menu/new"
           />
         </div>
@@ -214,9 +215,9 @@ function AdminMenu() {
           {pageItems.length === 0 ? (
             <AdminEmptyState
               icon={faCircleExclamation}
-              title="No products match"
-              message="Try a different search or filter."
-              actionLabel="Clear filters"
+              title={t('admin.noProductsMatch')}
+              message={t('admin.tryDifferentFilter')}
+              actionLabel={t('admin.clearFilters')}
               onAction={() => {
                 setQuery('');
                 setCategoryFilter('all');
@@ -225,15 +226,15 @@ function AdminMenu() {
               }}
             />
           ) : (
-            <div className="admin-table" role="table" aria-label="Menu products">
+            <div className="admin-table" role="table" aria-label={t('admin.ariaMenuProducts')}>
               <div className="admin-table-head" role="row">
-                <span role="columnheader">Product</span>
-                <span role="columnheader">Category</span>
-                <span role="columnheader">Price</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader">Featured</span>
+                <span role="columnheader">{t('admin.colProduct')}</span>
+                <span role="columnheader">{t('admin.colCategory')}</span>
+                <span role="columnheader">{t('admin.colPrice')}</span>
+                <span role="columnheader">{t('admin.colStatus')}</span>
+                <span role="columnheader">{t('admin.featured')}</span>
                 <span role="columnheader" className="admin-table-actions-head">
-                  Actions
+                  {t('admin.colActions')}
                 </span>
               </div>
 
@@ -243,7 +244,11 @@ function AdminMenu() {
                   role="row"
                   key={product.id}
                 >
-                  <div className="admin-table-product" role="cell" data-label="Product">
+                  <div
+                    className="admin-table-product"
+                    role="cell"
+                    data-label={t('admin.colProduct')}
+                  >
                     <img
                       src={product.image || DEFAULT_PRODUCT_IMAGE}
                       alt=""
@@ -257,46 +262,45 @@ function AdminMenu() {
                     </div>
                   </div>
 
-                  <span className="admin-table-category" role="cell" data-label="Category">
+                  <span className="admin-table-category" role="cell" data-label={t('admin.colCategory')}>
                     {categoryName(product.categoryId) || product.category || '—'}
                   </span>
 
-                  <span className="admin-table-price" role="cell" data-label="Price">
-                    {currency}
-                    {Number(product.basePrice).toFixed(2)}
+                  <span className="admin-table-price" role="cell" data-label={t('admin.colPrice')}>
+                    {formatMoney(Number(product.basePrice), i18n.language)}
                   </span>
 
-                  <span className="admin-table-status" role="cell" data-label="Status">
+                  <span className="admin-table-status" role="cell" data-label={t('admin.colStatus')}>
                     <button
                       type="button"
                       className={`admin-switch ${product.available ? 'is-on' : 'is-off'}`}
                       onClick={() => toggleAvailability(product)}
                       disabled={busyId === product.id}
                       aria-pressed={product.available}
-                      aria-label={`Toggle availability for ${product.name}`}
+                      aria-label={t('admin.ariaToggleAvailability', { name: product.name })}
                     >
                       <span className="admin-switch-track">
                         <span className="admin-switch-thumb" />
                       </span>
                       <span className="admin-switch-label">
-                        {product.available ? 'Available' : 'Off'}
+                        {product.available ? t('admin.available') : t('admin.off')}
                       </span>
                     </button>
                   </span>
 
-                  <span className="admin-table-featured" role="cell" data-label="Featured">
+                  <span className="admin-table-featured" role="cell" data-label={t('admin.featured')}>
                     {product.featured ? (
-                      <span className="admin-badge tone-success">Featured</span>
+                      <span className="admin-badge tone-success">{t('admin.featured')}</span>
                     ) : (
                       <span className="admin-muted">—</span>
                     )}
                   </span>
 
-                  <span className="admin-table-actions" role="cell" data-label="Actions">
+                  <span className="admin-table-actions" role="cell" data-label={t('admin.colActions')}>
                     <Link
                       to={`/admin/menu/${product.id}/edit`}
                       className="admin-icon-btn admin-icon-btn--sm"
-                      aria-label={`Edit ${product.name}`}
+                      aria-label={t('admin.ariaEditProduct', { name: product.name })}
                     >
                       <FontAwesomeIcon icon={faPen} />
                     </Link>
@@ -305,7 +309,7 @@ function AdminMenu() {
                       className="admin-icon-btn admin-icon-btn--sm is-danger"
                       onClick={() => setPendingDelete(product)}
                       disabled={busyId === product.id}
-                      aria-label={`Delete ${product.name}`}
+                      aria-label={t('admin.ariaDeleteProduct', { name: product.name })}
                     >
                       <FontAwesomeIcon icon={faTrash} />
                     </button>
@@ -323,10 +327,10 @@ function AdminMenu() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
               >
-                Previous
+                {t('admin.previous')}
               </button>
               <span>
-                Page {safePage} of {totalPages}
+                {t('admin.pageOf', { page: safePage, total: totalPages })}
               </span>
               <button
                 type="button"
@@ -334,7 +338,7 @@ function AdminMenu() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
               >
-                Next
+                {t('common.actions.next')}
               </button>
             </div>
           )}
@@ -343,9 +347,9 @@ function AdminMenu() {
 
       {pendingDelete && (
         <ConfirmDialog
-          title="Delete this product?"
-          message={`"${pendingDelete.name}" will be removed. This action cannot be undone.`}
-          confirmLabel="Delete"
+          title={t('admin.deleteProductTitle')}
+          message={t('admin.deleteProductMessage', { name: pendingDelete.name })}
+          confirmLabel={t('common.actions.delete')}
           danger
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}

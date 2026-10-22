@@ -1,6 +1,8 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 function Avatar({ name, photoURL, size = 'md' }) {
+  const { t } = useTranslation();
   const initials = (name || '?')
     .split(' ')
     .map((word) => word[0])
@@ -11,7 +13,7 @@ function Avatar({ name, photoURL, size = 'md' }) {
   return (
     <span className={`dash-avatar dash-avatar-${size}`}>
       {photoURL ? (
-        <img src={photoURL} alt={name || 'Profile'} />
+        <img src={photoURL} alt={name || t('account.profileAlt')} />
       ) : (
         <span className="dash-avatar-initials">{initials}</span>
       )}

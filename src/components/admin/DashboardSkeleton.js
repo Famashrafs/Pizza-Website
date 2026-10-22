@@ -1,9 +1,16 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 // Full-page loading state for the dashboard overview while data loads.
 function DashboardSkeleton() {
+  const { t } = useTranslation();
+
   return (
-    <div className="admin-dashboard-skeleton" aria-busy="true" aria-label="Loading dashboard">
+    <div
+      className="admin-dashboard-skeleton"
+      aria-busy="true"
+      aria-label={t('admin.ariaLoadingDashboard')}
+    >
       <div className="admin-skeleton-title">
         <div className="dash-skeleton-line" style={{ width: 180, height: 22 }} />
         <div className="dash-skeleton-line" style={{ width: 260, height: 13 }} />

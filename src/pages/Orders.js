@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../hooks/useOrders';
 import {
@@ -12,6 +13,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import OrderCard from '../components/account/OrderCard';
 
 function Orders() {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const uid = currentUser?.uid;
   const { status, orders, error, reload } = useOrders(uid);
@@ -27,14 +29,14 @@ function Orders() {
       items.forEach((item) => addItem(item));
       if (unavailable.length) {
         showToast(
-          `${unavailable.length} item(s) could not be reordered and were skipped.`,
+          t('orders.toastItemsSkipped', { count: unavailable.length }),
           'warning'
         );
       } else {
-        showToast('Items added to your cart.');
+        showToast(t('orders.toastItemsAdded'));
       }
     } catch (err) {
-      showToast('We could not reorder this order. Please try again.', 'error');
+      showToast(t('orders.toastReorderFailed'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -46,13 +48,13 @@ function Orders() {
     try {
       const result = await cancelOrder(order.id, uid);
       if (result.success) {
-        showToast('Your order was cancelled.');
+        showToast(t('orders.toastCancelled'));
         reload();
       } else {
-        showToast(result.error || 'We could not cancel this order.', 'error');
+        showToast(result.error || t('orders.toastCancelFailed'), 'error');
       }
     } catch (err) {
-      showToast('We could not cancel this order. Please try again.', 'error');
+      showToast(t('orders.toastCancelFailedRetry'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -61,7 +63,7 @@ function Orders() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">ORDER HISTORY</h1>
+        <h1 className="landing-title">{t('orders.historyTitle')}</h1>
       </div>
 
       <div className="cart-container">
@@ -74,22 +76,22 @@ function Orders() {
 
         {status === 'error' && (
           <div className="auth-card empty-cart">
-            <h2>Something went wrong</h2>
+            <h2>{t('orders.errorTitle')}</h2>
             <p className="auth-subtitle">{error}</p>
             <button type="button" className="contact-btn empty-cart-btn" onClick={reload}>
-              Try Again
+              {t('common.actions.retry')}
             </button>
           </div>
         )}
 
         {status === 'success' && orders.length === 0 && (
           <div className="auth-card empty-cart">
-            <h2>You haven&apos;t ordered yet.</h2>
+            <h2>{t('orders.emptyTitle')}</h2>
             <p className="auth-subtitle">
-              Your past orders will appear here once you place one.
+              {t('orders.emptyText')}
             </p>
             <Link to="/menu" className="contact-btn empty-cart-btn">
-              Browse Menu
+              {t('orders.browseMenu')}
             </Link>
           </div>
         )}
@@ -109,11 +111,9 @@ function Orders() {
 
       {pendingCancel && (
         <ConfirmDialog
-          title="Cancel this order?"
-          message={`Order ${
-            pendingCancel.id
-          } will be cancelled and its items will not be prepared.`}
-          confirmLabel="Cancel Order"
+          title={t('orders.cancelDialogTitle')}
+          message={t('orders.cancelDialogMessage', { id: pendingCancel.id })}
+          confirmLabel={t('orders.cancelOrder')}
           danger
           onConfirm={() => handleCancel(pendingCancel)}
           onCancel={() => setPendingCancel(null)}

@@ -1,0 +1,52 @@
+{
+  "links": {
+    "home": "Home",
+    "menu": "Menu",
+    "offers": "Offerte",
+    "about": "Chi siamo",
+    "contact": "Contatti",
+    "cart": "Carrello",
+    "login": "Accedi",
+    "logout": "Esci",
+    "myAccount": "Il mio account",
+    "orders": "Ordini",
+    "favorites": "Preferiti",
+    "dashboard": "Dashboard",
+    "yourCart": "Il tuo carrello",
+    "trackOrder": "Traccia l'ordine",
+    "savedAddresses": "Indirizzi salvati"
+  },
+  "theme": {
+    "light": "Modalità chiara",
+    "dark": "Modalità scura"
+  },
+  "language": {
+    "label": "Lingua",
+    "select": "Scegli la lingua"
+  },
+  "aria": {
+    "mainNavigation": "Navigazione principale",
+    "pizzaHome": "Home di Pizza",
+    "browseMenu": "Sfoglia il menu",
+    "openCart_one": "Apri il carrello, {{count}} articolo",
+    "openCart_other": "Apri il carrello, {{count}} articoli",
+    "switchToLight": "Passa alla modalità chiara",
+    "switchToDark": "Passa alla modalità scura",
+    "toggleMenu": "Mostra o nascondi il menu di navigazione"
+  },
+  "messages": {
+    "loggedOut": "Hai effettuato la disconnessione."
+  },
+  "footer": {
+    "tagline": "Pizze fatte a mano, un menu onesto e una consegna che puoi seguire dai nostri forni alla tua porta.",
+    "explore": "Esplora",
+    "customer": "Cliente",
+    "getInTouch": "Contatti",
+    "rightsReserved": "© {{year}} {{name}}. Tutti i diritti riservati.",
+    "freshFromOven": "Fresco dal forno a legna."
+  },
+  "moveToTop": {
+    "title": "Torna su",
+    "label": "SU"
+  }
+}

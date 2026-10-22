@@ -1,55 +1,50 @@
-const FIREBASE_ERRORS = {
-  'auth/email-already-in-use': 'An account already exists with this email.',
-  'auth/user-not-found': 'No account found with this email.',
-  'auth/wrong-password': 'Incorrect password. Please try again.',
-  'auth/invalid-credential': 'Invalid email or password.',
-  'auth/invalid-email': 'Please enter a valid email address.',
-  'auth/weak-password': 'Password should be at least 6 characters.',
-  'auth/popup-closed-by-user': 'Sign-in was cancelled before it finished.',
-  'auth/cancelled-popup-request': 'Sign-in was cancelled.',
-  'auth/too-many-requests': 'Too many attempts. Please try again later.',
-  'auth/network-request-failed': 'Network error. Check your connection.',
-  'auth/user-disabled': 'This account has been disabled.',
-  'auth/missing-email': 'Please enter your email address.',
-  'auth/requires-recent-login':
-    'This action requires a recent sign-in. Please sign in again first.',
-  'auth/invalid-verification-code':
-    'The verification code is incorrect. Please check it and try again.',
-  'auth/missing-verification-code': 'Please enter the 6-digit verification code.',
-  'auth/code-expired':
-    'This verification code has expired. Please request a new one.',
-  'auth/quota-exceeded':
-    'Too many verification attempts. Please try again later.',
-  'auth/captcha-check-failed':
-    'Unable to verify that you are not a robot. Please try again.',
-  'auth/operation-not-allowed':
-    'This sign-in method is not enabled for this project yet.',
-  'auth/invalid-phone-number': 'Please enter a valid phone number.',
-  'auth/credential-already-in-use':
-    'This credential is already linked to another account.',
+import i18n from '../i18n';
+
+// Maps a Firebase / Firestore error CODE to the translation key of the
+// message shown to the user.
+//
+// The CODES are a contract: they come from Firebase (and from the Firestore
+// data layer) and must never change. Only the message side is translated —
+// the lookup happens through the i18next singleton so the returned string
+// always matches the language that is currently active.
+//
+// `getAuthErrorMessage` keeps its name and signature: callers depend on it.
+const FIREBASE_ERROR_KEYS = {
+  'auth/email-already-in-use': 'auth.errorEmailInUse',
+  'auth/user-not-found': 'auth.errorUserNotFound',
+  'auth/wrong-password': 'auth.errorWrongPassword',
+  'auth/invalid-credential': 'auth.errorInvalidCredential',
+  'auth/invalid-email': 'auth.errorInvalidEmail',
+  'auth/weak-password': 'auth.errorWeakPassword',
+  'auth/popup-closed-by-user': 'auth.errorPopupClosedByUser',
+  'auth/cancelled-popup-request': 'auth.errorCancelledPopupRequest',
+  'auth/too-many-requests': 'auth.errorTooManyRequests',
+  'auth/network-request-failed': 'auth.errorNetworkRequestFailed',
+  'auth/user-disabled': 'auth.errorUserDisabled',
+  'auth/missing-email': 'auth.errorMissingEmail',
+  'auth/requires-recent-login': 'auth.errorRequiresRecentLogin',
+  'auth/invalid-verification-code': 'auth.errorInvalidVerificationCode',
+  'auth/missing-verification-code': 'auth.errorMissingVerificationCode',
+  'auth/code-expired': 'auth.errorCodeExpired',
+  'auth/quota-exceeded': 'auth.errorQuotaExceeded',
+  'auth/captcha-check-failed': 'auth.errorCaptchaCheckFailed',
+  'auth/operation-not-allowed': 'auth.errorOperationNotAllowed',
+  'auth/invalid-phone-number': 'auth.errorInvalidPhoneNumber',
+  'auth/credential-already-in-use': 'auth.errorCredentialAlreadyInUse',
   'auth/account-exists-with-different-credential':
-    'An account already exists with the same email but a different sign-in method.',
-  'auth/invalid-app-credential':
-    'Verification could not be completed. Please check your Firebase configuration.',
-  'auth/missing-or-invalid-nonce':
-    'Security verification failed. Please refresh the page and try again.',
-  'restaurant/already-owned':
-    'This storefront already has an owner. Only the active owner can manage this deployment.',
+    'auth.errorAccountExistsWithDifferentCredential',
+  'auth/invalid-app-credential': 'auth.errorInvalidAppCredential',
+  'auth/missing-or-invalid-nonce': 'auth.errorMissingOrInvalidNonce',
+  'restaurant/already-owned': 'auth.errorRestaurantAlreadyOwned',
   // Data-layer failures (Firestore) used to fall through to the generic message
   // below, which made an unreachable database indistinguishable from a typo.
-  unavailable:
-    'We could not reach the database. Check your connection and try again.',
-  'permission-denied':
-    'Your account is not allowed to perform this action.',
-  'failed-precondition':
-    'A required database setup step is still missing (index or security rules).',
-  'deadline-exceeded':
-    'The database took too long to respond. Please try again.',
+  unavailable: 'auth.errorUnavailable',
+  'permission-denied': 'auth.errorPermissionDenied',
+  'failed-precondition': 'auth.errorFailedPrecondition',
+  'deadline-exceeded': 'auth.errorDeadlineExceeded',
 };
 
 export default function getAuthErrorMessage(code) {
-  return (
-    FIREBASE_ERRORS[code] ||
-    'Something went wrong. Please try again.'
-  );
+  const key = FIREBASE_ERROR_KEYS[code];
+  return key ? i18n.t(key) : i18n.t('common.errors.generic');
 }

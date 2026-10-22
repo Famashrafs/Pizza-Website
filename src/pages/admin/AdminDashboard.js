@@ -6,8 +6,9 @@ import {
   faUsers,
   faUtensils,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAdminData } from '../../hooks/useAdminData';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatMoney } from '../../i18n/format';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminStatCard from '../../components/admin/AdminStatCard';
 import QuickActions from '../../components/admin/QuickActions';
@@ -17,6 +18,7 @@ import DashboardSkeleton from '../../components/admin/DashboardSkeleton';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 
 function AdminDashboard() {
+  const { t, i18n } = useTranslation();
   const { restaurant, restaurantLoading, restaurantError, reloadRestaurant } =
     useOutletContext();
 
@@ -30,70 +32,62 @@ function AdminDashboard() {
     reload,
   } = useAdminData(restaurantId);
 
-  const currency = RESTAURANT_SETTINGS.currency || '$';
-
   const statCards = useMemo(
     () => [
       {
         icon: faDollarSign,
-        label: "Today's Revenue",
-        value: `${currency}${stats.todayRevenue.toFixed(2)}`,
-        hint: 'Collected from today’s orders',
+        label: t('admin.statTodayRevenue'),
+        value: formatMoney(stats.todayRevenue, i18n.language),
+        hint: t('admin.statTodayRevenueHint'),
         tone: 'gold',
         loading: status === 'loading',
       },
       {
         icon: faReceipt,
-        label: "Today's Orders",
+        label: t('admin.statTodayOrders'),
         value: String(stats.todayOrders),
-        hint:
-          stats.todayOrders === 1
-            ? '1 order placed today'
-            : `${stats.todayOrders} orders placed today`,
+        hint: t('admin.statOrdersPlacedToday', { count: stats.todayOrders }),
         tone: 'green',
         loading: status === 'loading',
       },
       {
         icon: faUsers,
-        label: 'Customers',
+        label: t('admin.statCustomers'),
         value: String(stats.totalCustomers),
-        hint: 'Customers who have ordered',
+        hint: t('admin.statCustomersHint'),
         tone: 'coral',
         loading: status === 'loading',
       },
       {
         icon: faUtensils,
-        label: 'Products',
+        label: t('admin.statProducts'),
         value: String(stats.totalProducts),
-        hint:
-          stats.totalProducts === 1
-            ? '1 item on the menu'
-            : `${stats.totalProducts} items on the menu`,
+        hint: t('admin.statItemsOnMenu', { count: stats.totalProducts }),
         tone: 'blue',
         loading: status === 'loading',
       },
     ],
-    [stats, status, currency]
+    [stats, status, t, i18n.language]
   );
 
   return (
     <div className="dash-section admin-overview">
       <div className="dash-section-head">
         <SectionTitle
-          title="Dashboard"
+          title={t('admin.titleDashboard')}
           subtitle={
             restaurantLoading
-              ? 'Loading your restaurant…'
+              ? t('admin.loadingRestaurant')
               : restaurant
-              ? `Overview of ${restaurant.name}`
-              : 'Overview of your restaurant'
+              ? t('admin.overviewOf', { name: restaurant.name })
+              : t('admin.overviewOfRestaurant')
           }
         />
       </div>
 
       {(restaurantError || (dataError && status === 'error')) && (
         <AdminErrorState
-          message={dataError || restaurantError || 'Unable to load dashboard data.'}
+          message={dataError || restaurantError || t('admin.errorLoadDashboard')}
           onRetry={restaurantError ? reloadRestaurant : reload}
         />
       )}

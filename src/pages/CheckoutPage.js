@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
@@ -50,6 +51,7 @@ function reportLoadFailure(scope, error) {
 }
 
 function CheckoutPage() {
+  const { t } = useTranslation();
   const { currentUser, userProfile, isGuest, ensureGuestSession } = useAuth();
   const { items, promoCode, count, clearCart } = useCart();
   const { showToast } = useToast();
@@ -286,6 +288,19 @@ function CheckoutPage() {
     clearFieldError('address', field);
   };
 
+  const translateErrors = (errorMap = {}) => {
+    const translated = {};
+    Object.keys(errorMap).forEach((key) => {
+      const value = errorMap[key];
+      if (typeof value === 'string' && value.startsWith('checkout.')) {
+        translated[key] = t(value);
+      } else {
+        translated[key] = value;
+      }
+    });
+    return translated;
+  };
+
   const handleFulfillmentChange = (type) => {
     setFulfillmentType(type);
     setErrors((prev) => ({ ...prev, address: undefined }));
@@ -360,10 +375,10 @@ function CheckoutPage() {
         reason === 'catalog-error' ||
           reason === 'settings-error' ||
           reason === 'settings-invalid'
-          ? 'We couldn\u2019t confirm today\u2019s prices. Please retry loading the menu above.'
+          ? t('checkout.pricingErrorCatalog')
           : reason === 'catalog-empty'
-          ? 'Some items in your cart can no longer be priced. Please review your cart.'
-          : 'We are still confirming today\u2019s menu prices. Please wait a moment and try again.'
+          ? t('checkout.pricingErrorItems')
+          : t('checkout.pricingErrorLoading')
       );
       return;
     }
@@ -389,9 +404,7 @@ function CheckoutPage() {
             '[checkout] Could not create an anonymous guest session:',
             guestResult?.error
           );
-          setOrderError(
-            'Quick order is temporarily unavailable. Please try again or sign in.'
-          );
+          setOrderError(t('checkout.guestSessionError'));
           return;
         }
         orderCustomerId = guestResult.value.uid;
@@ -413,9 +426,7 @@ function CheckoutPage() {
 
       if (!result.success) {
         setErrors(result.errors || {});
-        setOrderError(
-          result.error || 'We could not place your order. Please try again.'
-        );
+        setOrderError(result.error || t('checkout.placeOrderFailed'));
         if (result.errors?.customer) setStep('details');
         else if (result.errors?.address) setStep('delivery');
         else if (result.errors?.payment) setStep('payment');
@@ -442,7 +453,7 @@ function CheckoutPage() {
       }
       setPlaced(true);
       clearCart();
-      showToast('Order confirmed!');
+      showToast(t('checkout.toastOrderConfirmed'));
       navigate('/order-confirmation', { state: { order: result.order } });
     } catch (err) {
       console.error('[checkout] Failed to place order:', {
@@ -452,9 +463,7 @@ function CheckoutPage() {
       });
 
       // Keep the cart so the customer can retry.
-      setOrderError(
-        'Something went wrong while placing your order. Please try again.'
-      );
+      setOrderError(t('checkout.placeOrderUnexpected'));
     } finally {
       submitLock.current = false;
       setSubmitting(false);
@@ -465,16 +474,16 @@ function CheckoutPage() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">CHECKOUT</h1>
+          <h1 className="landing-title">{t('checkout.pageTitle')}</h1>
         </div>
         <div className="cart-empty">
           <p className="cart-empty-emoji" aria-hidden="true">
             🛒
           </p>
-          <h2>Your cart is empty</h2>
-          <p>Add a few items before checking out.</p>
+          <h2>{t('checkout.emptyCartTitle')}</h2>
+          <p>{t('checkout.emptyCartText')}</p>
           <Link to="/menu" className="contact-btn cart-empty-btn">
-            Explore Menu
+            {t('checkout.exploreMenu')}
           </Link>
         </div>
       </div>
@@ -484,52 +493,52 @@ function CheckoutPage() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">CHECKOUT</h1>
+        <h1 className="landing-title">{t('checkout.pageTitle')}</h1>
       </div>
 
       <div className="checkout-page">
         {(!currentUser || isGuest) && (
           <div className="checkout-banner checkout-banner--info">
-            <strong>Ordering as a guest?</strong> No account needed — just enter
-            your contact details below. Already have an account?{' '}
+            <strong>{t('checkout.guestBannerTitle')}</strong>{' '}
+            {t('checkout.guestBannerText')}{' '}
             <Link to="/login/customer" state={{ from: '/checkout' }}>
-              Log in
+              {t('checkout.guestBannerLogin')}
             </Link>
           </div>
         )}
 
         {catalogStatus === 'error' && (
           <div className="checkout-banner checkout-banner--error" role="alert">
-            <strong>We couldn&apos;t load the live menu.</strong> Checkout is
-            paused so your items are never priced from an outdated catalog.{' '}
+            <strong>{t('checkout.catalogErrorTitle')}</strong>{' '}
+            {t('checkout.catalogErrorText')}{' '}
             <button
               type="button"
               className="checkout-banner-link"
               onClick={() => setReloadKey((key) => key + 1)}
             >
-              Retry
+              {t('checkout.retry')}
             </button>
           </div>
         )}
 
         {settingsStatus === 'error' && (
           <div className="checkout-banner checkout-banner--error" role="alert">
-            <strong>We couldn&apos;t load live pricing settings.</strong>{' '}
-            Checkout is paused so you&apos;re never charged from stale totals.{' '}
+            <strong>{t('checkout.settingsErrorTitle')}</strong>{' '}
+            {t('checkout.settingsErrorText')}{' '}
             <button
               type="button"
               className="checkout-banner-link"
               onClick={() => setReloadKey((key) => key + 1)}
             >
-              Retry
+              {t('checkout.retry')}
             </button>
           </div>
         )}
 
         {readiness.reason === 'catalog-empty' && (
           <div className="checkout-banner checkout-banner--error" role="alert">
-            <strong>The menu is currently unavailable.</strong> We can&apos;t
-            price the items in your cart right now — please try again later.
+            <strong>{t('checkout.menuUnavailableTitle')}</strong>{' '}
+            {t('checkout.menuUnavailableText')}
           </div>
         )}
 
@@ -537,7 +546,7 @@ function CheckoutPage() {
           catalogStatus !== 'error' &&
           settingsStatus !== 'error' && (
             <div className="checkout-banner checkout-banner--info" role="status">
-              Loading current menu prices…
+              {t('checkout.loadingPrices')}
             </div>
           )}
 
@@ -555,7 +564,7 @@ function CheckoutPage() {
               <CustomerInfoStep
                 customer={customer}
                 onChange={handleCustomerChange}
-                errors={errors.customer || {}}
+                errors={translateErrors(errors.customer || {})}
               />
             )}
 
@@ -565,7 +574,7 @@ function CheckoutPage() {
                 onFulfillmentChange={handleFulfillmentChange}
                 address={address}
                 onAddressChange={handleAddressChange}
-                errors={errors.address || {}}
+                errors={translateErrors(errors.address || {})}
                 saveAddress={saveAddress}
                 onSaveChange={setSaveAddress}
               />
@@ -575,7 +584,7 @@ function CheckoutPage() {
               <PaymentStep
                 selected={paymentMethod}
                 onChange={setPaymentMethod}
-                error={errors.payment}
+                error={errors.payment ? t(errors.payment) : null}
               />
             )}
 
@@ -602,7 +611,7 @@ function CheckoutPage() {
 
             <div className="checkout-nav">
               <button type="button" className="checkout-back" onClick={handleBack}>
-                {step === 'details' ? 'Back to Cart' : 'Back'}
+                {step === 'details' ? t('checkout.backToCart') : t('common.actions.back')}
               </button>
               {step !== 'review' && (
                 <button
@@ -610,7 +619,7 @@ function CheckoutPage() {
                   className="contact-btn checkout-next"
                   onClick={handleContinue}
                 >
-                  Continue
+                  {t('common.actions.continue')}
                 </button>
               )}
             </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPenToSquare,
@@ -8,14 +9,16 @@ import { formatAddress, getEstimatedTime } from '../../utils/checkoutLogic';
 import { getPaymentMethod } from '../../services/paymentService';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 import OrderSummaryPanel from './OrderSummaryPanel';
+import { PAYMENT_METHOD_LABEL_KEYS } from '../../utils/checkoutLogic';
 
-function ReviewBlock({ title, stepId, onEdit, children }) {
+function ReviewBlock({ title, stepId, onEdit, children, editLabel }) {
+  const { t } = useTranslation();
   return (
     <div className="review-block">
       <div className="review-block-head">
         <h3>{title}</h3>
         <button type="button" className="review-edit" onClick={() => onEdit(stepId)}>
-          <FontAwesomeIcon icon={faPenToSquare} /> Edit
+          <FontAwesomeIcon icon={faPenToSquare} /> {editLabel || t('common.actions.edit')}
         </button>
       </div>
       <div className="review-block-body">{children}</div>
@@ -41,14 +44,20 @@ function ReviewStep({
   orderError = '',
   pricingReady = true,
 }) {
+  const { t } = useTranslation();
   const payment = getPaymentMethod(paymentMethod);
   const currency = RESTAURANT_SETTINGS.currency;
+  const paymentLabel = payment
+    ? (PAYMENT_METHOD_LABEL_KEYS[payment.id] ? t(PAYMENT_METHOD_LABEL_KEYS[payment.id]) : payment.label)
+    : t('checkout.notSelected');
+  const methodLabel = t(fulfillmentType === 'pickup' ? 'checkout.fulfillmentPickup' : 'checkout.fulfillmentDelivery');
+  const methodLower = fulfillmentType === 'pickup' ? 'pickup' : 'delivery';
 
   return (
     <section className="checkout-section" aria-labelledby="checkout-review-title">
-      <h2 id="checkout-review-title">Review Your Order</h2>
+      <h2 id="checkout-review-title">{t('checkout.reviewTitle')}</h2>
       <p className="checkout-section-sub">
-        Please confirm everything looks right before placing your order.
+        {t('checkout.reviewSubtitle')}
       </p>
 
       {orderError && (
@@ -61,7 +70,7 @@ function ReviewStep({
         <div className="checkout-banner checkout-banner--warning" role="alert">
           <FontAwesomeIcon icon={faTriangleExclamation} />
           <div>
-            <strong>Prices changed since you added these items:</strong>
+            <strong>{t('checkout.pricesChangedTitle')}</strong>
             <ul>
               {priceChanges.map((change) => (
                 <li key={change.id}>
@@ -72,8 +81,7 @@ function ReviewStep({
               ))}
             </ul>
             <small>
-              The totals shown below reflect the current menu prices that this
-              order will be charged.
+              {t('checkout.pricesChangedNote')}
             </small>
           </div>
         </div>
@@ -83,7 +91,7 @@ function ReviewStep({
         <div className="checkout-banner checkout-banner--warning" role="alert">
           <FontAwesomeIcon icon={faTriangleExclamation} />
           <div>
-            <strong>Some items are no longer available:</strong>
+            <strong>{t('checkout.unavailableItemsTitle')}</strong>
             <ul>
               {availabilityIssues.map((issue) => (
                 <li key={issue.id}>
@@ -95,14 +103,14 @@ function ReviewStep({
         </div>
       )}
 
-      <ReviewBlock title="Customer" stepId="details" onEdit={onEditStep}>
+      <ReviewBlock title={t('checkout.reviewCustomerTitle')} stepId="details" onEdit={onEditStep}>
         <p>{customer.fullName}</p>
         <p>{customer.email}</p>
         <p>{customer.phone}</p>
       </ReviewBlock>
 
       <ReviewBlock
-        title={fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}
+        title={methodLabel}
         stepId="delivery"
         onEdit={onEditStep}
       >
@@ -115,23 +123,25 @@ function ReviewStep({
           </>
         )}
         <p className="review-muted">
-          Estimated {fulfillmentType === 'pickup' ? 'pickup' : 'delivery'}:{' '}
-          {getEstimatedTime(fulfillmentType)}
+          {t('checkout.estimatedFulfillment', {
+            method: fulfillmentType === 'pickup' ? t('checkout.fulfillmentPickup').toLowerCase() : t('checkout.fulfillmentDelivery').toLowerCase(),
+            time: getEstimatedTime(fulfillmentType),
+          })}
         </p>
       </ReviewBlock>
 
-      <ReviewBlock title="Payment" stepId="payment" onEdit={onEditStep}>
-        <p>{payment ? payment.label : 'Not selected'}</p>
-        <p className="review-muted">Pending — no payment taken yet</p>
+      <ReviewBlock title={t('checkout.reviewPaymentTitle')} stepId="payment" onEdit={onEditStep}>
+        <p>{paymentLabel}</p>
+        <p className="review-muted">{t('checkout.paymentPendingNote')}</p>
       </ReviewBlock>
 
       <div className="review-notes">
-        <label htmlFor="order-notes">Order notes (optional)</label>
+        <label htmlFor="order-notes">{t('checkout.orderNotesLabel')}</label>
         <textarea
           id="order-notes"
           value={notes}
           onChange={(event) => onNotesChange(event.target.value)}
-          placeholder="Allergies, gate codes, delivery instructions…"
+          placeholder={t('checkout.orderNotesPlaceholder')}
         />
       </div>
 
@@ -143,8 +153,7 @@ function ReviewStep({
       />
 
       <p className="review-muted">
-        Estimated total — the final amount is confirmed on our side when the
-        order is placed.
+        {t('checkout.estimatedTotalNote')}
       </p>
 
       <button
@@ -154,12 +163,12 @@ function ReviewStep({
         disabled={submitting || availabilityIssues.length > 0 || !pricingReady}
       >
         {submitting
-          ? 'Placing order…'
+          ? t('checkout.placingOrder')
           : !pricingReady
-          ? 'Confirming prices…'
-          : `Place Order · ${RESTAURANT_SETTINGS.currency}${Number(
-              totals?.total || 0
-            ).toFixed(2)}`}
+          ? t('checkout.confirmingPrices')
+          : t('checkout.placeOrderWithAmount', {
+              amount: `${currency}${Number(totals?.total || 0).toFixed(2)}`,
+            })}
       </button>
     </section>
   );

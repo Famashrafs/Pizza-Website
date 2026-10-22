@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faStar,
   faClock,
@@ -21,6 +22,7 @@ import {
 import { fetchProducts, getCategories } from '../services/menuService';
 import { PROMO_CODES } from '../utils/cartPricing';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
+import { formatMoney } from '../i18n/format';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { hasCustomization, createCartItem, createSimpleCartItem } from '../utils/cartItem';
@@ -37,51 +39,56 @@ const CATEGORY_ICONS = {
   Desserts: faCookieBite,
 };
 
-const VALUE_PROPS = [
-  {
-    icon: faFire,
-    title: 'Wood-fired freshness',
-    text: 'Every pizza is stone-baked in our wood-fired oven, so it arrives blistered, smoky and exactly as it should be.',
-  },
-  {
-    icon: faTruckFast,
-    title: 'Tracked to your door',
-    text: 'Follow your order from the oven to your address — no refresh guessing, just live status updates.',
-  },
-  {
-    icon: faClock,
-    title: 'Delivery in minutes',
-    text: `Hot, fresh and on time. Estimate ${RESTAURANT_SETTINGS.delivery.estimatedMinutes[0]}–${RESTAURANT_SETTINGS.delivery.estimatedMinutes[1]} minutes for delivery, or grab takeout at our counter.`,
-  },
-];
-
-const HOW_STEPS = [
-  {
-    icon: faHandPointer,
-    title: 'Pick your dishes',
-    text: 'Browse the menu and customize your pizza with toppings, crust and size.',
-  },
-  {
-    icon: faWallet,
-    title: 'Check out in seconds',
-    text: 'Delivery or pickup, saved addresses and payment details make repeat orders a tap away.',
-  },
-  {
-    icon: faFireBurner,
-    title: 'We cook it fresh',
-    text: 'Your order hits the wood-fired oven the moment the kitchen receives it.',
-  },
-  {
-    icon: faTruckFast,
-    title: 'Track it to your door',
-    text: 'Follow each step in real time, from prep to the courier on your street.',
-  },
-];
-
 function HomePage() {
+  const { t, i18n } = useTranslation();
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('loading');
   const [customizing, setCustomizing] = useState(null);
+
+  const VALUE_PROPS = [
+    {
+      icon: faFire,
+      title: t('valueWoodFiredTitle', { ns: 'home' }),
+      text: t('valueWoodFiredText', { ns: 'home' }),
+    },
+    {
+      icon: faTruckFast,
+      title: t('valueTrackedTitle', { ns: 'home' }),
+      text: t('valueTrackedText', { ns: 'home' }),
+    },
+    {
+      icon: faClock,
+      title: t('valueDeliveryTitle', { ns: 'home' }),
+      text: t('valueDeliveryText', {
+        ns: 'home',
+        min: RESTAURANT_SETTINGS.delivery.estimatedMinutes[0],
+        max: RESTAURANT_SETTINGS.delivery.estimatedMinutes[1],
+      }),
+    },
+  ];
+
+  const HOW_STEPS = [
+    {
+      icon: faHandPointer,
+      title: t('stepPickTitle', { ns: 'home' }),
+      text: t('stepPickText', { ns: 'home' }),
+    },
+    {
+      icon: faWallet,
+      title: t('stepCheckoutTitle', { ns: 'home' }),
+      text: t('stepCheckoutText', { ns: 'home' }),
+    },
+    {
+      icon: faFireBurner,
+      title: t('stepCookTitle', { ns: 'home' }),
+      text: t('stepCookText', { ns: 'home' }),
+    },
+    {
+      icon: faTruckFast,
+      title: t('stepTrackTitle', { ns: 'home' }),
+      text: t('stepTrackText', { ns: 'home' }),
+    },
+  ];
 
   const { addItem } = useCart();
   const { showToast } = useToast();
@@ -127,17 +134,17 @@ function HomePage() {
       return;
     }
     addItem(createSimpleCartItem(product));
-    showToast(`${product.name} added to cart.`);
+    showToast(t('toastAddedToCart', { ns: 'home', name: product.name }));
   };
 
   const handleConfirmCustomization = (config) => {
     const item = createCartItem(customizing, config);
     if (!item) {
-      showToast('That configuration is not valid.', 'error');
+      showToast(t('toastInvalidConfiguration', { ns: 'home' }), 'error');
       return;
     }
     addItem(item);
-    showToast(`${customizing.name} added to cart.`);
+    showToast(t('toastAddedToCart', { ns: 'home', name: customizing.name }));
     setCustomizing(null);
   };
 
@@ -153,28 +160,26 @@ function HomePage() {
           <div className="hero-inner">
             <div>
               <span className="hero-eyebrow">
-                <FontAwesomeIcon icon={faFire} /> Wood-fired kitchen &amp; delivery
+                <FontAwesomeIcon icon={faFire} /> {t('app.tagline', { ns: 'common' })}
               </span>
               <h1 className="hero-title">
-                Real dough. <em>Real fire.</em> Real fast.
+                {t('heroTitleStart', { ns: 'home' })} <em>{t('heroTitleAccent', { ns: 'home' })}</em>{' '}
+                {t('heroTitleEnd', { ns: 'home' })}
               </h1>
-              <p className="hero-sub">
-                Hand-stretched dough, slow-risen overnight and baked in a wood-fired
-                oven. Order online in minutes and watch it go from oven to your door.
-              </p>
+              <p className="hero-sub">{t('heroSubtitle', { ns: 'home' })}</p>
               <div className="hero-cta">
                 <Link to="/menu" className="contact-btn">
-                  Browse the menu <FontAwesomeIcon icon={faArrowRight} />
+                  {t('browseMenu', { ns: 'home' })} <FontAwesomeIcon icon={faArrowRight} />
                 </Link>
                 <Link to="/offers" className="menu-btn">
-                  Today&rsquo;s offers
+                  {t('todaysOffers', { ns: 'home' })}
                 </Link>
               </div>
               <div className="hero-trust">
                 <div className="hero-trust-item">
                   <FontAwesomeIcon icon={faClock} />
                   <div>
-                    <strong>Open daily</strong>
+                    <strong>{t('openDaily', { ns: 'home' })}</strong>
                     <span>{RESTAURANT_SETTINGS.pickup.hours}</span>
                   </div>
                 </div>
@@ -182,17 +187,20 @@ function HomePage() {
                   <FontAwesomeIcon icon={faTruckFast} />
                   <div>
                     <strong>
-                      {RESTAURANT_SETTINGS.delivery.estimatedMinutes[0]}–
-                      {RESTAURANT_SETTINGS.delivery.estimatedMinutes[1]} min
+                      {t('deliveryEstimate', {
+                        ns: 'home',
+                        min: RESTAURANT_SETTINGS.delivery.estimatedMinutes[0],
+                        max: RESTAURANT_SETTINGS.delivery.estimatedMinutes[1],
+                      })}
                     </strong>
-                    <span>Fresh at your door</span>
+                    <span>{t('freshAtYourDoor', { ns: 'home' })}</span>
                   </div>
                 </div>
                 <div className="hero-trust-item">
                   <FontAwesomeIcon icon={faStar} />
                   <div>
-                    <strong>4.8 rated</strong>
-                    <span>Loved by regulars</span>
+                    <strong>{t('rated', { ns: 'home', rating: '4.8' })}</strong>
+                    <span>{t('lovedByRegulars', { ns: 'home' })}</span>
                   </div>
                 </div>
               </div>
@@ -200,12 +208,13 @@ function HomePage() {
 
             <div className="hero-media">
               <div className="hero-rating-chip">
-                <FontAwesomeIcon icon={faStar} /> 4.8 · 1,000+ orders
+                <FontAwesomeIcon icon={faStar} />{' '}
+                {t('ratingChip', { ns: 'home', rating: '4.8', orders: '1,000' })}
               </div>
               <div className="hero-img-wrap">
                 <img
                   src="/images/BA-Perfect-Pizza.webp"
-                  alt="A wood-fired pizza straight from the oven"
+                  alt={t('heroImageAlt', { ns: 'home' })}
                 />
               </div>
               <div className="hero-card">
@@ -213,8 +222,8 @@ function HomePage() {
                   <FontAwesomeIcon icon={faFire} />
                 </span>
                 <div>
-                  <strong>Stone-baked</strong>
-                  <span>90 seconds at 450°C</span>
+                  <strong>{t('stoneBaked', { ns: 'home' })}</strong>
+                  <span>{t('bakeDetails', { ns: 'home' })}</span>
                 </div>
               </div>
             </div>
@@ -226,11 +235,9 @@ function HomePage() {
       <section className="section">
         <div className="container">
           <div className="section-head">
-            <span className="section-eyebrow">From the kitchen</span>
-            <h2 className="section-title">Featured this week</h2>
-            <p className="section-sub">
-              Our most-loved dishes, ready in minutes and customizable to taste.
-            </p>
+            <span className="section-eyebrow">{t('eyebrowKitchen', { ns: 'home' })}</span>
+            <h2 className="section-title">{t('featuredTitle', { ns: 'home' })}</h2>
+            <p className="section-sub">{t('featuredSub', { ns: 'home' })}</p>
           </div>
 
           {status === 'loading' && (
@@ -243,9 +250,9 @@ function HomePage() {
 
           {status === 'error' && (
             <EmptyState
-              title="We couldn't load the menu"
-              message="Something went wrong while fetching the home menu. Try again."
-              actionLabel="Try again"
+              title={t('loadErrorTitle', { ns: 'home' })}
+              message={t('loadErrorMessage', { ns: 'home' })}
+              actionLabel={t('actions.retry', { ns: 'common' })}
               onAction={loadProducts}
             />
           )}
@@ -269,15 +276,18 @@ function HomePage() {
                     <div className="mini-card-foot">
                       <span className="price">
                         {hasCustomization(product)
-                          ? `from $${product.basePrice.toFixed(2)}`
-                          : `$${product.basePrice.toFixed(2)}`}
+                          ? t('priceFrom', {
+                              ns: 'home',
+                              price: formatMoney(product.basePrice, i18n.language),
+                            })
+                          : formatMoney(product.basePrice, i18n.language)}
                       </span>
                       <button
                         type="button"
                         className="mini-card-add"
                         onClick={() => handleAdd(product)}
                         disabled={!product.available}
-                        aria-label={`Add ${product.name} to cart`}
+                        aria-label={t('ariaAddToCart', { ns: 'home', name: product.name })}
                       >
                         <FontAwesomeIcon icon={faPlus} />
                       </button>
@@ -294,8 +304,8 @@ function HomePage() {
       <section className="section section-tinted">
         <div className="container">
           <div className="section-head">
-            <span className="section-eyebrow">Browse the menu</span>
-            <h2 className="section-title">Find your craving</h2>
+            <span className="section-eyebrow">{t('browseMenu', { ns: 'home' })}</span>
+            <h2 className="section-title">{t('findYourCraving', { ns: 'home' })}</h2>
           </div>
           <div className="category-rail">
             {categories.map((category) => (
@@ -321,11 +331,9 @@ function HomePage() {
       <section className="section">
         <div className="container">
           <div className="section-head is-center">
-            <span className="section-eyebrow">Why order here</span>
-            <h2 className="section-title">Ordering made easy</h2>
-            <p className="section-sub">
-              A restaurant-grade experience without the fuss of a phone call.
-            </p>
+            <span className="section-eyebrow">{t('whyOrderHere', { ns: 'home' })}</span>
+            <h2 className="section-title">{t('orderingMadeEasy', { ns: 'home' })}</h2>
+            <p className="section-sub">{t('orderingMadeEasySub', { ns: 'home' })}</p>
           </div>
           <div className="value-grid">
             {VALUE_PROPS.map((value) => (
@@ -350,11 +358,8 @@ function HomePage() {
           >
             <div className="offer-band-grid">
               <div>
-                <h2>Grab a deal while it&rsquo;s hot</h2>
-                <p>
-                  Enter a code at checkout and the discount is applied instantly.
-                  No sign-up tricks, just savings.
-                </p>
+                <h2>{t('grabADeal', { ns: 'home' })}</h2>
+                <p>{t('grabADealText', { ns: 'home' })}</p>
                 <div className="offer-band-codes">
                   {promoEntries.map(({ code }) => (
                     <span key={code} className="offer-code-pill">
@@ -364,7 +369,7 @@ function HomePage() {
                 </div>
               </div>
               <Link to="/offers" className="contact-btn">
-                See all offers <FontAwesomeIcon icon={faArrowRight} />
+                {t('seeAllOffers', { ns: 'home' })} <FontAwesomeIcon icon={faArrowRight} />
               </Link>
             </div>
           </div>
@@ -375,8 +380,8 @@ function HomePage() {
       <section className="section">
         <div className="container">
           <div className="section-head is-center">
-            <span className="section-eyebrow">How it works</span>
-            <h2 className="section-title">From craving to doorstep</h2>
+            <span className="section-eyebrow">{t('howItWorks', { ns: 'home' })}</span>
+            <h2 className="section-title">{t('fromCravingToDoorstep', { ns: 'home' })}</h2>
           </div>
           <div className="how-grid">
             {HOW_STEPS.map((step, index) => (
@@ -397,13 +402,10 @@ function HomePage() {
             className="cta-band"
             style={{ '--band-img': 'url("/images/bg_3.jpg")' }}
           >
-            <h2>Hungry yet?</h2>
-            <p>
-              Hot pizza doesn&rsquo;t wait. Order now and we&rsquo;ll have it out
-              of the oven before you finish reading this.
-            </p>
+            <h2>{t('hungryYet', { ns: 'home' })}</h2>
+            <p>{t('hungryYetText', { ns: 'home' })}</p>
             <Link to="/menu" className="contact-btn">
-              Order now <FontAwesomeIcon icon={faArrowRight} />
+              {t('orderNow', { ns: 'home' })} <FontAwesomeIcon icon={faArrowRight} />
             </Link>
           </div>
         </div>

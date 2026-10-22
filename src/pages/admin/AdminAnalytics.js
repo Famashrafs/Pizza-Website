@@ -14,13 +14,22 @@ import {
   ANALYTICS_RANGES,
   computeAnalytics,
 } from '../../services/adminService';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { useTranslation } from 'react-i18next';
+import { formatMoney } from '../../i18n/format';
 import SectionTitle from '../../components/account/SectionTitle';
 import SalesOverview from '../../components/admin/SalesOverview';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 
 const TONE_CLASSES = ['is-gold', 'is-green', 'is-coral', 'is-blue'];
+
+// The shared range list carries English labels; the admin UI translates them
+// by key so every locale shows its own wording for the same window.
+const RANGE_LABEL_KEYS = {
+  '7d': 'admin.range7Days',
+  '30d': 'admin.range30Days',
+  '90d': 'admin.range90Days',
+};
 
 function AnalyticsSkeleton() {
   return (
@@ -38,13 +47,24 @@ function AnalyticsSkeleton() {
 }
 
 function AdminAnalytics() {
+  const { t, i18n } = useTranslation();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
 
   const { status, orders, error, reload } = useRestaurantOrders(restaurantId);
   const { products } = useRestaurantProducts(restaurantId);
   const [range, setRange] = useState('30d');
+
+  const ranges = useMemo(
+    () =>
+      ANALYTICS_RANGES.map((entry) => ({
+        ...entry,
+        label: RANGE_LABEL_KEYS[entry.key]
+          ? t(RANGE_LABEL_KEYS[entry.key])
+          : entry.label,
+      })),
+    [t]
+  );
 
   const analytics = useMemo(
     () => computeAnalytics({ orders, products, range }),
@@ -54,29 +74,39 @@ function AdminAnalytics() {
   const cards = [
     {
       key: 'revenue',
-      label: 'Revenue',
-      value: `${currency}${analytics.totalRevenue.toFixed(2)}`,
+      label: t('admin.statRevenue'),
+      value: formatMoney(analytics.totalRevenue, i18n.language),
       icon: faSackDollar,
     },
-    { key: 'orders', label: 'Orders', value: analytics.totalOrders, icon: faReceipt },
+    {
+      key: 'orders',
+      label: t('admin.statOrders'),
+      value: analytics.totalOrders,
+      icon: faReceipt,
+    },
     {
       key: 'aov',
-      label: 'Avg. order',
-      value: `${currency}${analytics.averageOrderValue.toFixed(2)}`,
+      label: t('admin.statAvgOrder'),
+      value: formatMoney(analytics.averageOrderValue, i18n.language),
       icon: faChartLine,
     },
-    { key: 'delivered', label: 'Delivered', value: analytics.delivered, icon: faBagShopping },
+    {
+      key: 'delivered',
+      label: t('admin.statDelivered'),
+      value: analytics.delivered,
+      icon: faBagShopping,
+    },
   ];
 
   return (
     <div className="admin-overview">
       <div className="admin-page-head">
         <SectionTitle
-          title="Analytics"
-          subtitle="Understand how your restaurant is performing."
+          title={t('admin.navAnalytics')}
+          subtitle={t('admin.analyticsSubtitle')}
         />
-        <div className="admin-tabs" role="tablist" aria-label="Analytics range">
-          {ANALYTICS_RANGES.map((entry) => (
+        <div className="admin-tabs" role="tablist" aria-label={t('admin.ariaAnalyticsRange')}>
+          {ranges.map((entry) => (
             <button
               key={entry.key}
               type="button"
@@ -115,15 +145,9 @@ function AdminAnalytics() {
             </div>
 
             <div className="admin-analytics-under">
-              <span>
-                <strong>{analytics.cancelled}</strong> cancelled
-              </span>
-              <span>
-                <strong>{analytics.activeOrders}</strong> in progress
-              </span>
-              <span>
-                <strong>{analytics.totalProducts}</strong> menu items
-              </span>
+              <span>{t('admin.analyticsCancelled', { count: analytics.cancelled })}</span>
+              <span>{t('admin.analyticsInProgress', { count: analytics.activeOrders })}</span>
+              <span>{t('admin.analyticsMenuItems', { count: analytics.totalProducts })}</span>
             </div>
 
             <SalesOverview
@@ -131,7 +155,7 @@ function AdminAnalytics() {
               status={status}
               error={error}
               onRetry={reload}
-              ranges={ANALYTICS_RANGES}
+              ranges={ranges}
               range={range}
               onRangeChange={setRange}
             />
@@ -139,39 +163,42 @@ function AdminAnalytics() {
             <section className="admin-panel">
               <div className="admin-panel-head">
                 <h3>
-                  <FontAwesomeIcon icon={faTrophy} /> Best Sellers
+                  <FontAwesomeIcon icon={faTrophy} /> {t('admin.bestSellers')}
                 </h3>
-                <p className="admin-panel-sub">Top items by quantity sold</p>
+                <p className="admin-panel-sub">{t('admin.bestSellersSub')}</p>
               </div>
 
               {analytics.bestSellers.length === 0 ? (
                 <AdminEmptyState
                   icon={faTrophy}
-                  title="No sales in this period"
-                  message="Once orders come in, your top-selling items will be ranked here."
+                  title={t('admin.noSalesInPeriod')}
+                  message={t('admin.noSalesInPeriodMessage')}
                 />
               ) : (
-                <div className="admin-table" role="table" aria-label="Best sellers">
+                <div className="admin-table" role="table" aria-label={t('admin.ariaBestSellers')}>
                   <div className="admin-table-head" role="row">
                     <span role="columnheader">#</span>
-                    <span role="columnheader">Product</span>
-                    <span role="columnheader">Sold</span>
-                    <span role="columnheader">Revenue</span>
+                    <span role="columnheader">{t('admin.colProduct')}</span>
+                    <span role="columnheader">{t('admin.colSold')}</span>
+                    <span role="columnheader">{t('admin.colRevenue')}</span>
                   </div>
                   {analytics.bestSellers.map((item, index) => (
                     <div className="admin-table-row" role="row" key={item.productId || item.name}>
-                      <span className="admin-rank" role="cell" data-label="Rank">
+                      <span className="admin-rank" role="cell" data-label={t('admin.colRank')}>
                         {index + 1}
                       </span>
-                      <span role="cell" data-label="Product">
+                      <span role="cell" data-label={t('admin.colProduct')}>
                         <strong>{item.name}</strong>
                       </span>
-                      <span role="cell" data-label="Sold">
+                      <span role="cell" data-label={t('admin.colSold')}>
                         {item.qty}
                       </span>
-                      <span className="admin-table-price" role="cell" data-label="Revenue">
-                        {currency}
-                        {Number(item.revenue).toFixed(2)}
+                      <span
+                        className="admin-table-price"
+                        role="cell"
+                        data-label={t('admin.colRevenue')}
+                      >
+                        {formatMoney(Number(item.revenue), i18n.language)}
                       </span>
                     </div>
                   ))}

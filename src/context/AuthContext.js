@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -253,6 +254,7 @@ async function recoverOwnerProfile(user, existingDoc) {
 }
 
 export function AuthProvider({ children }) {
+  const { t, i18n } = useTranslation();
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -269,6 +271,10 @@ export function AuthProvider({ children }) {
   // profile. Anything that routes on the role (post-login redirect) waits on
   // this instead of reading a stale/absent profile.
   const profileWaiters = useRef([]);
+  // The CODE of the last auth failure. The message itself is cached in
+  // `authError` (state), so the code is kept next to it to be able to
+  // re-translate the message when the language changes.
+  const authErrorCode = useRef(null);
 
   const setProfileState = (profile) => {
     profileSeq.current += 1;
@@ -369,19 +375,33 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  const clearError = () => setAuthError('');
+  const clearError = () => {
+    authErrorCode.current = null;
+    setAuthError('');
+  };
 
   const run = async (action) => {
+    authErrorCode.current = null;
     setAuthError('');
     try {
       const value = await action();
       return { success: true, value };
     } catch (err) {
       const message = getAuthErrorMessage(err.code);
+      authErrorCode.current = err.code || null;
       setAuthError(message);
       return { success: false, error: message };
     }
   };
+
+  // An error that is already on screen is cached in state, so a language
+  // switch would leave it in the previous language. Re-translate it from the
+  // stored code instead.
+  useEffect(() => {
+    if (authErrorCode.current) {
+      setAuthError(getAuthErrorMessage(authErrorCode.current));
+    }
+  }, [i18n.language]);
 
   const signup = (name, email, password, phone, address) =>
     run(async () => {
@@ -501,7 +521,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       const authUpdates = {};
       if (data.displayName !== undefined) authUpdates.displayName = data.displayName;
@@ -518,7 +538,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await reauthenticateWithCredential(
         user,
@@ -530,7 +550,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await reauthenticateWithPopup(user, new GoogleAuthProvider());
     });
@@ -539,7 +559,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await sendEmailVerification(user);
     });
@@ -548,7 +568,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await reauthenticateWithCredential(
         user,
@@ -566,7 +586,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await reauthenticateWithCredential(
         user,
@@ -579,7 +599,7 @@ export function AuthProvider({ children }) {
     run(async () => {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error('Not signed in.');
+        throw new Error(t('auth.errorNotSignedIn'));
       }
       await reauthenticateWithCredential(
         user,
@@ -654,7 +674,7 @@ export function AuthProvider({ children }) {
         // auth/profile request has finished.
         <div className="auth-page" data-testid="checking-auth">
           <div className="auth-card">
-            <p>Checking authentication…</p>
+            <p>{t('auth.checkingAuthentication')}</p>
           </div>
         </div>
       ) : (

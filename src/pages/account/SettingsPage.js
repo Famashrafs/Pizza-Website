@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGear, faBell, faLanguage } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import SectionTitle from '../../components/account/SectionTitle';
@@ -32,6 +33,7 @@ function Toggle({ checked, onChange, label, description }) {
 }
 
 function SettingsPage() {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const { account } = useOutletContext();
@@ -50,49 +52,46 @@ function SettingsPage() {
       if (uid) updatePreferences(uid, next);
       return next;
     });
-    showToast('Preferences saved.');
+    showToast(t('account.toastPreferencesSaved'));
   };
 
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Settings"
-        subtitle="Notification and in-app preferences"
+        title={t('account.navSettings')}
+        subtitle={t('account.settingsSubtitle')}
       />
 
       <div className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faBell} /> Notifications
+            <FontAwesomeIcon icon={faBell} /> {t('account.notificationsTitle')}
           </h3>
         </div>
-        <p className="dash-card-sub">
-          Choose what you want to be notified about. These preferences reflect
-          what this app can deliver today.
-        </p>
+        <p className="dash-card-sub">{t('account.notificationsInfo')}</p>
         <div className="dash-toggle-list">
           <Toggle
-            label="Order updates"
-            description="Delivery and pickup status changes"
+            label={t('account.prefOrderUpdates')}
+            description={t('account.prefOrderUpdatesDesc')}
             checked={prefs.notifications.orderUpdates}
             onChange={(v) => handleChange('notifications', { orderUpdates: v })}
           />
           <Toggle
-            label="Email receipts and summaries"
-            description="Sent to your account email"
+            label={t('account.prefEmail')}
+            description={t('account.prefEmailDesc')}
             checked={prefs.notifications.email}
             onChange={(v) => handleChange('notifications', { email: v })}
           />
           <Toggle
-            label="Promotional offers"
-            description="Special deals and discounts"
+            label={t('account.prefPromotions')}
+            description={t('account.prefPromotionsDesc')}
             checked={prefs.notifications.promotions}
             onChange={(v) => handleChange('notifications', { promotions: v })}
           />
           {account.emailVerified && (
             <Toggle
-              label="Weekly offers digest"
-              description="A weekly roundup of new offers"
+              label={t('account.prefOffers')}
+              description={t('account.prefOffersDesc')}
               checked={prefs.notifications.offers}
               onChange={(v) => handleChange('notifications', { offers: v })}
             />
@@ -103,13 +102,13 @@ function SettingsPage() {
       <div className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faGear} /> Privacy
+            <FontAwesomeIcon icon={faGear} /> {t('account.privacyTitle')}
           </h3>
         </div>
         <div className="dash-toggle-list">
           <Toggle
-            label="Share usage data"
-            description="Help us improve by sharing anonymous usage data"
+            label={t('account.prefShareUsage')}
+            description={t('account.prefShareUsageDesc')}
             checked={prefs.privacy.shareUsageData}
             onChange={(v) => handleChange('privacy', { shareUsageData: v })}
           />
@@ -119,21 +118,19 @@ function SettingsPage() {
       <div className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faLanguage} /> Language
+            <FontAwesomeIcon icon={faLanguage} /> {t('account.languageTitle')}
           </h3>
         </div>
-        <p className="dash-card-sub">
-          The storefront currently ships in English only.
-        </p>
+        <p className="dash-card-sub">{t('account.languageNote')}</p>
         <div className="dash-field">
           <select
             value={prefs.language}
             onChange={(event) => handleChange('language', event.target.value)}
-            aria-label="Preferred language"
+            aria-label={t('account.preferredLanguageAria')}
           >
-            <option value="en">English</option>
+            <option value="en">{t('account.languageEnglish')}</option>
             <option value="ar" disabled>
-              العربية (coming soon)
+              {t('account.languageArabicComingSoon')}
             </option>
           </select>
         </div>

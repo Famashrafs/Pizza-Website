@@ -6,9 +6,11 @@ import {
   faTriangleExclamation,
   faPenToSquare,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import Avatar from './Avatar';
 
 function AccountHeader({ account }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -20,15 +22,16 @@ function AccountHeader({ account }) {
           size="lg"
         />
         <div>
-          <h1>{account?.name || 'My Account'}</h1>
+          <h1>{account?.name || t('account.myAccount')}</h1>
           <p className="dash-header-email">{account?.email}</p>
           {account?.emailVerified ? (
             <span className="dash-verify-badge verified">
-              <FontAwesomeIcon icon={faCheckCircle} /> Email verified
+              <FontAwesomeIcon icon={faCheckCircle} /> {t('account.emailVerified')}
             </span>
           ) : (
             <span className="dash-verify-badge unverified">
-              <FontAwesomeIcon icon={faTriangleExclamation} /> Email not verified
+              <FontAwesomeIcon icon={faTriangleExclamation} />{' '}
+              {t('account.emailNotVerified')}
             </span>
           )}
         </div>
@@ -38,7 +41,7 @@ function AccountHeader({ account }) {
         className="dash-edit-btn"
         onClick={() => navigate('/account/profile')}
       >
-        <FontAwesomeIcon icon={faPenToSquare} /> Edit Profile
+        <FontAwesomeIcon icon={faPenToSquare} /> {t('account.editProfile')}
       </button>
     </div>
   );

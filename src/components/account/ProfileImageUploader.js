@@ -6,16 +6,21 @@ import {
   faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
 const MAX_DIMENSION = 320;
 
+// Internal marker for a failed file read. The message shown to the user is
+// translated at the catch site.
+const FILE_READ_ERROR = 'file-read-error';
+
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Unable to read the selected file.'));
+    reader.onerror = () => reject(new Error(FILE_READ_ERROR));
     reader.readAsDataURL(file);
   });
 }
@@ -46,6 +51,7 @@ function downscale(fallbackUrl) {
 }
 
 function ProfileImageUploader({ photoURL, onSave, onRemove }) {
+  const { t } = useTranslation();
   const inputRef = useRef(null);
   const [phase, setPhase] = useState('idle'); // idle | editing | uploading
   const [preview, setPreview] = useState('');
@@ -65,11 +71,11 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
     if (!file) return;
     setError('');
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError('Please choose a JPG, PNG or WebP image.');
+      setError(t('account.errorImageType'));
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
-      setError('That image is larger than 4 MB. Please choose a smaller one.');
+      setError(t('account.errorImageSize'));
       return;
     }
     try {
@@ -77,7 +83,11 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
       setPreview(raw);
       setPhase('editing');
     } catch (err) {
-      setError(err.message || 'Unable to load the selected image.');
+      setError(
+        err.message === FILE_READ_ERROR
+          ? t('account.errorReadFile')
+          : t('account.errorLoadImage')
+      );
     }
   };
 
@@ -97,7 +107,7 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
       reset();
     } catch (err) {
       window.clearInterval(timer);
-      setError(err.message || 'We could not save the image. Please try again.');
+      setError(t('account.errorSaveImage'));
       setPhase('editing');
     }
   };
@@ -106,9 +116,9 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
     <div className="dash-uploader">
       <div className="dash-uploader-preview">
         {preview ? (
-          <img src={preview} alt="Profile preview" />
+          <img src={preview} alt={t('account.profilePreviewAlt')} />
         ) : photoURL ? (
-          <img src={photoURL} alt="Profile" />
+          <img src={photoURL} alt={t('account.profileAlt')} />
         ) : (
           <span className="dash-uploader-none">
             <FontAwesomeIcon icon={faCamera} />
@@ -127,7 +137,7 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
         accept={ACCEPTED_TYPES.join(',')}
         onChange={handleSelect}
         style={{ display: 'none' }}
-        aria-label="Choose a profile picture"
+        aria-label={t('account.chooseProfilePictureAria')}
       />
 
       {phase === 'editing' ? (
@@ -138,7 +148,7 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
             onClick={handleSave}
             disabled={phase === 'uploading'}
           >
-            {phase === 'uploading' ? 'Saving…' : 'Save Photo'}
+            {phase === 'uploading' ? t('account.saving') : t('account.savePhoto')}
           </button>
           <button
             type="button"
@@ -146,7 +156,7 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
             onClick={reset}
             disabled={phase === 'uploading'}
           >
-            <FontAwesomeIcon icon={faXmark} /> Cancel
+            <FontAwesomeIcon icon={faXmark} /> {t('common.actions.cancel')}
           </button>
         </div>
       ) : (
@@ -156,7 +166,7 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
             className="menu-btn dash-btn-sm"
             onClick={() => inputRef.current?.click()}
           >
-            <FontAwesomeIcon icon={faCamera} /> Change Profile Picture
+            <FontAwesomeIcon icon={faCamera} /> {t('account.changeProfilePicture')}
           </button>
           {photoURL && (
             <button
@@ -167,17 +177,14 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
                 reset();
               }}
             >
-              <FontAwesomeIcon icon={faTrash} /> Remove Profile Picture
+              <FontAwesomeIcon icon={faTrash} /> {t('account.removeProfilePicture')}
             </button>
           )}
         </>
       )}
 
       {error && <p className="dash-field-error">{error}</p>}
-      <p className="dash-uploader-note">
-        JPG, PNG or WebP up to 4 MB. Your picture is stored locally with your
-        account and shown when you return.
-      </p>
+      <p className="dash-uploader-note">{t('account.uploaderNote')}</p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileInvoice } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../hooks/useOrders';
 import { reorder, cancelOrder } from '../../services/orderService';
@@ -12,6 +13,7 @@ import OrderCard from '../../components/account/OrderCard';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
 function OrdersSection() {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const { addItem } = useCart();
@@ -28,14 +30,14 @@ function OrdersSection() {
       items.forEach((item) => addItem(item));
       if (unavailable.length) {
         showToast(
-          `${unavailable.length} item(s) were unavailable and skipped.`,
+          t('account.toastItemsSkipped', { count: unavailable.length }),
           'warning'
         );
       } else {
-        showToast('Items added to your cart.');
+        showToast(t('account.toastItemsAddedToCart'));
       }
     } catch (err) {
-      showToast('We could not reorder this order. Please try again.', 'error');
+      showToast(t('account.toastReorderFailed'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -47,13 +49,13 @@ function OrdersSection() {
     try {
       const result = await cancelOrder(order.id, uid);
       if (result.success) {
-        showToast('Your order was cancelled.');
+        showToast(t('account.toastOrderCancelled'));
         reload();
       } else {
-        showToast(result.error || 'We could not cancel this order.', 'error');
+        showToast(result.error || t('account.toastCancelFailed'), 'error');
       }
     } catch (err) {
-      showToast('We could not cancel this order. Please try again.', 'error');
+      showToast(t('account.toastCancelFailedRetry'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -62,8 +64,8 @@ function OrdersSection() {
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Orders"
-        subtitle="Track, reorder or cancel your past orders"
+        title={t('account.navOrders')}
+        subtitle={t('account.ordersSubtitle')}
       />
 
       {status === 'loading' && (
@@ -77,10 +79,10 @@ function OrdersSection() {
         <div className="dash-card">
           <div className="dash-empty">
             <FontAwesomeIcon icon={faFileInvoice} className="dash-empty-icon" />
-            <p>Something went wrong loading your orders.</p>
+            <p>{t('account.ordersLoadError')}</p>
             <p className="dash-form-note">{error}</p>
             <button type="button" className="menu-btn dash-btn-sm" onClick={reload}>
-              Try Again
+              {t('common.actions.retry')}
             </button>
           </div>
         </div>
@@ -90,12 +92,12 @@ function OrdersSection() {
         <div className="dash-card">
           <div className="dash-empty">
             <FontAwesomeIcon icon={faFileInvoice} className="dash-empty-icon" />
-            <p>No orders yet.</p>
+            <p>{t('account.noOrdersYet')}</p>
             <p className="dash-form-note">
-              Your past orders will appear here once you place one.
+              {t('account.pastOrdersHint')}
             </p>
             <Link to="/menu" className="contact-btn dash-btn-sm">
-              Browse Menu
+              {t('account.browseMenu')}
             </Link>
           </div>
         </div>
@@ -115,11 +117,9 @@ function OrdersSection() {
 
       {pendingCancel && (
         <ConfirmDialog
-          title="Cancel this order?"
-          message={`Order ${
-            pendingCancel.id
-          } will be cancelled and its items will not be prepared.`}
-          confirmLabel="Cancel Order"
+          title={t('account.cancelOrderTitle')}
+          message={t('account.cancelOrderMessage', { id: pendingCancel.id })}
+          confirmLabel={t('account.cancelOrder')}
           danger
           onConfirm={() => handleCancel(pendingCancel)}
           onCancel={() => setPendingCancel(null)}

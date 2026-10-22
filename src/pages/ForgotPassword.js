@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 function ForgotPassword() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const { forgotPassword, authError } = useAuth();
@@ -14,28 +16,33 @@ function ForgotPassword() {
     const result = await forgotPassword(email);
     if (result.success) {
       setSent(true);
-      showToast('Password reset email sent!');
+      showToast(t('auth.toastResetEmailSent'));
     }
   };
 
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">RESET PASSWORD</h1>
+        <h1 className="landing-title">
+          {t('auth.pageTitleResetPassword')}
+        </h1>
       </div>
       <div className="auth-card">
-        <h2>Forgot Password</h2>
+        <h2>{t('auth.headingForgotPassword')}</h2>
         <p className="auth-subtitle">
-          Enter your email and we'll send you a reset link.
+          {t('auth.subtitleForgotPassword')}
         </p>
         {sent ? (
           <>
             <div className="auth-success">
-              We've sent a reset link to <strong>{email}</strong>. Check your
-              inbox.
+              <Trans
+                i18nKey="auth.resetLinkSent"
+                values={{ email }}
+                components={{ strong: <strong /> }}
+              />
             </div>
             <Link to="/login" className="contact-btn empty-cart-btn">
-              Back to Login
+              {t('auth.buttonBackToLogin')}
             </Link>
           </>
         ) : (
@@ -44,17 +51,18 @@ function ForgotPassword() {
             <form className="auth-form" onSubmit={handleSubmit}>
               <input
                 type="email"
-                placeholder="Email"
+                placeholder={t('auth.fieldEmail')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
               <button type="submit" className="contact-btn">
-                Send Reset Link
+                {t('auth.buttonSendResetLink')}
               </button>
             </form>
             <p className="auth-switch">
-              Remembered? <Link to="/login">Login</Link>
+              {t('auth.promptRemembered')}{' '}
+              <Link to="/login">{t('auth.linkLogin')}</Link>
             </p>
           </>
         )}

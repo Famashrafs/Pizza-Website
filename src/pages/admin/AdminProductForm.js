@@ -4,6 +4,7 @@ import { useRestaurantProducts } from '../../hooks/useRestaurantProducts';
 import { useRestaurantCategories } from '../../hooks/useRestaurantCategories';
 import { createProduct, updateProduct } from '../../services/menuService';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import ProductForm from '../../components/admin/ProductForm';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import SectionTitle from '../../components/account/SectionTitle';
@@ -25,6 +26,7 @@ function FormSkeleton() {
 // Hosts the shared ProductForm for both create and edit. Persists through the
 // menu service and sends the owner back to the menu with a confirmation.
 function AdminProductForm() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const isEdit = Boolean(id);
   const { restaurant } = useOutletContext();
@@ -39,29 +41,29 @@ function AdminProductForm() {
 
   const handleSubmit = async (values) => {
     if (!restaurantId) {
-      return { success: false, error: 'Your restaurant is not ready yet.' };
+      return { success: false, error: t('admin.errorRestaurantNotReady') };
     }
 
     try {
       if (isEdit) {
         const updated = await updateProduct(id, values);
-        if (!updated) return { success: false, error: 'Product not found.' };
-        showToast(`${updated.name} updated.`);
+        if (!updated) return { success: false, error: t('admin.errorProductNotFound') };
+        showToast(t('admin.toastProductUpdated', { name: updated.name }));
       } else {
         const created = await createProduct(values, restaurantId);
-        showToast(`${created.name} added to your menu.`);
+        showToast(t('admin.toastProductAdded', { name: created.name }));
       }
       navigate('/admin/menu');
       return { success: true };
     } catch (err) {
-      return { success: false, error: err.message || 'Could not save the product.' };
+      return { success: false, error: err.message || t('admin.errorSaveProduct') };
     }
   };
 
   if (isEdit && status === 'loading') {
     return (
       <div className="admin-overview">
-        <SectionTitle title="Edit product" subtitle="Loading product…" />
+        <SectionTitle title={t('admin.editProduct')} subtitle={t('admin.loadingProduct')} />
         <FormSkeleton />
       </div>
     );
@@ -70,7 +72,7 @@ function AdminProductForm() {
   if (isEdit && status === 'error') {
     return (
       <div className="admin-overview">
-        <SectionTitle title="Edit product" />
+        <SectionTitle title={t('admin.editProduct')} />
         <div className="admin-panel">
           <AdminErrorState message={error} onRetry={reload} />
         </div>
@@ -81,10 +83,10 @@ function AdminProductForm() {
   if (isEdit && status === 'success' && !product) {
     return (
       <div className="admin-overview">
-        <SectionTitle title="Edit product" />
+        <SectionTitle title={t('admin.editProduct')} />
         <div className="admin-panel">
           <AdminErrorState
-            message="We couldn't find that product. It may have been deleted."
+            message={t('admin.errorProductNotFoundLong')}
             onRetry={() => navigate('/admin/menu')}
           />
         </div>
@@ -95,12 +97,8 @@ function AdminProductForm() {
   return (
     <div className="admin-overview">
       <SectionTitle
-        title={isEdit ? 'Edit product' : 'Add product'}
-        subtitle={
-          isEdit
-            ? 'Update the details customers see on your menu.'
-            : 'Create a new item for your menu.'
-        }
+        title={isEdit ? t('admin.editProduct') : t('admin.addProductTitle')}
+        subtitle={isEdit ? t('admin.editProductSubtitle') : t('admin.addProductSubtitle')}
       />
       <ProductForm
         product={product}

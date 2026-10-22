@@ -8,6 +8,7 @@ import {
   faEnvelope,
   faKey,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import ProfileImageUploader from '../../components/account/ProfileImageUploader';
@@ -19,6 +20,7 @@ import {
 } from '../../services/accountService';
 
 function ProfilePage() {
+  const { t } = useTranslation();
   const { currentUser, userProfile, updateProfileData, resendVerificationEmail, changeEmail } =
     useAuth();
   const { showToast } = useToast();
@@ -46,9 +48,9 @@ function ProfilePage() {
     const result = await updateProfileData({ displayName: name.trim() });
     setSaving(false);
     if (result.success) {
-      showToast('Profile updated successfully.');
+      showToast(t('account.toastProfileUpdated'));
     } else {
-      showToast(result.error || 'Unable to update your profile.', 'error');
+      showToast(result.error || t('account.toastProfileUpdateFailed'), 'error');
     }
   };
 
@@ -57,15 +59,15 @@ function ProfilePage() {
     const result = await updateProfileData({ photoURL: dataUrl });
     setPhotoSaving(false);
     if (result.success) {
-      showToast('Profile picture updated.');
+      showToast(t('account.toastProfilePictureUpdated'));
     } else {
-      setPhotoError(result.error || 'Unable to update your profile picture.');
+      setPhotoError(result.error || t('account.toastProfilePictureFailed'));
     }
   };
 
   const handleRemovePhoto = async () => {
     const result = await updateProfileData({ photoURL: '' });
-    if (result.success) showToast('Profile picture removed.');
+    if (result.success) showToast(t('account.toastProfilePictureRemoved'));
   };
 
   const handleVerifyEmail = async () => {
@@ -73,10 +75,10 @@ function ProfilePage() {
     const result = await resendVerificationEmail();
     setVerifyBusy(false);
     if (result.success) {
-      showToast('Verification email sent. Check your inbox.');
+      showToast(t('account.toastVerificationEmailSent'));
     } else {
       showToast(
-        result.error || 'Unable to send the verification email.',
+        result.error || t('account.toastVerificationEmailFailed'),
         'error'
       );
     }
@@ -89,27 +91,28 @@ function ProfilePage() {
     const result = await changeEmail(newEmail.trim(), emailPassword);
     setEmailBusy(false);
     if (result.success) {
-      showToast(
-        'Email updated. A verification email was sent to your new address.'
-      );
+      showToast(t('account.toastEmailUpdated'));
       setEmailMode('view');
       setNewEmail('');
       setEmailPassword('');
     } else {
-      showToast(result.error || 'Unable to update your email.', 'error');
+      showToast(result.error || t('account.toastEmailUpdateFailed'), 'error');
     }
   };
 
   const handleSetDefaultAddress = (id) => {
     setDefaultAddress(uid, id);
-    showToast('Default address updated.');
+    showToast(t('account.toastDefaultAddressUpdated'));
   };
 
   const normalized = normalizeAccount(uid, currentUser, userProfile);
 
   return (
     <div className="dash-section">
-      <SectionTitle title="Profile" subtitle="Manage your personal information" />
+      <SectionTitle
+        title={t('account.navProfile')}
+        subtitle={t('account.profileSubtitle')}
+      />
 
       <div className="dash-card dash-profile-layout">
         <div className="dash-profile-photo">
@@ -123,14 +126,14 @@ function ProfilePage() {
           )}
           {photoSaving && (
             <p className="dash-form-note">
-              <FontAwesomeIcon icon={faSpinner} spin /> Uploading…
+              <FontAwesomeIcon icon={faSpinner} spin /> {t('account.uploading')}
             </p>
           )}
         </div>
 
         <form onSubmit={handleSaveProfile} className="dash-form">
           <div className="dash-field">
-            <label htmlFor="profile-name">Full name</label>
+            <label htmlFor="profile-name">{t('account.fullName')}</label>
             <input
               id="profile-name"
               type="text"
@@ -141,7 +144,7 @@ function ProfilePage() {
           </div>
 
           <div className="dash-field">
-            <label htmlFor="profile-phone">Phone number</label>
+            <label htmlFor="profile-phone">{t('account.phoneNumber')}</label>
             <div className="dash-phone-summary">
               <input
                 id="profile-phone"
@@ -149,34 +152,34 @@ function ProfilePage() {
                 value={normalized.phone}
                 readOnly
                 tabIndex={-1}
-                aria-label="Phone number"
+                aria-label={t('account.phoneNumber')}
               />
               {normalized.phoneVerified ? (
                 <span className="dash-verify-badge verified">
-                  <FontAwesomeIcon icon={faCheckCircle} /> Verified
+                  <FontAwesomeIcon icon={faCheckCircle} /> {t('account.verified')}
                 </span>
               ) : (
                 <Link
                   to="/account/security"
                   className="dash-inline-verify"
                 >
-                  <FontAwesomeIcon icon={faTriangleExclamation} /> Verify phone
-                  to receive SMS updates
+                  <FontAwesomeIcon icon={faTriangleExclamation} />{' '}
+                  {t('account.verifyPhoneForUpdates')}
                 </Link>
               )}
             </div>
             <p className="dash-form-note">
-              Phone verification lives under Security.
+              {t('account.phoneVerificationUnderSecurity')}
             </p>
           </div>
 
           <div className="dash-field">
-            <label>Default address</label>
+            <label>{t('account.defaultAddress')}</label>
             {addresses.length === 0 ? (
               <p className="dash-field-error">
-                No saved addresses yet.{' '}
-                <Link to="/account/addresses">Add an address</Link> for faster
-                checkout.
+                {t('account.noSavedAddressesYet')}{' '}
+                <Link to="/account/addresses">{t('account.addAnAddress')}</Link>{' '}
+                {t('account.forFasterCheckout')}
               </p>
             ) : (
               <select
@@ -203,10 +206,10 @@ function ProfilePage() {
           >
             {saving ? (
               <>
-                <FontAwesomeIcon icon={faSpinner} spin /> Saving…
+                <FontAwesomeIcon icon={faSpinner} spin /> {t('account.saving')}
               </>
             ) : (
-              'Save Changes'
+              t('account.saveChanges')
             )}
           </button>
         </form>
@@ -215,7 +218,7 @@ function ProfilePage() {
       <div className="dash-card dash-email-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faEnvelope} /> Email
+            <FontAwesomeIcon icon={faEnvelope} /> {t('account.emailTitle')}
           </h3>
         </div>
         <div className="dash-email-row">
@@ -223,12 +226,13 @@ function ProfilePage() {
             <p className="dash-email-address">{normalized.email}</p>
             {normalized.emailVerified ? (
               <span className="dash-verify-badge verified">
-                <FontAwesomeIcon icon={faCheckCircle} /> Email verified
+                <FontAwesomeIcon icon={faCheckCircle} />{' '}
+                {t('account.emailVerified')}
               </span>
             ) : (
               <span className="dash-verify-badge unverified">
-                <FontAwesomeIcon icon={faTriangleExclamation} /> Email not
-                verified
+                <FontAwesomeIcon icon={faTriangleExclamation} />{' '}
+                {t('account.emailNotVerified')}
               </span>
             )}
           </div>
@@ -240,7 +244,7 @@ function ProfilePage() {
                 onClick={handleVerifyEmail}
                 disabled={verifyBusy}
               >
-                {verifyBusy ? 'Sending…' : 'Verify Email'}
+                {verifyBusy ? t('account.sending') : t('account.verifyEmail')}
               </button>
             )}
             <button
@@ -248,7 +252,9 @@ function ProfilePage() {
               className="menu-btn dash-btn-sm"
               onClick={() => setEmailMode(emailMode === 'view' ? 'change' : 'view')}
             >
-              {emailMode === 'view' ? 'Change Email' : 'Cancel'}
+              {emailMode === 'view'
+                ? t('account.changeEmail')
+                : t('common.actions.cancel')}
             </button>
           </div>
         </div>
@@ -256,12 +262,10 @@ function ProfilePage() {
         {emailMode === 'change' && (
           <form onSubmit={handleChangeEmail} className="dash-form dash-email-change">
             <p className="dash-form-note">
-              <FontAwesomeIcon icon={faKey} /> To change your email you must
-              confirm with your current password. Your new address will not be
-              treated as verified until you confirm it.
+              <FontAwesomeIcon icon={faKey} /> {t('account.emailChangeNote')}
             </p>
             <div className="dash-field">
-              <label htmlFor="new-email">New email</label>
+              <label htmlFor="new-email">{t('account.newEmail')}</label>
               <input
                 id="new-email"
                 type="email"
@@ -271,7 +275,9 @@ function ProfilePage() {
               />
             </div>
             <div className="dash-field">
-              <label htmlFor="email-password">Current password</label>
+              <label htmlFor="email-password">
+                {t('account.currentPassword')}
+              </label>
               <input
                 id="email-password"
                 type="password"
@@ -288,10 +294,10 @@ function ProfilePage() {
             >
               {emailBusy ? (
                 <>
-                  <FontAwesomeIcon icon={faSpinner} spin /> Updating…
+                  <FontAwesomeIcon icon={faSpinner} spin /> {t('account.updating')}
                 </>
               ) : (
-                'Update Email'
+                t('account.updateEmail')
               )}
             </button>
           </form>

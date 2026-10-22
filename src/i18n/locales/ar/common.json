@@ -1,0 +1,116 @@
+{
+  "app": {
+    "name": "بيتزا",
+    "tagline": "مطبخ الحطب والتوصيل"
+  },
+  "actions": {
+    "save": "حفظ",
+    "saveChanges": "حفظ التغييرات",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "delete": "حذف",
+    "remove": "إزالة",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "back": "رجوع",
+    "next": "التالي",
+    "continue": "متابعة",
+    "submit": "إرسال",
+    "retry": "حاول مرة أخرى",
+    "dismiss": "إخفاء",
+    "apply": "تطبيق",
+    "clear": "مسح",
+    "search": "بحث",
+    "viewAll": "عرض الكل",
+    "seeMore": "عرض المزيد",
+    "loading": "جارٍ التحميل…",
+    "optional": "اختياري",
+    "required": "مطلوب"
+  },
+  "states": {
+    "empty": "لا يوجد شيء هنا بعد",
+    "error": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "loading": "جارٍ التحميل…",
+    "noResults": "لا توجد نتائج"
+  },
+  "a11y": {
+    "dismiss": "إخفاء",
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل",
+    "requiredField": "حقل مطلوب",
+    "confirmTitle": "هل أنت متأكد؟"
+  },
+  "guard": {
+    "manageProfile": "سجّل الدخول لإدارة ملفك الشخصي",
+    "viewOrders": "سجّل الدخول لعرض طلباتك",
+    "trackOrder": "سجّل الدخول لتتبّع طلبك",
+    "manageAddresses": "سجّل الدخول لإدارة عناوينك",
+    "viewFavorites": "سجّل الدخول لعرض مفضلاتك"
+  },
+  "comingSoon": {
+    "couponsTitle": "القسائم",
+    "couponsDescription": "أنشئ وأدر رموز الخصم والعروض الترويجية. سيُبنى هذا القسم في المرحلة القادمة.",
+    "reviewsTitle": "التقييمات",
+    "reviewsDescription": "اقرأ تقييمات العملاء وردّ عليها. سيُبنى هذا القسم في المرحلة القادمة."
+  },
+  "orderStatus": {
+    "placed": "تم استلام الطلب",
+    "confirmed": "تم التأكيد",
+    "preparing": "قيد التحضير",
+    "ready": "جاهز للاستلام",
+    "out_for_delivery": "في الطريق إليك",
+    "delivered": "تم التوصيل",
+    "cancelled": "ملغي"
+  },
+  "orderStatusDescription": {
+    "placed": "استلمنا طلبك وسنؤكده قريبًا.",
+    "confirmed": "تم تأكيد طلبك.",
+    "preparing": "مطبخنا يعمل على تحضير طلبك.",
+    "ready": "طلبك جاهز للاستلام.",
+    "out_for_delivery": "طلبك في الطريق إليك.",
+    "delivered": "شهيك! تم توصيل طلبك.",
+    "cancelled": "تم إلغاء هذا الطلب."
+  },
+  "paymentStatus": {
+    "pending": "قيد الانتظار",
+    "paid": "مدفوع",
+    "unpaid": "غير مدفوع",
+    "failed": "فشل",
+    "refunded": "مسترد"
+  },
+  "errors": {
+    "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "network": "مشكلة في الشبكة. يرجى التحقق من اتصالك والمحاولة مرة أخرى.",
+    "notFound": "تعذر العثور على ما تبحث عنه.",
+    "signInRequired": "يجب تسجيل الدخول للمتابعة.",
+    "permission": "ليست لديك صلاحية للقيام بذلك.",
+    "somethingWrong": "حدث خطأ ما أثناء تحميل هذا القسم."
+  },
+  "units": {
+    "items_zero": "{{count}} عنصر",
+    "items_one": "عنصر واحد",
+    "items_two": "عنصران",
+    "items_few": "{{count}} عناصر",
+    "items_many": "{{count}} عنصرًا",
+    "items_other": "{{count}} عنصر",
+    "orders_zero": "{{count}} طلب",
+    "orders_one": "طلب واحد",
+    "orders_two": "طلبان",
+    "orders_few": "{{count}} طلبات",
+    "orders_many": "{{count}} طلبًا",
+    "orders_other": "{{count}} طلب",
+    "minutes_zero": "{{count}} دقيقة",
+    "minutes_one": "دقيقة واحدة",
+    "minutes_two": "دقيقتان",
+    "minutes_few": "{{count}} دقائق",
+    "minutes_many": "{{count}} دقيقة",
+    "minutes_other": "{{count}} دقيقة",
+    "toppings_zero": "لا إضافات",
+    "toppings_one": "إضافة واحدة",
+    "toppings_two": "إضافتان",
+    "toppings_few": "{{count}} إضافات",
+    "toppings_many": "{{count}} إضافة",
+    "toppings_other": "{{count}} إضافة"
+  }
+}

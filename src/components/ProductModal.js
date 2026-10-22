@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faXmark,
   faStar,
@@ -14,17 +15,11 @@ import {
   resolveSize,
   validateConfiguration,
 } from '../utils/cartItem';
+import { formatMoney } from '../i18n/format';
 
 const MAX_INSTRUCTIONS = 200;
-const INSTRUCTION_SUGGESTIONS = ['No onions', 'Extra crispy', 'Cut into 8 pieces'];
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const formatAdjust = (value) => {
-  const amount = Number(value) || 0;
-  if (amount === 0) return 'Included';
-  return `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}`;
-};
 
 function ProductModal({
   product,
@@ -33,6 +28,7 @@ function ProductModal({
   onClose,
   onConfirm,
 }) {
+  const { t, i18n } = useTranslation();
   const sizes = product.sizes || [];
   const crusts = (product.crusts || []).filter(
     (crustOption) => crustOption.available !== false
@@ -58,6 +54,52 @@ function ProductModal({
     () => initialConfig?.instructions || ''
   );
   const [showErrors, setShowErrors] = useState(false);
+
+  const instructionSuggestions = [
+    t('menu.suggestionNoOnions'),
+    t('menu.suggestionExtraCrispy'),
+    t('menu.suggestionCutInto8'),
+  ];
+
+  const formatAdjust = (value) => {
+    const amount = Number(value) || 0;
+    if (amount === 0) return t('menu.included');
+    const price = formatMoney(Math.abs(amount), i18n.language);
+    return amount > 0
+      ? t('menu.pricePlus', { price })
+      : t('menu.priceAdjustMinus', { price });
+  };
+
+  const translateValidationError = (error) => {
+    const message = String(error);
+    let match = message.match(/^Remove unavailable toppings:\s*(.+)\.$/);
+    if (match) {
+      return t('menu.errorRemoveUnavailableToppings', { toppings: match[1] });
+    }
+    match = message.match(/^Choose at most (\d+) toppings?\.$/);
+    if (match) {
+      return t('menu.errorMaxToppings', { count: Number(match[1]) });
+    }
+    match = message.match(
+      /^Special instructions must be (\d+) characters? or fewer\.$/
+    );
+    if (match) {
+      return t('menu.errorInstructionsLength', { count: Number(match[1]) });
+    }
+    if (message === 'Please select a size.') {
+      return t('menu.errorSelectSize');
+    }
+    if (message === 'Please select a crust.') {
+      return t('menu.errorSelectCrust');
+    }
+    if (message === 'One or more selected toppings are no longer available.') {
+      return t('menu.errorToppingsUnavailable');
+    }
+    if (message === 'Quantity must be a whole number of at least 1.') {
+      return t('menu.errorQuantity');
+    }
+    return message;
+  };
 
   const dialogRef = useRef(null);
   const previouslyFocused = useRef(null);
@@ -188,7 +230,7 @@ function ProductModal({
           type="button"
           className="modal-close"
           onClick={onClose}
-          aria-label="Close customization dialog"
+          aria-label={t('menu.ariaCloseModal')}
         >
           <FontAwesomeIcon icon={faXmark} />
         </button>
@@ -220,7 +262,7 @@ function ProductModal({
 
             {sizes.length > 0 && (
               <fieldset className="option-group">
-                <legend>Size</legend>
+                <legend>{t('menu.size')}</legend>
                 <div className="choice-row">
                   {sizes.map((option) => {
                     const active = Boolean(size) && size.label === option.label;
@@ -254,7 +296,7 @@ function ProductModal({
 
             {crusts.length > 0 && (
               <fieldset className="option-group">
-                <legend>Crust</legend>
+                <legend>{t('menu.crust')}</legend>
                 <div className="choice-row">
                   {crusts.map((option) => {
                     const active = Boolean(crust) && crust.id === option.id;
@@ -289,7 +331,7 @@ function ProductModal({
             {toppingsList.length > 0 && (
               <fieldset className="option-group">
                 <legend>
-                  Extra toppings
+                  {t('menu.extraToppings')}
                   {maxToppings > 0 && (
                     <span className={`option-count ${atMax ? 'at-max' : ''}`}>
                       {selectedToppingIds.length}/{maxToppings}
@@ -313,15 +355,21 @@ function ProductModal({
                           checked={checked}
                           disabled={disabled}
                           onChange={() => toggleTopping(option.id)}
-                          aria-label={`${option.name}${
-                            unavailable ? ' (unavailable)' : ''
-                          }`}
+                          aria-label={
+                            unavailable
+                              ? t('menu.ariaToppingUnavailable', {
+                                  name: option.name,
+                                })
+                              : option.name
+                          }
                         />
                         <span className="topping-name">{option.name}</span>
                         <small className="topping-price">
                           {unavailable
-                            ? 'Sold out'
-                            : `+$${option.price.toFixed(2)}`}
+                            ? t('menu.soldOut')
+                            : t('menu.pricePlus', {
+                                price: formatMoney(option.price, i18n.language),
+                              })}
                         </small>
                       </label>
                     );
@@ -330,8 +378,8 @@ function ProductModal({
                 {maxToppings > 0 && (
                   <p className={`option-note ${atMax ? 'at-max' : ''}`}>
                     {atMax
-                      ? `Maximum of ${maxToppings} toppings reached.`
-                      : `Choose up to ${maxToppings} toppings.`}
+                      ? t('menu.maxToppingsReached', { count: maxToppings })
+                      : t('menu.chooseUpToToppings', { count: maxToppings })}
                   </p>
                 )}
               </fieldset>
@@ -339,13 +387,13 @@ function ProductModal({
 
             <div className="option-group">
               <label className="option-legend" htmlFor="product-instructions">
-                Special instructions
+                {t('menu.specialInstructions')}
               </label>
               <textarea
                 id="product-instructions"
                 className="instructions-input"
                 maxLength={MAX_INSTRUCTIONS}
-                placeholder="e.g. No onions, extra crispy, cut into 8 pieces"
+                placeholder={t('menu.instructionsPlaceholder')}
                 value={instructions}
                 onChange={(event) =>
                   setInstructions(event.target.value.slice(0, MAX_INSTRUCTIONS))
@@ -353,7 +401,7 @@ function ProductModal({
                 aria-describedby="product-instructions-meta"
               />
               <div className="instructions-suggestions">
-                {INSTRUCTION_SUGGESTIONS.map((text) => {
+                {instructionSuggestions.map((text) => {
                   const active = instructions.includes(text);
                   return (
                     <button
@@ -376,7 +424,7 @@ function ProductModal({
             {showErrors && !validation.valid && (
               <div className="modal-error" role="alert">
                 {validation.errors.map((error) => (
-                  <p key={error}>{error}</p>
+                  <p key={error}>{translateValidationError(error)}</p>
                 ))}
               </div>
             )}
@@ -384,17 +432,21 @@ function ProductModal({
 
           <div className="modal-foot">
             <div className="modal-total">
-              <span className="modal-total-label">Total</span>
-              <span className="modal-total-value">${total.toFixed(2)}</span>
-              <small>${unitPrice.toFixed(2)} each</small>
+              <span className="modal-total-label">{t('menu.total')}</span>
+              <span className="modal-total-value">
+                {formatMoney(total, i18n.language)}
+              </span>
+              <small>
+                {t('menu.priceEach', { price: formatMoney(unitPrice, i18n.language) })}
+              </small>
             </div>
 
-            <div className="qty-stepper" role="group" aria-label="Quantity">
+            <div className="qty-stepper" role="group" aria-label={t('menu.ariaQuantity')}>
               <button
                 type="button"
                 onClick={() => setQtyBy(-1)}
                 disabled={qty <= 1}
-                aria-label="Decrease quantity"
+                aria-label={t('menu.ariaDecreaseQuantity')}
               >
                 <FontAwesomeIcon icon={faMinus} />
               </button>
@@ -402,7 +454,7 @@ function ProductModal({
               <button
                 type="button"
                 onClick={() => setQtyBy(1)}
-                aria-label="Increase quantity"
+                aria-label={t('menu.ariaIncreaseQuantity')}
               >
                 <FontAwesomeIcon icon={faPlus} />
               </button>
@@ -414,7 +466,8 @@ function ProductModal({
               onClick={handleSubmit}
               aria-disabled={!validation.valid}
             >
-              {mode === 'edit' ? 'Update cart' : 'Add to cart'} · ${total.toFixed(2)}
+              {mode === 'edit' ? t('menu.updateCart') : t('menu.addToCart')} ·{' '}
+              {formatMoney(total, i18n.language)}
             </button>
           </div>
         </div>

@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye, faEyeSlash, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
+// The strength score drives the styling; `label` holds the translation key of
+// the human-readable strength so it can be localized.
 export function getPasswordStrength(password) {
   if (!password) return { score: 0, label: '', color: '' };
   let score = 0;
@@ -13,13 +16,20 @@ export function getPasswordStrength(password) {
   if (/\d/.test(password)) score += 1;
   if (/[^A-Za-z0-9]/.test(password)) score += 1;
   const label =
-    score <= 2 ? 'Weak' : score === 3 ? 'Fair' : score === 4 ? 'Good' : 'Strong';
+    score <= 2
+      ? 'account.strengthWeak'
+      : score === 3
+      ? 'account.strengthFair'
+      : score === 4
+      ? 'account.strengthGood'
+      : 'account.strengthStrong';
   const color =
     score <= 2 ? 'weak' : score === 3 ? 'fair' : score === 4 ? 'good' : 'strong';
   return { score: Math.min(4, score), label, color };
 }
 
 function PasswordChangeForm() {
+  const { t } = useTranslation();
   const { changePassword } = useAuth();
   const { showToast } = useToast();
 
@@ -37,14 +47,13 @@ function PasswordChangeForm() {
 
   const validate = () => {
     const errors = {};
-    if (!current) errors.current = 'Current password is required.';
-    if (!next) errors.next = 'New password is required.';
+    if (!current) errors.current = t('account.errorCurrentPasswordRequired');
+    if (!next) errors.next = t('account.errorNewPasswordRequired');
     else if (!meetsMinimums)
-      errors.next =
-        'New password must be at least 6 characters and include a letter and a number.';
-    if (next !== confirm) errors.confirm = 'Passwords do not match.';
+      errors.next = t('account.errorNewPasswordRules');
+    if (next !== confirm) errors.confirm = t('account.errorPasswordsDoNotMatch');
     if (next && next === current)
-      errors.next = 'New password must be different from the current password.';
+      errors.next = t('account.errorNewPasswordSame');
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -61,19 +70,19 @@ function PasswordChangeForm() {
       setNext('');
       setConfirm('');
       setFieldErrors({});
-      showToast('Your password has been changed successfully.');
-      setMessage(
-        'Password updated. You may need to sign in again on other devices.'
-      );
+      showToast(t('account.toastPasswordChanged'));
+      setMessage(t('account.passwordUpdatedNote'));
     } else {
-      setMessage(result.error || 'We could not change your password.');
+      setMessage(result.error || t('account.toastPasswordChangeFailed'));
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="dash-form dash-password">
       <div className="dash-field">
-        <label htmlFor="current-password">Current Password</label>
+        <label htmlFor="current-password">
+          {t('account.currentPasswordLabel')}
+        </label>
         <div className="dash-password-input">
           <input
             id="current-password"
@@ -86,7 +95,7 @@ function PasswordChangeForm() {
             type="button"
             className="dash-password-toggle"
             onClick={() => setShow(!show)}
-            aria-label={show ? 'Hide passwords' : 'Show passwords'}
+            aria-label={show ? t('account.hidePasswords') : t('account.showPasswords')}
           >
             <FontAwesomeIcon icon={show ? faEyeSlash : faEye} />
           </button>
@@ -97,7 +106,7 @@ function PasswordChangeForm() {
       </div>
 
       <div className="dash-field">
-        <label htmlFor="new-password">New Password</label>
+        <label htmlFor="new-password">{t('account.newPasswordLabel')}</label>
         <div className="dash-password-input">
           <input
             id="new-password"
@@ -110,17 +119,17 @@ function PasswordChangeForm() {
         {next && (
           <div className="dash-strength">
             <span className={`dash-strength-bar is-${strength.color}`} />
-            <span className="dash-strength-label">{strength.label}</span>
+            <span className="dash-strength-label">{t(strength.label)}</span>
           </div>
         )}
         <ul className="dash-password-reqs">
           <li className={next.length >= 6 ? 'met' : ''}>
-            At least 6 characters
+            {t('account.reqMinLength')}
           </li>
           <li className={/[A-Za-z]/.test(next) ? 'met' : ''}>
-            Contains a letter
+            {t('account.reqLetter')}
           </li>
-          <li className={/\d/.test(next) ? 'met' : ''}>Contains a number</li>
+          <li className={/\d/.test(next) ? 'met' : ''}>{t('account.reqNumber')}</li>
         </ul>
         {fieldErrors.next && (
           <p className="dash-field-error">{fieldErrors.next}</p>
@@ -128,7 +137,9 @@ function PasswordChangeForm() {
       </div>
 
       <div className="dash-field">
-        <label htmlFor="confirm-password">Confirm New Password</label>
+        <label htmlFor="confirm-password">
+          {t('account.confirmNewPasswordLabel')}
+        </label>
         <div className="dash-password-input">
           <input
             id="confirm-password"
@@ -150,17 +161,14 @@ function PasswordChangeForm() {
       >
         {busy ? (
           <>
-            <FontAwesomeIcon icon={faSpinner} spin /> Updating password…
+            <FontAwesomeIcon icon={faSpinner} spin /> {t('account.updatingPassword')}
           </>
         ) : (
-          'Change Password'
+          t('account.changePasswordButton')
         )}
       </button>
       {message && <p className="dash-form-message">{message}</p>}
-      <p className="dash-form-note">
-        For security, you will be asked to confirm your identity before the
-        password is changed.
-      </p>
+      <p className="dash-form-note">{t('account.passwordSecurityNote')}</p>
     </form>
   );
 }

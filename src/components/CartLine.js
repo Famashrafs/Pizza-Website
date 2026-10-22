@@ -6,6 +6,8 @@ import {
   faTrashCan,
   faPenToSquare,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
+import { formatMoney } from '../i18n/format';
 
 function CartLine({
   item,
@@ -16,6 +18,7 @@ function CartLine({
   onEdit,
   editing = false,
 }) {
+  const { t, i18n } = useTranslation();
   const optionSummary = [item.size, item.crust].filter(Boolean).join(' · ');
   const toppingSummary = (item.toppings || []).join(', ');
   const configurable = Boolean(onEdit);
@@ -31,27 +34,33 @@ function CartLine({
             type="button"
             className="cart-line-remove"
             onClick={() => onRemove?.(item)}
-            aria-label={`Remove ${item.name} from cart`}
+            aria-label={t('cart.ariaRemoveItem', { name: item.name })}
           >
             <FontAwesomeIcon icon={faTrashCan} />
-            <span>Remove</span>
+            <span>{t('common.actions.remove')}</span>
           </button>
         </div>
 
         {optionSummary && <p className="cart-line-config">{optionSummary}</p>}
         {toppingSummary && (
-          <p className="cart-line-config">Toppings: {toppingSummary}</p>
+          <p className="cart-line-config">
+            {t('cart.toppingsLabel', { toppings: toppingSummary })}
+          </p>
         )}
         {!optionSummary && !toppingSummary && item.desc && (
           <p className="cart-line-config">{item.desc}</p>
         )}
         {item.instructions && (
-          <p className="cart-line-notes">Note: “{item.instructions}”</p>
+          <p className="cart-line-notes">
+            {t('cart.noteLabel', { note: item.instructions })}
+          </p>
         )}
 
         <div className="cart-line-foot">
           <span className="cart-line-unit">
-            ${item.price.toFixed(2)} each
+            {t('cart.priceEach', {
+              price: formatMoney(item.price, i18n.language),
+            })}
           </span>
 
           <div className="cart-qty">
@@ -59,7 +68,7 @@ function CartLine({
               type="button"
               onClick={() => onDecrease?.(item)}
               disabled={item.qty <= 1}
-              aria-label={`Decrease quantity of ${item.name}`}
+              aria-label={t('cart.ariaDecreaseQty', { name: item.name })}
             >
               <FontAwesomeIcon icon={faMinus} />
             </button>
@@ -67,14 +76,14 @@ function CartLine({
             <button
               type="button"
               onClick={() => onIncrease?.(item)}
-              aria-label={`Increase quantity of ${item.name}`}
+              aria-label={t('cart.ariaIncreaseQty', { name: item.name })}
             >
               <FontAwesomeIcon icon={faPlus} />
             </button>
           </div>
 
           <span className="cart-line-total">
-            ${(item.lineTotal ?? item.price * item.qty).toFixed(2)}
+            {formatMoney(item.lineTotal ?? item.price * item.qty, i18n.language)}
           </span>
         </div>
 
@@ -86,7 +95,7 @@ function CartLine({
             disabled={editing}
           >
             <FontAwesomeIcon icon={faPenToSquare} />{' '}
-            {editing ? 'Loading…' : 'Edit options'}
+            {editing ? t('common.actions.loading') : t('cart.editOptions')}
           </button>
         )}
       </div>

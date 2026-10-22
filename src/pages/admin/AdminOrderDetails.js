@@ -20,24 +20,12 @@ import {
   getNextOrderStatus,
   getAllowedOrderTransitions,
 } from '../../config/orderStatus';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime, formatMoney } from '../../i18n/format';
 import StatusBadge from '../../components/admin/StatusBadge';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import ConfirmDialog from '../../components/ConfirmDialog';
-
-function formatDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function DetailsSkeleton() {
   return (
@@ -54,10 +42,10 @@ function DetailsSkeleton() {
 }
 
 function AdminOrderDetails() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -67,18 +55,31 @@ function AdminOrderDetails() {
 
   const order = useMemo(() => orders.find((entry) => entry.id === id), [orders, id]);
 
+  const statusLabel = (value) => {
+    const meta = ORDER_STATUS_META[value];
+    if (!meta) return value;
+    return t(meta.labelKey, { defaultValue: meta.label });
+  };
+
   const changeStatus = async (nextStatus) => {
     if (!order || !nextStatus) return;
     setBusy(true);
     try {
       const result = await updateOrderStatus(order.id, nextStatus, { restaurantId });
       if (result.success) {
-        showToast(`Order ${order.id} marked ${result.order.statusMeta.label.toLowerCase()}.`);
+        showToast(
+          t('admin.toastOrderMarked', {
+            id: order.id,
+            status: t(result.order.statusMeta.labelKey, {
+              defaultValue: result.order.statusMeta.label,
+            }),
+          })
+        );
       } else {
-        showToast(result.error || 'Could not update the order.', 'error');
+        showToast(result.error || t('admin.errorUpdateOrder'), 'error');
       }
     } catch (err) {
-      showToast('Could not update the order.', 'error');
+      showToast(t('admin.errorUpdateOrder'), 'error');
     } finally {
       setBusy(false);
     }
@@ -107,7 +108,7 @@ function AdminOrderDetails() {
       <div className="admin-overview">
         <div className="admin-panel">
           <AdminErrorState
-            message="We couldn't find that order. It may have been removed."
+            message={t('admin.errorOrderNotFound')}
             onRetry={() => navigate('/admin/orders')}
           />
         </div>
@@ -127,16 +128,18 @@ function AdminOrderDetails() {
   return (
     <div className="admin-overview">
       <button type="button" className="admin-back-link" onClick={() => navigate('/admin/orders')}>
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to orders
+        <FontAwesomeIcon icon={faArrowLeft} /> {t('admin.backToOrders')}
       </button>
 
       <div className="admin-page-head">
         <div className="admin-order-title">
-          <h2>Order {order.id}</h2>
+          <h2>{t('admin.orderTitle', { id: order.id })}</h2>
           <div className="admin-order-title-meta">
             <StatusBadge type="order" value={order.orderStatus} />
             <StatusBadge type="payment" value={order.paymentStatus} />
-            <span className="admin-muted">{formatDateTime(order.createdAt)}</span>
+            <span className="admin-muted">
+              {formatDateTime(order.createdAt, i18n.language) || '—'}
+            </span>
           </div>
         </div>
         <div className="admin-page-actions">
@@ -148,7 +151,7 @@ function AdminOrderDetails() {
               disabled={busy}
             >
               <FontAwesomeIcon icon={faForward} />
-              {ORDER_STATUS_META[nextStatus].label}
+              {statusLabel(nextStatus)}
             </button>
           )}
           {!isTerminal && (
@@ -158,7 +161,7 @@ function AdminOrderDetails() {
               onClick={() => setConfirmCancel(true)}
               disabled={busy}
             >
-              <FontAwesomeIcon icon={faXmark} /> Cancel order
+              <FontAwesomeIcon icon={faXmark} /> {t('admin.cancelOrder')}
             </button>
           )}
         </div>
@@ -167,7 +170,7 @@ function AdminOrderDetails() {
       <section className="admin-panel">
         <div className="admin-status-control">
           <label className="admin-field">
-            <span>Update status</span>
+            <span>{t('admin.updateStatus')}</span>
             <select
               value={order.orderStatus}
               onChange={(event) => changeStatus(event.target.value)}
@@ -175,12 +178,12 @@ function AdminOrderDetails() {
             >
               {allowedTransitions.map((entry) => (
                 <option key={entry} value={entry}>
-                  {ORDER_STATUS_META[entry].label}
+                  {statusLabel(entry)}
                 </option>
               ))}
               {allowedTransitions.length === 0 && (
                 <option value={order.orderStatus}>
-                  {ORDER_STATUS_META[order.orderStatus]?.label || order.orderStatus}
+                  {statusLabel(order.orderStatus) || order.orderStatus}
                 </option>
               )}
             </select>
@@ -192,7 +195,7 @@ function AdminOrderDetails() {
         <section className="admin-panel">
           <div className="admin-panel-head">
             <h3>
-              <FontAwesomeIcon icon={faReceipt} /> Items
+              <FontAwesomeIcon icon={faReceipt} /> {t('admin.colItems')}
             </h3>
           </div>
           <ul className="admin-order-items">
@@ -210,8 +213,7 @@ function AdminOrderDetails() {
                   )}
                 </div>
                 <span className="admin-order-item-price">
-                  {currency}
-                  {Number(item.lineTotal).toFixed(2)}
+                  {formatMoney(Number(item.lineTotal), i18n.language)}
                 </span>
               </li>
             ))}
@@ -219,48 +221,41 @@ function AdminOrderDetails() {
 
           {order.customerNotes && (
             <div className="admin-order-note">
-              <strong>Customer notes</strong>
+              <strong>{t('admin.customerNotes')}</strong>
               <p>{order.customerNotes}</p>
             </div>
           )}
 
           <div className="admin-order-summary">
             <div>
-              <span>Subtotal</span>
-              <span>
-                {currency}
-                {Number(order.subtotal).toFixed(2)}
-              </span>
+              <span>{t('admin.subtotal')}</span>
+              <span>{formatMoney(Number(order.subtotal), i18n.language)}</span>
             </div>
             {order.discount > 0 && (
               <div>
-                <span>Discount {order.pricing?.promoCode ? `(${order.pricing.promoCode})` : ''}</span>
-                <span>-{currency}
-                  {Number(order.discount).toFixed(2)}
+                <span>
+                  {order.pricing?.promoCode
+                    ? t('admin.discountWithCode', { code: order.pricing.promoCode })
+                    : t('admin.discount')}
                 </span>
+                <span>-{formatMoney(Number(order.discount), i18n.language)}</span>
               </div>
             )}
             <div>
-              <span>Delivery</span>
+              <span>{t('admin.deliveryFee')}</span>
               <span>
                 {order.deliveryFee > 0
-                  ? `${currency}${Number(order.deliveryFee).toFixed(2)}`
-                  : 'Free'}
+                  ? formatMoney(Number(order.deliveryFee), i18n.language)
+                  : t('admin.free')}
               </span>
             </div>
             <div>
-              <span>Tax</span>
-              <span>
-                {currency}
-                {Number(order.tax).toFixed(2)}
-              </span>
+              <span>{t('admin.tax')}</span>
+              <span>{formatMoney(Number(order.tax), i18n.language)}</span>
             </div>
             <div className="admin-order-total">
-              <span>Total</span>
-              <span>
-                {currency}
-                {Number(order.total).toFixed(2)}
-              </span>
+              <span>{t('admin.total')}</span>
+              <span>{formatMoney(Number(order.total), i18n.language)}</span>
             </div>
           </div>
         </section>
@@ -269,23 +264,23 @@ function AdminOrderDetails() {
           <section className="admin-panel">
             <div className="admin-panel-head">
               <h3>
-                <FontAwesomeIcon icon={faUser} /> Customer
+                <FontAwesomeIcon icon={faUser} /> {t('admin.colCustomer')}
               </h3>
             </div>
             <dl className="admin-detail-list">
               <div>
-                <dt>Name</dt>
-                <dd>{order.customer?.fullName || 'Guest'}</dd>
+                <dt>{t('admin.colName')}</dt>
+                <dd>{order.customer?.fullName || t('admin.guest')}</dd>
               </div>
               {order.customer?.phone && (
                 <div>
-                  <dt>Phone</dt>
+                  <dt>{t('admin.colPhone')}</dt>
                   <dd>{order.customer.phone}</dd>
                 </div>
               )}
               {order.customer?.email && (
                 <div>
-                  <dt>Email</dt>
+                  <dt>{t('admin.colEmail')}</dt>
                   <dd>{order.customer.email}</dd>
                 </div>
               )}
@@ -295,22 +290,24 @@ function AdminOrderDetails() {
           <section className="admin-panel">
             <div className="admin-panel-head">
               <h3>
-                <FontAwesomeIcon icon={faBagShopping} /> Fulfillment
+                <FontAwesomeIcon icon={faBagShopping} /> {t('admin.fulfillment')}
               </h3>
             </div>
             <dl className="admin-detail-list">
               <div>
-                <dt>Type</dt>
-                <dd>{order.fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}</dd>
+                <dt>{t('admin.colType')}</dt>
+                <dd>
+                  {order.fulfillmentType === 'pickup' ? t('admin.pickup') : t('admin.delivery')}
+                </dd>
               </div>
               <div>
-                <dt>Estimate</dt>
+                <dt>{t('admin.estimate')}</dt>
                 <dd>{order.estimatedTime || '—'}</dd>
               </div>
               {order.addressText && (
                 <div>
                   <dt>
-                    <FontAwesomeIcon icon={faLocationDot} /> Address
+                    <FontAwesomeIcon icon={faLocationDot} /> {t('admin.colAddress')}
                   </dt>
                   <dd>{order.addressText}</dd>
                 </div>
@@ -321,16 +318,16 @@ function AdminOrderDetails() {
           <section className="admin-panel">
             <div className="admin-panel-head">
               <h3>
-                <FontAwesomeIcon icon={faCreditCard} /> Payment
+                <FontAwesomeIcon icon={faCreditCard} /> {t('admin.payment')}
               </h3>
             </div>
             <dl className="admin-detail-list">
               <div>
-                <dt>Method</dt>
+                <dt>{t('admin.colMethod')}</dt>
                 <dd className="admin-capitalize">{order.paymentMethod || '—'}</dd>
               </div>
               <div>
-                <dt>Status</dt>
+                <dt>{t('admin.colStatus')}</dt>
                 <dd>
                   <StatusBadge type="payment" value={order.paymentStatus} />
                 </dd>
@@ -341,19 +338,19 @@ function AdminOrderDetails() {
           <section className="admin-panel">
             <div className="admin-panel-head">
               <h3>
-                <FontAwesomeIcon icon={faClockRotateLeft} /> Timeline
+                <FontAwesomeIcon icon={faClockRotateLeft} /> {t('admin.timeline')}
               </h3>
             </div>
             {history.length === 0 ? (
-              <p className="admin-muted">No status changes yet.</p>
+              <p className="admin-muted">{t('admin.noStatusChanges')}</p>
             ) : (
               <ol className="admin-timeline">
                 {history.map((entry, index) => (
                   <li key={`${entry.status}-${entry.at}-${index}`}>
                     <span className="admin-timeline-dot" />
                     <div>
-                      <strong>{ORDER_STATUS_META[entry.status]?.label || entry.status}</strong>
-                      <span>{formatDateTime(entry.at)}</span>
+                      <strong>{statusLabel(entry.status) || entry.status}</strong>
+                      <span>{formatDateTime(entry.at, i18n.language) || '—'}</span>
                     </div>
                   </li>
                 ))}
@@ -365,9 +362,9 @@ function AdminOrderDetails() {
 
       {confirmCancel && (
         <ConfirmDialog
-          title="Cancel this order?"
-          message={`Order ${order.id} will be marked as cancelled. The customer will see the change.`}
-          confirmLabel="Cancel order"
+          title={t('admin.cancelOrderTitle')}
+          message={t('admin.cancelOrderMessage', { id: order.id })}
+          confirmLabel={t('admin.cancelOrder')}
           danger
           onConfirm={() => {
             setConfirmCancel(false);

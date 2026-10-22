@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
@@ -7,6 +8,7 @@ import {
 } from '../services/storage';
 
 function Addresses() {
+  const { t } = useTranslation();
   const { currentUser, userProfile, updateProfileData } = useAuth();
   const { showToast } = useToast();
   const uid = currentUser.uid;
@@ -31,7 +33,7 @@ function Addresses() {
     setList(next);
     saveSavedAddresses(uid, next);
     setForm({ label: '', street: '', city: '', zip: '' });
-    showToast('Address added.');
+    showToast(t('account.toastAddressAdded'));
   };
 
   const handleSetDefault = (id) => {
@@ -43,7 +45,7 @@ function Addresses() {
     saveSavedAddresses(uid, next);
     const chosen = next.find((addr) => addr.id === id);
     updateProfileData({ address: chosen.address });
-    showToast('Default address updated.');
+    showToast(t('account.toastDefaultAddressUpdated'));
   };
 
   const handleRemove = (id) => {
@@ -55,7 +57,7 @@ function Addresses() {
       saveSavedAddresses(uid, next);
       updateProfileData({ address: next[0].address });
     }
-    showToast('Address removed.');
+    showToast(t('account.toastAddressRemoved'));
   };
 
   const defaultAddress = userProfile?.address;
@@ -63,23 +65,23 @@ function Addresses() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">SAVED ADDRESSES</h1>
+        <h1 className="landing-title">{t('account.savedAddressesPageTitle')}</h1>
       </div>
       <div className="cart-container">
         <div className="address-form-card">
-          <h2>Add a New Address</h2>
+          <h2>{t('account.addNewAddress')}</h2>
           <form className="auth-form" onSubmit={handleAdd}>
             <input
               type="text"
               name="label"
-              placeholder="Label (Home, Work...)"
+              placeholder={t('account.labelPlaceholder')}
               value={form.label}
               onChange={handleChange}
             />
             <input
               type="text"
               name="street"
-              placeholder="Street address"
+              placeholder={t('account.streetAddress')}
               value={form.street}
               onChange={handleChange}
               required
@@ -87,7 +89,7 @@ function Addresses() {
             <input
               type="text"
               name="city"
-              placeholder="City"
+              placeholder={t('account.city')}
               value={form.city}
               onChange={handleChange}
               required
@@ -95,12 +97,12 @@ function Addresses() {
             <input
               type="text"
               name="zip"
-              placeholder="Zip code (optional)"
+              placeholder={t('account.zipCodeOptional')}
               value={form.zip}
               onChange={handleChange}
             />
             <button type="submit" className="contact-btn">
-              Add Address
+              {t('account.addAddress')}
             </button>
           </form>
         </div>
@@ -108,9 +110,9 @@ function Addresses() {
         <div className="address-list">
           {list.length === 0 ? (
             <div className="auth-card empty-cart">
-              <h2>No saved addresses</h2>
+              <h2>{t('account.noSavedAddressesTitle')}</h2>
               <p className="auth-subtitle">
-                Add an address to speed up checkout.
+                {t('account.noSavedAddressesText')}
               </p>
             </div>
           ) : (
@@ -120,7 +122,9 @@ function Addresses() {
                   <h4>
                     {addr.label}
                     {addr.isDefault && (
-                      <span className="address-badge">Default</span>
+                      <span className="address-badge">
+                        {t('account.defaultBadge')}
+                      </span>
                     )}
                   </h4>
                   <p>{addr.address}</p>
@@ -133,7 +137,7 @@ function Addresses() {
                         className="menu-btn"
                         onClick={() => handleSetDefault(addr.id)}
                       >
-                        Set as Default
+                        {t('account.setAsDefault')}
                       </button>
                     )}
                   <button
@@ -141,7 +145,7 @@ function Addresses() {
                     className="cart-remove"
                     onClick={() => handleRemove(addr.id)}
                   >
-                    Remove
+                    {t('common.actions.remove')}
                   </button>
                 </div>
               </div>

@@ -8,6 +8,7 @@ import {
   faLocationDot,
   faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../hooks/useOrders';
 import {
@@ -16,7 +17,7 @@ import {
   getFirstIncomplete,
 } from '../../services/accountService';
 import SectionTitle from '../../components/account/SectionTitle';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatMoney, formatDate } from '../../i18n/format';
 
 function StatCard({ icon, label, value, to, sub }) {
   return (
@@ -37,6 +38,11 @@ function StatCard({ icon, label, value, to, sub }) {
 }
 
 function RecentOrder({ order }) {
+  const { t, i18n } = useTranslation();
+  const statusLabel = order.statusMeta?.labelKey
+    ? t(order.statusMeta.labelKey)
+    : order.statusMeta?.label || '';
+
   return (
     <Link to={`/orders/${order.id}`} className="dash-recent-order">
       <div className="dash-recent-order-main">
@@ -49,20 +55,19 @@ function RecentOrder({ order }) {
           {order.items.length > 2 && ` +${order.items.length - 2} more`}
         </span>
         <span className="dash-recent-order-date">
-          {new Date(order.createdAt || order.placedAt).toLocaleDateString()}
+          {formatDate(order.createdAt || order.placedAt, i18n.language)}
         </span>
       </div>
       <div className="dash-recent-order-side">
         <span className="dash-recent-order-total">
-          {RESTAURANT_SETTINGS.currency}
-          {Number(order.total || 0).toFixed(2)}
+          {formatMoney(order.total || 0, i18n.language)}
         </span>
         <span
           className={`order-status-badge ${
             order.isCancelled ? 'is-cancelled' : `is-${order.statusMeta.tone}`
           }`}
         >
-          {order.statusMeta.label}
+          {statusLabel}
         </span>
       </div>
     </Link>
@@ -70,10 +75,36 @@ function RecentOrder({ order }) {
 }
 
 function Overview() {
+  const { t, i18n } = useTranslation();
   const { currentUser } = useAuth();
   const uid = currentUser?.uid;
   const { status, orders, error, reload } = useOrders(uid);
   const { account } = useOutletContext();
+
+  // The profile-completion criteria live in the data layer (src/services), so
+  // only the display copy is mapped to translation keys here.
+  const COMPLETION_COPY = {
+    name: {
+      label: 'account.completionName',
+      hint: 'account.completionNameHint',
+    },
+    email: {
+      label: 'account.completionEmail',
+      hint: 'account.completionEmailHint',
+    },
+    photo: {
+      label: 'account.completionPhoto',
+      hint: 'account.completionPhotoHint',
+    },
+    phone: {
+      label: 'account.completionPhone',
+      hint: 'account.completionPhoneHint',
+    },
+    address: {
+      label: 'account.completionAddress',
+      hint: 'account.completionAddressHint',
+    },
+  };
 
   const overview = useMemo(() => computeOverview(account, orders), [account, orders]);
   const completion = useMemo(() => computeProfileCompletion(account), [account]);
@@ -85,35 +116,38 @@ function Overview() {
   return (
     <div className="dash-section">
       <div className="dash-section-head">
-        <SectionTitle title="Overview" subtitle="Your account at a glance" />
+        <SectionTitle
+          title={t('account.navOverview')}
+          subtitle={t('account.overviewSubtitle')}
+        />
         <Link to="/menu" className="dash-text-link">
-          Browse menu
+          {t('account.browseMenuLower')}
         </Link>
       </div>
 
       <div className="dash-stat-grid">
         <StatCard
           icon={faBoxArchive}
-          label="Orders"
+          label={t('account.navOrders')}
           value={overview.ordersCount}
-          sub={`${overview.activeOrders} active`}
+          sub={t('account.activeOrders', { count: overview.activeOrders })}
           to="/account/orders"
         />
         <StatCard
           icon={faWallet}
-          label="Total Spent"
-          value={`${RESTAURANT_SETTINGS.currency}${overview.totalSpent.toFixed(2)}`}
+          label={t('account.totalSpent')}
+          value={formatMoney(overview.totalSpent, i18n.language)}
           to="/account/orders"
         />
         <StatCard
           icon={faHeart}
-          label="Favorites"
+          label={t('account.navFavorites')}
           value={overview.favoritesCount}
           to="/account/favorites"
         />
         <StatCard
           icon={faLocationDot}
-          label="Saved Addresses"
+          label={t('account.savedAddresses')}
           value={overview.addressesCount}
           to="/account/addresses"
         />
@@ -122,9 +156,9 @@ function Overview() {
       <div className="dash-columns">
         <section className="dash-card dash-recent">
           <div className="dash-card-head">
-            <h3>Recent Orders</h3>
+            <h3>{t('account.recentOrders')}</h3>
             <Link to="/account/orders" className="dash-text-link">
-              View all
+              {t('common.actions.viewAll')}
             </Link>
           </div>
           {status === 'loading' && (
@@ -138,15 +172,15 @@ function Overview() {
             <div className="dash-empty">
               <p>{error}</p>
               <button type="button" className="menu-btn" onClick={reload}>
-                Try Again
+                {t('common.actions.retry')}
               </button>
             </div>
           )}
           {status === 'success' && orders.length === 0 && (
             <div className="dash-empty">
-              <p>You haven&apos;t ordered yet.</p>
+              <p>{t('account.notOrderedYet')}</p>
               <Link to="/menu" className="menu-btn">
-                Browse Menu
+                {t('account.browseMenu')}
               </Link>
             </div>
           )}
@@ -158,32 +192,37 @@ function Overview() {
 
         <section className="dash-card dash-completion">
           <div className="dash-card-head">
-            <h3>Profile Completion</h3>
+            <h3>{t('account.profileCompletion')}</h3>
             <span className="dash-completion-percent">{completion.percent}%</span>
           </div>
           <div className="dash-completion-bar">
             <span style={{ width: `${completion.percent}%` }} />
           </div>
           <ul className="dash-completion-list">
-            {completion.items.map((item) => (
-              <li key={item.key} className={item.complete ? 'done' : ''}>
-                <span className="dash-completion-check">
-                  {item.complete ? '✓' : '○'}
-                </span>
-                {item.complete ? (
-                  <span>{item.label}</span>
-                ) : (
-                  <Link to={`/account/${item.section}`}>{item.hint}</Link>
-                )}
-              </li>
-            ))}
+            {completion.items.map((item) => {
+              const copy = COMPLETION_COPY[item.key] || {};
+              return (
+                <li key={item.key} className={item.complete ? 'done' : ''}>
+                  <span className="dash-completion-check">
+                    {item.complete ? '✓' : '○'}
+                  </span>
+                  {item.complete ? (
+                    <span>{copy.label ? t(copy.label) : item.label}</span>
+                  ) : (
+                    <Link to={`/account/${item.section}`}>
+                      {copy.hint ? t(copy.hint) : item.hint}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {firstIncomplete && (
             <Link
               to={`/account/${firstIncomplete.section}`}
               className="contact-btn dash-completion-cta"
             >
-              Complete Profile
+              {t('account.completeProfile')}
             </Link>
           )}
         </section>

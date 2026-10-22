@@ -1,0 +1,56 @@
+{
+  "links": {
+    "home": "الرئيسية",
+    "menu": "القائمة",
+    "offers": "العروض",
+    "about": "من نحن",
+    "contact": "اتصل بنا",
+    "cart": "السلة",
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "myAccount": "حسابي",
+    "orders": "الطلبات",
+    "favorites": "المفضلة",
+    "dashboard": "لوحة التحكم",
+    "yourCart": "سلتك",
+    "trackOrder": "تتبّع الطلب",
+    "savedAddresses": "العناوين المحفوظة"
+  },
+  "theme": {
+    "light": "الوضع الفاتح",
+    "dark": "الوضع الداكن"
+  },
+  "language": {
+    "label": "اللغة",
+    "select": "اختر اللغة"
+  },
+  "aria": {
+    "mainNavigation": "التنقل الرئيسي",
+    "pizzaHome": "صفحة بيتزا الرئيسية",
+    "browseMenu": "تصفّح القائمة",
+    "openCart_zero": "فتح السلة، {{count}} عنصر",
+    "openCart_one": "فتح السلة، عنصر واحد",
+    "openCart_two": "فتح السلة، عنصران",
+    "openCart_few": "فتح السلة، {{count}} عناصر",
+    "openCart_many": "فتح السلة، {{count}} عنصرًا",
+    "openCart_other": "فتح السلة، {{count}} عنصر",
+    "switchToLight": "التبديل إلى الوضع الفاتح",
+    "switchToDark": "التبديل إلى الوضع الداكن",
+    "toggleMenu": "إظهار أو إخفاء قائمة التنقل"
+  },
+  "messages": {
+    "loggedOut": "تم تسجيل خروجك."
+  },
+  "footer": {
+    "tagline": "بيتزا مصنوعة يدويًا، قائمة صادقة، وتوصيل يمكنك تتبّعه من فرننا إلى بابك.",
+    "explore": "استكشف",
+    "customer": "العميل",
+    "getInTouch": "تواصل معنا",
+    "rightsReserved": "© {{year}} {{name}}. جميع الحقوق محفوظة.",
+    "freshFromOven": "طازج من فرن الحطب."
+  },
+  "moveToTop": {
+    "title": "العودة إلى الأعلى",
+    "label": "أعلى"
+  }
+}

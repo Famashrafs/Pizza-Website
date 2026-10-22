@@ -9,32 +9,22 @@ import {
   faCircleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 import { useRestaurantCustomers } from '../../hooks/useRestaurantCustomers';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatDate, formatMoney } from '../../i18n/format';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 
 const PAGE_SIZE = 10;
 
-function initials(customer) {
-  const source = customer.name || customer.email || 'Guest';
+function initials(customer, guestLabel) {
+  const source = customer.name || customer.email || guestLabel;
   return source
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('');
-}
-
-function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 function CustomerSkeleton() {
@@ -53,9 +43,10 @@ function CustomerSkeleton() {
 }
 
 function AdminCustomers() {
+  const { t, i18n } = useTranslation();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
+  const guestLabel = t('admin.guest');
 
   const { status, customers, error, reload } = useRestaurantCustomers(restaurantId);
   const [query, setQuery] = useState('');
@@ -90,11 +81,11 @@ function AdminCustomers() {
     <div className="admin-overview">
       <div className="admin-page-head">
         <SectionTitle
-          title="Customers"
+          title={t('admin.navCustomers')}
           subtitle={
             hasCustomers
-              ? `${customers.length} customer${customers.length === 1 ? '' : 's'} from your orders`
-              : 'Customers appear here after their first order'
+              ? t('admin.customersSubtitle', { count: customers.length })
+              : t('admin.customersEmptySubtitle')
           }
         />
       </div>
@@ -105,7 +96,7 @@ function AdminCustomers() {
             <FontAwesomeIcon icon={faMagnifyingGlass} />
             <input
               type="search"
-              placeholder="Search by name, email or phone…"
+              placeholder={t('admin.searchCustomers')}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -116,11 +107,11 @@ function AdminCustomers() {
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value)}
-            aria-label="Sort customers"
+            aria-label={t('admin.ariaSortCustomers')}
           >
-            <option value="recent">Most recent</option>
-            <option value="spent">Top spenders</option>
-            <option value="orders">Most orders</option>
+            <option value="recent">{t('admin.sortRecent')}</option>
+            <option value="spent">{t('admin.sortSpenders')}</option>
+            <option value="orders">{t('admin.sortOrders')}</option>
           </select>
         </div>
       )}
@@ -137,8 +128,8 @@ function AdminCustomers() {
         <div className="admin-panel">
           <AdminEmptyState
             icon={faUsers}
-            title="No customers yet"
-            message="Once customers place orders, their profiles and history show up here."
+            title={t('admin.noCustomersYet')}
+            message={t('admin.noCustomersYetMessage')}
           />
         </div>
       )}
@@ -148,60 +139,76 @@ function AdminCustomers() {
           {pageItems.length === 0 ? (
             <AdminEmptyState
               icon={faCircleExclamation}
-              title="No customers match"
-              message="Try a different search term."
+              title={t('admin.noCustomersMatch')}
+              message={t('admin.tryDifferentSearch')}
             />
           ) : (
-            <div className="admin-table admin-table--customers" role="table" aria-label="Customers">
+            <div
+              className="admin-table admin-table--customers"
+              role="table"
+              aria-label={t('admin.ariaCustomersTable')}
+            >
               <div className="admin-table-head" role="row">
-                <span role="columnheader">Customer</span>
-                <span role="columnheader">Contact</span>
-                <span role="columnheader">Orders</span>
-                <span role="columnheader">Spent</span>
-                <span role="columnheader">Last order</span>
+                <span role="columnheader">{t('admin.colCustomer')}</span>
+                <span role="columnheader">{t('admin.colContact')}</span>
+                <span role="columnheader">{t('admin.colOrders')}</span>
+                <span role="columnheader">{t('admin.colSpent')}</span>
+                <span role="columnheader">{t('admin.colLastOrder')}</span>
                 <span role="columnheader" className="admin-table-actions-head">
-                  Details
+                  {t('admin.colDetails')}
                 </span>
               </div>
 
               {pageItems.map((customer) => (
                 <div className="admin-table-row" role="row" key={customer.id}>
-                  <div className="admin-customer-cell" role="cell" data-label="Customer">
-                    <span className="admin-avatar">{initials(customer)}</span>
+                  <div
+                    className="admin-customer-cell"
+                    role="cell"
+                    data-label={t('admin.colCustomer')}
+                  >
+                    <span className="admin-avatar">{initials(customer, guestLabel)}</span>
                     <div className="admin-table-product-meta">
                       <strong>
                         {customer.name}
                         {customer.customerId && !customer.isGuest && (
                           <span className="admin-badge tone-success admin-badge--inline">
-                            <FontAwesomeIcon icon={faCrown} /> Registered
+                            <FontAwesomeIcon icon={faCrown} /> {t('admin.registered')}
                           </span>
                         )}
                       </strong>
-                      <span>{customer.isGuest ? 'Guest checkout' : 'Account customer'}</span>
+                      <span>
+                        {customer.isGuest ? t('admin.guestCheckout') : t('admin.accountCustomer')}
+                      </span>
                     </div>
                   </div>
-                  <div className="admin-customer-contact" role="cell" data-label="Contact">
+                  <div
+                    className="admin-customer-contact"
+                    role="cell"
+                    data-label={t('admin.colContact')}
+                  >
                     <span>{customer.email || '—'}</span>
                     <span>{customer.phone || '—'}</span>
                   </div>
-                  <span role="cell" data-label="Orders">
+                  <span role="cell" data-label={t('admin.colOrders')}>
                     {customer.orderCount}
                     {customer.cancelledOrders > 0 && (
-                      <small className="admin-muted"> · {customer.cancelledOrders} cancelled</small>
+                      <small className="admin-muted">
+                        {' '}
+                        · {t('admin.cancelledSuffix', { count: customer.cancelledOrders })}
+                      </small>
                     )}
                   </span>
-                  <span className="admin-table-price" role="cell" data-label="Spent">
-                    {currency}
-                    {Number(customer.totalSpent).toFixed(2)}
+                  <span className="admin-table-price" role="cell" data-label={t('admin.colSpent')}>
+                    {formatMoney(Number(customer.totalSpent), i18n.language)}
                   </span>
-                  <span className="admin-table-date" role="cell" data-label="Last order">
-                    {formatDate(customer.lastOrderAt)}
+                  <span className="admin-table-date" role="cell" data-label={t('admin.colLastOrder')}>
+                    {formatDate(customer.lastOrderAt, i18n.language, { dateStyle: 'medium' }) || '—'}
                   </span>
-                  <span className="admin-table-actions" role="cell" data-label="Details">
+                  <span className="admin-table-actions" role="cell" data-label={t('admin.colDetails')}>
                     <Link
                       to={`/admin/customers/${encodeURIComponent(customer.id)}`}
                       className="admin-icon-btn admin-icon-btn--sm"
-                      aria-label={`View ${customer.name}`}
+                      aria-label={t('admin.ariaViewCustomer', { name: customer.name })}
                     >
                       <FontAwesomeIcon icon={faEye} />
                     </Link>
@@ -219,10 +226,10 @@ function AdminCustomers() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
               >
-                Previous
+                {t('admin.previous')}
               </button>
               <span>
-                Page {safePage} of {totalPages}
+                {t('admin.pageOf', { page: safePage, total: totalPages })}
               </span>
               <button
                 type="button"
@@ -230,7 +237,7 @@ function AdminCustomers() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
               >
-                Next
+                {t('common.actions.next')}
               </button>
             </div>
           )}

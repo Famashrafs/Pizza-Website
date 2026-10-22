@@ -1,6 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+// Initializes i18next (language + direction) BEFORE the first render so the
+// interface never flashes the wrong language or the wrong direction.
+import './i18n';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { ThemeProvider } from './context/ThemeContext';

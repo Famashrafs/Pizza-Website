@@ -7,17 +7,19 @@ import {
   faSpinner,
   faUserXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
 function DeleteAccountModal({ onCancel, onConfirm }) {
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const handleConfirm = async () => {
     if (!password) {
-      setError('Please enter your password to confirm.');
+      setError(t('account.errorPasswordConfirm'));
       return;
     }
     setBusy(true);
@@ -34,14 +36,10 @@ function DeleteAccountModal({ onCancel, onConfirm }) {
         aria-modal="true"
       >
         <FontAwesomeIcon icon={faTriangleExclamation} className="confirm-icon danger" />
-        <h2>Delete your account?</h2>
-        <p>
-          This permanently deletes <strong>your profile, addresses and payment
-          methods</strong> and signs you out. Your order history remains in our
-          records for business reasons.
-        </p>
+        <h2>{t('account.deleteAccountTitle')}</h2>
+        <p>{t('account.deleteAccountBody')}</p>
         <label className="danger-zone-label" htmlFor="confirm-password">
-          Enter your password to confirm
+          {t('account.enterPasswordToConfirm')}
         </label>
         <div className="dash-password-input">
           <input
@@ -56,7 +54,7 @@ function DeleteAccountModal({ onCancel, onConfirm }) {
         {error && <p className="dash-field-error">{error}</p>}
         <div className="confirm-actions">
           <button type="button" className="confirm-cancel" onClick={onCancel}>
-            Keep my account
+            {t('account.keepMyAccount')}
           </button>
           <button
             type="button"
@@ -66,10 +64,10 @@ function DeleteAccountModal({ onCancel, onConfirm }) {
           >
             {busy ? (
               <>
-                <FontAwesomeIcon icon={faSpinner} spin /> Deleting…
+                <FontAwesomeIcon icon={faSpinner} spin /> {t('account.deleting')}
               </>
             ) : (
-              'Delete my account'
+              t('account.deleteMyAccount')
             )}
           </button>
         </div>
@@ -79,6 +77,7 @@ function DeleteAccountModal({ onCancel, onConfirm }) {
 }
 
 function DangerZone() {
+  const { t } = useTranslation();
   const { logout, deleteAccount } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -87,10 +86,10 @@ function DangerZone() {
   const handleLogout = async () => {
     const result = await logout();
     if (result.success) {
-      showToast('You have been logged out.');
+      showToast(t('nav.messages.loggedOut'));
       navigate('/');
     } else {
-      showToast(result.error || 'Unable to log out.', 'error');
+      showToast(result.error || t('account.toastLogoutFailed'), 'error');
     }
   };
 
@@ -98,11 +97,11 @@ function DangerZone() {
     const result = await deleteAccount(password);
     if (result.success) {
       setConfirmingDelete(false);
-      showToast('Your account has been deleted.');
+      showToast(t('account.toastAccountDeleted'));
       navigate('/');
     } else {
       showToast(
-        result.error || 'Unable to delete your account. Please try again.',
+        result.error || t('account.toastDeleteAccountFailed'),
         'error'
       );
     }
@@ -112,26 +111,25 @@ function DangerZone() {
     <section className="dash-card danger-zone">
       <div className="dash-card-head">
         <h3>
-          <FontAwesomeIcon icon={faUserXmark} /> Danger Zone
+          <FontAwesomeIcon icon={faUserXmark} /> {t('account.dangerZoneTitle')}
         </h3>
       </div>
       <div className="danger-zone-row">
         <div>
-          <p className="danger-zone-title">Log out of this device</p>
+          <p className="danger-zone-title">{t('account.logOutDevice')}</p>
           <p className="danger-zone-desc">
-            Sign out of your account on this browser.
+            {t('account.logOutDeviceDesc')}
           </p>
         </div>
         <button type="button" className="menu-btn dash-btn-sm" onClick={handleLogout}>
-          <FontAwesomeIcon icon={faRightFromBracket} /> Log out
+          <FontAwesomeIcon icon={faRightFromBracket} /> {t('nav.links.logout')}
         </button>
       </div>
       <div className="danger-zone-row">
         <div>
-          <p className="danger-zone-title">Delete your account</p>
+          <p className="danger-zone-title">{t('account.deleteYourAccount')}</p>
           <p className="danger-zone-desc">
-            Permanently remove your profile and personal data. This cannot be
-            undone.
+            {t('account.deleteAccountDesc')}
           </p>
         </div>
         <button
@@ -139,7 +137,7 @@ function DangerZone() {
           className="menu-btn dash-btn-sm is-danger"
           onClick={() => setConfirmingDelete(true)}
         >
-          Delete account
+          {t('account.deleteAccountButton')}
         </button>
       </div>
 

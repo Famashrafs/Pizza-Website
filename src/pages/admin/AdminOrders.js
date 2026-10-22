@@ -11,21 +11,15 @@ import {
 import { useRestaurantOrders } from '../../hooks/useRestaurantOrders';
 import { updateOrderStatus } from '../../services/orderService';
 import { ORDER_STATUS, getNextOrderStatus } from '../../config/orderStatus';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatDateTime, formatMoney } from '../../i18n/format';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import StatusBadge from '../../components/admin/StatusBadge';
 
 const PAGE_SIZE = 10;
-
-const TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'active', label: 'Active' },
-  { id: 'completed', label: 'Completed' },
-  { id: 'cancelled', label: 'Cancelled' },
-];
 
 const ACTIVE_STATUSES = [
   ORDER_STATUS.PENDING,
@@ -34,18 +28,6 @@ const ACTIVE_STATUSES = [
   ORDER_STATUS.READY,
   ORDER_STATUS.OUT_FOR_DELIVERY,
 ];
-
-function formatDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function OrderListSkeleton() {
   return (
@@ -64,10 +46,18 @@ function OrderListSkeleton() {
 }
 
 function AdminOrders() {
+  const { t, i18n } = useTranslation();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
   const { showToast } = useToast();
+
+  // The tabs live inside the component so their labels can be translated.
+  const tabs = [
+    { id: 'all', labelKey: 'admin.tabAll' },
+    { id: 'active', labelKey: 'admin.tabActive' },
+    { id: 'completed', labelKey: 'admin.tabCompleted' },
+    { id: 'cancelled', labelKey: 'admin.tabCancelled' },
+  ];
 
   const { status, orders, error, reload } = useRestaurantOrders(restaurantId);
   const [tab, setTab] = useState('all');
@@ -120,12 +110,15 @@ function AdminOrders() {
     try {
       const result = await updateOrderStatus(order.id, next, { restaurantId });
       if (result.success) {
-        showToast(`Order ${order.id} marked ${result.order.statusMeta.label.toLowerCase()}.`);
+        const statusLabel = t(result.order.statusMeta.labelKey, {
+          defaultValue: result.order.statusMeta.label,
+        });
+        showToast(t('admin.toastOrderMarked', { id: order.id, status: statusLabel }));
       } else {
-        showToast(result.error || 'Could not update the order.', 'error');
+        showToast(result.error || t('admin.errorUpdateOrder'), 'error');
       }
     } catch (err) {
-      showToast('Could not update the order.', 'error');
+      showToast(t('admin.errorUpdateOrder'), 'error');
     } finally {
       setBusyId(null);
     }
@@ -137,18 +130,18 @@ function AdminOrders() {
     <div className="admin-overview">
       <div className="admin-page-head">
         <SectionTitle
-          title="Orders"
+          title={t('admin.navOrders')}
           subtitle={
             hasOrders
-              ? `${counts.active} active of ${counts.all} total`
-              : 'Track and manage incoming orders'
+              ? t('admin.ordersSubtitle', { active: counts.active, total: counts.all })
+              : t('admin.ordersSubtitleEmpty')
           }
         />
       </div>
 
       {hasOrders && (
         <div className="admin-tabs" role="tablist">
-          {TABS.map((entry) => (
+          {tabs.map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -160,7 +153,7 @@ function AdminOrders() {
                 setPage(1);
               }}
             >
-              {entry.label}
+              {t(entry.labelKey)}
               <span className="admin-tab-count">{counts[entry.id]}</span>
             </button>
           ))}
@@ -173,7 +166,7 @@ function AdminOrders() {
             <FontAwesomeIcon icon={faMagnifyingGlass} />
             <input
               type="search"
-              placeholder="Search by order id, name or phone…"
+              placeholder={t('admin.searchOrders')}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -196,8 +189,8 @@ function AdminOrders() {
         <div className="admin-panel">
           <AdminEmptyState
             icon={faReceipt}
-            title="No orders yet"
-            message="New orders from customers will appear here automatically."
+            title={t('admin.noOrdersYet')}
+            message={t('admin.noOrdersYetMessage')}
           />
         </div>
       )}
@@ -207,21 +200,25 @@ function AdminOrders() {
           {pageItems.length === 0 ? (
             <AdminEmptyState
               icon={faCircleExclamation}
-              title="No orders match"
-              message="Try a different tab or search term."
+              title={t('admin.noOrdersMatch')}
+              message={t('admin.tryDifferentTabOrSearch')}
             />
           ) : (
-            <div className="admin-table admin-table--orders" role="table" aria-label="Orders">
+            <div
+              className="admin-table admin-table--orders"
+              role="table"
+              aria-label={t('admin.ariaOrdersTable')}
+            >
               <div className="admin-table-head" role="row">
-                <span role="columnheader">Order</span>
-                <span role="columnheader">Customer</span>
-                <span role="columnheader">Items</span>
-                <span role="columnheader">Total</span>
-                <span role="columnheader">Type</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader">Placed</span>
+                <span role="columnheader">{t('admin.colOrder')}</span>
+                <span role="columnheader">{t('admin.colCustomer')}</span>
+                <span role="columnheader">{t('admin.colItems')}</span>
+                <span role="columnheader">{t('admin.colTotal')}</span>
+                <span role="columnheader">{t('admin.colType')}</span>
+                <span role="columnheader">{t('admin.colStatus')}</span>
+                <span role="columnheader">{t('admin.colPlaced')}</span>
                 <span role="columnheader" className="admin-table-actions-head">
-                  Actions
+                  {t('admin.colActions')}
                 </span>
               </div>
 
@@ -229,33 +226,42 @@ function AdminOrders() {
                 const next = getNextOrderStatus(order.fulfillmentType, order.orderStatus);
                 return (
                   <div className="admin-table-row" role="row" key={order.id}>
-                    <span className="admin-table-id" role="cell" data-label="Order">
+                    <span className="admin-table-id" role="cell" data-label={t('admin.colOrder')}>
                       {order.id}
                     </span>
-                    <span className="admin-table-customer" role="cell" data-label="Customer">
-                      {order.customer?.fullName || 'Guest'}
+                    <span
+                      className="admin-table-customer"
+                      role="cell"
+                      data-label={t('admin.colCustomer')}
+                    >
+                      {order.customer?.fullName || t('admin.guest')}
                     </span>
-                    <span className="admin-table-items" role="cell" data-label="Items">
+                    <span className="admin-table-items" role="cell" data-label={t('admin.colItems')}>
                       {(order.items || []).length}
                     </span>
-                    <span className="admin-table-price" role="cell" data-label="Total">
-                      {currency}
-                      {Number(order.total).toFixed(2)}
+                    <span className="admin-table-price" role="cell" data-label={t('admin.colTotal')}>
+                      {formatMoney(Number(order.total), i18n.language)}
                     </span>
-                    <span className="admin-table-type" role="cell" data-label="Type">
-                      {order.fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}
+                    <span className="admin-table-type" role="cell" data-label={t('admin.colType')}>
+                      {order.fulfillmentType === 'pickup'
+                        ? t('admin.pickup')
+                        : t('admin.delivery')}
                     </span>
-                    <span className="admin-table-status" role="cell" data-label="Status">
+                    <span className="admin-table-status" role="cell" data-label={t('admin.colStatus')}>
                       <StatusBadge type="order" value={order.orderStatus} />
                     </span>
-                    <span className="admin-table-date" role="cell" data-label="Placed">
-                      {formatDateTime(order.createdAt)}
+                    <span className="admin-table-date" role="cell" data-label={t('admin.colPlaced')}>
+                      {formatDateTime(order.createdAt, i18n.language) || '—'}
                     </span>
-                    <span className="admin-table-actions" role="cell" data-label="Actions">
+                    <span
+                      className="admin-table-actions"
+                      role="cell"
+                      data-label={t('admin.colActions')}
+                    >
                       <Link
                         to={`/admin/orders/${order.id}`}
                         className="admin-icon-btn admin-icon-btn--sm"
-                        aria-label={`View order ${order.id}`}
+                        aria-label={t('admin.ariaViewOrder', { id: order.id })}
                       >
                         <FontAwesomeIcon icon={faEye} />
                       </Link>
@@ -266,7 +272,7 @@ function AdminOrders() {
                           onClick={() => advance(order)}
                           disabled={busyId === order.id}
                         >
-                          <FontAwesomeIcon icon={faForward} /> Advance
+                          <FontAwesomeIcon icon={faForward} /> {t('admin.advance')}
                         </button>
                       )}
                     </span>
@@ -284,10 +290,10 @@ function AdminOrders() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
               >
-                Previous
+                {t('admin.previous')}
               </button>
               <span>
-                Page {safePage} of {totalPages}
+                {t('admin.pageOf', { page: safePage, total: totalPages })}
               </span>
               <button
                 type="button"
@@ -295,7 +301,7 @@ function AdminOrders() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
               >
-                Next
+                {t('common.actions.next')}
               </button>
             </div>
           )}

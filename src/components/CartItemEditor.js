@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { fetchProductById } from '../services/menuService';
@@ -6,10 +7,19 @@ import { createCartItem, hasCustomization } from '../utils/cartItem';
 import ProductModal from './ProductModal';
 
 function CartItemEditor({ item, onClose }) {
+  const { t } = useTranslation();
   const { updateItem } = useCart();
   const { showToast } = useToast();
   const [product, setProduct] = useState(null);
   const [status, setStatus] = useState('idle');
+
+  // The translate function is kept in a ref so a language switch never
+  // re-triggers the product fetch below (the effect still runs exactly when
+  // the item, the close handler or the toast function changes).
+  const translateRef = useRef(t);
+  useEffect(() => {
+    translateRef.current = t;
+  }, [t]);
 
   useEffect(() => {
     let active = true;
@@ -24,7 +34,7 @@ function CartItemEditor({ item, onClose }) {
     fetchProductById(item.productId).then((found) => {
       if (!active) return;
       if (!found || !hasCustomization(found)) {
-        showToast('This item has no options to edit.', 'error');
+        showToast(translateRef.current('cart.toastNoOptionsToEdit'), 'error');
         onClose();
         return;
       }
@@ -41,11 +51,11 @@ function CartItemEditor({ item, onClose }) {
   const handleConfirm = (config) => {
     const next = createCartItem(product, config);
     if (!next) {
-      showToast('That configuration is not valid.', 'error');
+      showToast(t('cart.toastInvalidConfiguration'), 'error');
       return;
     }
     updateItem(item.id, next);
-    showToast(`${product.name} updated.`);
+    showToast(t('cart.toastUpdated', { name: product.name }));
     onClose();
   };
 

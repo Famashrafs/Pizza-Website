@@ -13,25 +13,44 @@ export { ORDER_STATUS_FLOW, ORDER_STATUS_LABELS, getOrderStatusFlow };
 
 // Step order shown in the progress indicator. "Cart" is rendered as a link
 // back to the cart page; these are the steps handled inside /checkout.
+//
+// The ids are part of the flow (they are the step keys the UI switches on and
+// they never change); only the display text is a translation key now.
 export const CHECKOUT_STEPS = [
-  { id: 'details', label: 'Details' },
-  { id: 'delivery', label: 'Delivery' },
-  { id: 'payment', label: 'Payment' },
-  { id: 'review', label: 'Review' },
+  { id: 'details', labelKey: 'checkout.stepDetails' },
+  { id: 'delivery', labelKey: 'checkout.stepDelivery' },
+  { id: 'payment', labelKey: 'checkout.stepPayment' },
+  { id: 'review', labelKey: 'checkout.stepReview' },
 ];
 
 export const FULFILLMENT_TYPES = [
   {
     id: 'delivery',
-    label: 'Delivery',
-    description: 'We bring your order to your door.',
+    labelKey: 'checkout.fulfillmentDelivery',
+    descriptionKey: 'checkout.fulfillmentDeliveryDescription',
   },
   {
     id: 'pickup',
-    label: 'Pickup',
-    description: 'Collect your order from our restaurant.',
+    labelKey: 'checkout.fulfillmentPickup',
+    descriptionKey: 'checkout.fulfillmentPickupDescription',
   },
 ];
+
+// Payment method copy lives in services/paymentService.js (shared with the
+// rest of the app), so the UI looks the translated label/description up by
+// method id instead of hardcoding it. The English text of the service stays
+// the fallback for a method that has no key here yet.
+export const PAYMENT_METHOD_LABEL_KEYS = {
+  cash: 'checkout.paymentCashLabel',
+  card: 'checkout.paymentCardLabel',
+  online: 'checkout.paymentOnlineLabel',
+};
+
+export const PAYMENT_METHOD_DESCRIPTION_KEYS = {
+  cash: 'checkout.paymentCashDescription',
+  card: 'checkout.paymentCardDescription',
+  online: 'checkout.paymentOnlineDescription',
+};
 
 export function getCheckoutTotals(
   items,
@@ -98,6 +117,13 @@ export function getEstimatedTime(fulfillmentType, settings = RESTAURANT_SETTINGS
 }
 
 // --- Validation helpers (pure, used by the UI and by orderService) ---
+//
+// The validators return the FIELD errors only (fullName, email, phone, street,
+// city) — those keys never change. The VALUE of an error is a translation key
+// now: the message is resolved by the UI (CheckoutPage), which is the only
+// place that knows the active language. The trusted server keeps its own copy
+// of these validators (functions/lib/orderCore.js) and still answers with
+// plain English sentences, so the API contract is untouched.
 
 export function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
@@ -130,17 +156,17 @@ export function createEmptyAddress() {
 export function validateCustomerInfo(customer = {}) {
   const errors = {};
   if (!String(customer.fullName || '').trim()) {
-    errors.fullName = 'Please enter the name for this order.';
+    errors.fullName = 'checkout.errorFullName';
   }
   if (!String(customer.email || '').trim()) {
-    errors.email = 'Please enter your email address.';
+    errors.email = 'checkout.errorEmailRequired';
   } else if (!isEmail(customer.email)) {
-    errors.email = 'Please enter a valid email address.';
+    errors.email = 'checkout.errorEmailInvalid';
   }
   if (!String(customer.phone || '').trim()) {
-    errors.phone = 'Please enter a phone number for order updates.';
+    errors.phone = 'checkout.errorPhoneRequired';
   } else if (digitsOnly(customer.phone).length < 7) {
-    errors.phone = 'Please enter a valid phone number.';
+    errors.phone = 'checkout.errorPhoneInvalid';
   }
   return errors;
 }
@@ -149,15 +175,15 @@ export function validateAddress(address = {}, fulfillmentType = 'delivery') {
   if (fulfillmentType === 'pickup') return {};
   const errors = {};
   if (!String(address.street || '').trim()) {
-    errors.street = 'Street address is required for delivery.';
+    errors.street = 'checkout.errorStreetRequired';
   }
   if (!String(address.city || '').trim()) {
-    errors.city = 'City is required for delivery.';
+    errors.city = 'checkout.errorCityRequired';
   }
   if (!String(address.phone || '').trim()) {
-    errors.phone = 'A contact phone number is required for delivery.';
+    errors.phone = 'checkout.errorContactPhoneRequired';
   } else if (digitsOnly(address.phone).length < 7) {
-    errors.phone = 'Please enter a valid phone number.';
+    errors.phone = 'checkout.errorPhoneInvalid';
   }
   return errors;
 }

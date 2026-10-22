@@ -1,45 +1,47 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import FormField from './FormField';
 
 function CustomerInfoStep({ customer, onChange, errors = {} }) {
+  const { t } = useTranslation();
   return (
     <section className="checkout-section" aria-labelledby="checkout-details-title">
-      <h2 id="checkout-details-title">Customer Information</h2>
+      <h2 id="checkout-details-title">{t('checkout.customerInfoTitle')}</h2>
       <p className="checkout-section-sub">
-        We&apos;ll use these details to confirm and update your order.
+        {t('checkout.customerInfoSubtitle')}
       </p>
 
       <FormField
         id="fullName"
-        label="Full name"
+        label={t('checkout.fieldFullName', { defaultValue: 'Full name' })}
         value={customer.fullName}
         onChange={(value) => onChange('fullName', value)}
         error={errors.fullName}
         autoComplete="name"
-        placeholder="Jane Doe"
+        placeholder={t('checkout.placeholderFullName', { defaultValue: 'Jane Doe' })}
         required
       />
       <FormField
         id="email"
-        label="Email"
+        label={t('checkout.fieldEmail', { defaultValue: 'Email' })}
         type="email"
         value={customer.email}
         onChange={(value) => onChange('email', value)}
         error={errors.email}
         autoComplete="email"
-        placeholder="jane@example.com"
+        placeholder={t('checkout.placeholderEmail', { defaultValue: 'jane@example.com' })}
         required
       />
       <FormField
         id="phone"
-        label="Phone"
+        label={t('checkout.fieldPhone', { defaultValue: 'Phone' })}
         type="tel"
         value={customer.phone}
         onChange={(value) => onChange('phone', value)}
         error={errors.phone}
         autoComplete="tel"
         inputMode="tel"
-        placeholder="+1 555 012 3456"
+        placeholder={t('checkout.placeholderPhone', { defaultValue: '+1 555 012 3456' })}
         required
       />
     </section>

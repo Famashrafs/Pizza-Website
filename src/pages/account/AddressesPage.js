@@ -5,6 +5,7 @@ import {
   faPlus,
   faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import SectionTitle from '../../components/account/SectionTitle';
@@ -29,10 +30,12 @@ export const EMPTY_ADDRESS_FIELDS = {
 };
 
 function AddressFields({ fields, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-street">Street address *</label>
+        <label htmlFor="addr-street">{t('account.streetAddressRequired')}</label>
         <input
           id="addr-street"
           type="text"
@@ -42,7 +45,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-city">City *</label>
+        <label htmlFor="addr-city">{t('account.cityRequired')}</label>
         <input
           id="addr-city"
           type="text"
@@ -52,7 +55,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-area">Area</label>
+        <label htmlFor="addr-area">{t('account.area')}</label>
         <input
           id="addr-area"
           type="text"
@@ -61,7 +64,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-building">Building</label>
+        <label htmlFor="addr-building">{t('account.building')}</label>
         <input
           id="addr-building"
           type="text"
@@ -70,7 +73,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-apartment">Apartment</label>
+        <label htmlFor="addr-apartment">{t('account.apartment')}</label>
         <input
           id="addr-apartment"
           type="text"
@@ -79,7 +82,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-floor">Floor</label>
+        <label htmlFor="addr-floor">{t('account.floor')}</label>
         <input
           id="addr-floor"
           type="text"
@@ -88,7 +91,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-landmark">Landmark</label>
+        <label htmlFor="addr-landmark">{t('account.landmark')}</label>
         <input
           id="addr-landmark"
           type="text"
@@ -97,7 +100,7 @@ function AddressFields({ fields, onChange }) {
         />
       </div>
       <div className="dash-field dash-field-half">
-        <label htmlFor="addr-phone">Phone number</label>
+        <label htmlFor="addr-phone">{t('account.phoneNumber')}</label>
         <input
           id="addr-phone"
           type="tel"
@@ -110,6 +113,7 @@ function AddressFields({ fields, onChange }) {
 }
 
 function AddressFormModal({ initial, onClose, onSave }) {
+  const { t } = useTranslation();
   const [label, setLabel] = useState(initial?.label || 'Home');
   const [fields, setFields] = useState(initial?.fields || EMPTY_ADDRESS_FIELDS);
   const [isDefault, setIsDefault] = useState(initial?.isDefault || false);
@@ -139,17 +143,17 @@ function AddressFormModal({ initial, onClose, onSave }) {
         aria-labelledby="address-form-title"
       >
         <h2 id="address-form-title">
-          {initial ? 'Edit Address' : 'Add New Address'}
+          {initial ? t('account.editAddress') : t('account.addNewAddress')}
         </h2>
         <form onSubmit={handleSubmit} className="dash-form">
           <div className="dash-field">
-            <label htmlFor="addr-label">Address label</label>
+            <label htmlFor="addr-label">{t('account.addressLabel')}</label>
             <input
               id="addr-label"
               type="text"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="Home, Work…"
+              placeholder={t('account.addressLabelPlaceholder')}
             />
           </div>
           <div className="dash-field-grid">
@@ -161,21 +165,21 @@ function AddressFormModal({ initial, onClose, onSave }) {
               checked={isDefault}
               onChange={(event) => setIsDefault(event.target.checked)}
             />
-            Set as default address
+            {t('account.setAsDefaultAddress')}
           </label>
           <div className="confirm-actions">
             <button type="button" className="confirm-cancel" onClick={onClose}>
-              Cancel
+              {t('common.actions.cancel')}
             </button>
             <button type="submit" className="confirm-confirm" disabled={busy}>
               {busy ? (
                 <>
-                  <FontAwesomeIcon icon={faSpinner} spin /> Saving…
+                  <FontAwesomeIcon icon={faSpinner} spin /> {t('account.saving')}
                 </>
               ) : initial ? (
-                'Save Changes'
+                t('account.saveChanges')
               ) : (
-                'Add Address'
+                t('account.addAddress')
               )}
             </button>
           </div>
@@ -186,6 +190,7 @@ function AddressFormModal({ initial, onClose, onSave }) {
 }
 
 function AddressesPage() {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const uid = currentUser?.uid;
@@ -222,52 +227,56 @@ function AddressesPage() {
     writeAddresses(uid, withDefault);
     setList(withDefault);
     setEditing(null);
-    showToast(wasEditing ? 'Address updated.' : 'Address added.');
+    showToast(
+      wasEditing
+        ? t('account.toastAddressUpdated')
+        : t('account.toastAddressAdded')
+    );
   };
 
   const handleSetDefault = (id) => {
     const next = setDefaultAddress(uid, id);
     setList(next);
-    showToast('Default address updated.');
+    showToast(t('account.toastDefaultAddressUpdated'));
   };
 
   const handleRemove = async (address) => {
     setPendingRemoval(null);
     const next = removeAddress(uid, address.id);
     setList(next);
-    showToast('Address removed.');
+    showToast(t('account.toastAddressRemoved'));
   };
 
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Addresses"
-        subtitle="Manage delivery addresses used at checkout"
+        title={t('account.navAddresses')}
+        subtitle={t('account.addressesSubtitle')}
       />
       <div className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faLocationDot} /> Saved Addresses
+            <FontAwesomeIcon icon={faLocationDot} /> {t('account.savedAddresses')}
           </h3>
           <button
             type="button"
             className="menu-btn dash-btn-sm"
             onClick={() => setEditing(false)}
           >
-            <FontAwesomeIcon icon={faPlus} /> Add New Address
+            <FontAwesomeIcon icon={faPlus} /> {t('account.addNewAddress')}
           </button>
         </div>
 
         {list.length === 0 ? (
           <div className="dash-empty">
             <FontAwesomeIcon icon={faLocationDot} className="dash-empty-icon" />
-            <p>No saved addresses.</p>
+            <p>{t('account.noSavedAddresses')}</p>
             <button
               type="button"
               className="menu-btn dash-btn-sm"
               onClick={() => setEditing(false)}
             >
-              Add New Address
+              {t('account.addNewAddress')}
             </button>
           </div>
         ) : (
@@ -295,13 +304,13 @@ function AddressesPage() {
 
       {pendingRemoval && (
         <ConfirmDialog
-          title="Delete this address?"
+          title={t('account.deleteAddressTitle')}
           message={
             pendingRemoval.isDefault
-              ? 'This is your default address. If you delete it, the first remaining address becomes the default.'
-              : 'This address will be removed from your account.'
+              ? t('account.deleteDefaultAddressWarning')
+              : t('account.deleteAddressWarning')
           }
-          confirmLabel="Delete"
+          confirmLabel={t('common.actions.delete')}
           danger
           onConfirm={() => handleRemove(pendingRemoval)}
           onCancel={() => setPendingRemoval(null)}

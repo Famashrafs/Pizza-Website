@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
+import { formatMoney } from '../i18n/format';
 import CartLine from '../components/CartLine';
 import CartItemEditor from '../components/CartItemEditor';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 function CartPage() {
+  const { t, i18n } = useTranslation();
   const {
     items,
     count,
@@ -34,36 +37,39 @@ function CartPage() {
   const handleDecrease = (item) => updateQty(item.id, item.qty - 1);
   const handleRemove = (item) => {
     removeItem(item.id);
-    showToast(`${item.name} removed from cart.`);
+    showToast(t('cart.toastRemoved', { name: item.name }));
   };
 
   const handleApplyPromo = (event) => {
     event.preventDefault();
     const result = applyPromo(promoInput);
-    showToast(result.message, result.success ? 'success' : 'error');
+    showToast(
+      result.success ? t('cart.toastPromoApplied') : t('cart.toastPromoInvalid'),
+      result.success ? 'success' : 'error'
+    );
     if (result.success) setPromoInput('');
   };
 
   const handleConfirmClear = () => {
     clearCart();
     setConfirmClear(false);
-    showToast('Your cart has been cleared.');
+    showToast(t('cart.toastCleared'));
   };
 
   if (items.length === 0) {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">YOUR CART</h1>
+          <h1 className="landing-title">{t('cart.pageTitle')}</h1>
         </div>
         <div className="cart-empty">
           <p className="cart-empty-emoji" aria-hidden="true">
             🍕
           </p>
-          <h2>Your cart is empty</h2>
-          <p>Looks like you haven&apos;t added anything yet.</p>
+          <h2>{t('cart.emptyTitle')}</h2>
+          <p>{t('cart.emptyPageText')}</p>
           <Link to="/menu" className="contact-btn cart-empty-btn">
-            Explore Menu
+            {t('cart.exploreMenu')}
           </Link>
         </div>
       </div>
@@ -73,21 +79,19 @@ function CartPage() {
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">YOUR CART</h1>
+        <h1 className="landing-title">{t('cart.pageTitle')}</h1>
       </div>
 
       <div className="cart-layout">
-        <section className="cart-items" aria-label="Cart items">
+        <section className="cart-items" aria-label={t('cart.ariaCartItems')}>
           <div className="cart-items-head">
-            <h2>
-              {count} {count === 1 ? 'item' : 'items'} in your cart
-            </h2>
+            <h2>{t('cart.itemsInCart', { count })}</h2>
             <button
               type="button"
               className="cart-clear"
               onClick={() => setConfirmClear(true)}
             >
-              Clear Cart
+              {t('cart.clearCart')}
             </button>
           </div>
 
@@ -105,38 +109,50 @@ function CartPage() {
           ))}
         </section>
 
-        <aside className="cart-summary-panel" aria-label="Order summary">
-          <h2>Order Summary</h2>
+        <aside className="cart-summary-panel" aria-label={t('cart.ariaOrderSummary')}>
+          <h2>{t('cart.orderSummary')}</h2>
 
           <div className="summary-line">
-            <span>Subtotal</span>
-            <span>${subtotal.toFixed(2)}</span>
+            <span>{t('cart.subtotal')}</span>
+            <span>{formatMoney(subtotal, i18n.language)}</span>
           </div>
 
           {discount > 0 && (
             <div className="summary-line summary-line--discount">
-              <span>Discount{promoCode ? ` (${promoCode})` : ''}</span>
-              <span>-${discount.toFixed(2)}</span>
+              <span>
+                {promoCode
+                  ? t('cart.discountWithCode', { code: promoCode })
+                  : t('cart.discount')}
+              </span>
+              <span>
+                {t('cart.negativeAmount', {
+                  amount: formatMoney(discount, i18n.language),
+                })}
+              </span>
             </div>
           )}
 
           <div className="summary-line">
-            <span>Delivery fee</span>
-            <span>{freeDelivery ? 'Free' : `$${deliveryFee.toFixed(2)}`}</span>
+            <span>{t('cart.deliveryFee')}</span>
+            <span>
+              {freeDelivery
+                ? t('cart.free')
+                : formatMoney(deliveryFee, i18n.language)}
+            </span>
           </div>
 
           <div className="summary-line">
-            <span>Tax ({Math.round((taxRate || 0) * 100)}%)</span>
-            <span>${tax.toFixed(2)}</span>
+            <span>{t('cart.tax', { rate: Math.round((taxRate || 0) * 100) })}</span>
+            <span>{formatMoney(tax, i18n.language)}</span>
           </div>
 
           <div className="summary-line summary-line--total">
-            <span>Grand total</span>
-            <span>${grandTotal.toFixed(2)}</span>
+            <span>{t('cart.grandTotal')}</span>
+            <span>{formatMoney(grandTotal, i18n.language)}</span>
           </div>
 
           <form className="promo-form" onSubmit={handleApplyPromo}>
-            <label htmlFor="promo-code">Promo code</label>
+            <label htmlFor="promo-code">{t('cart.promoCode')}</label>
             <div className="promo-row">
               <input
                 id="promo-code"
@@ -145,33 +161,33 @@ function CartPage() {
                 placeholder="PIZZA10"
                 onChange={(event) => setPromoInput(event.target.value)}
               />
-              <button type="submit">Apply</button>
+              <button type="submit">{t('common.actions.apply')}</button>
             </div>
             {promoCode && (
               <p className="promo-applied">
-                <span>{discountLabel || `Code ${promoCode} applied`}</span>
+                <span>{discountLabel || t('cart.codeApplied', { code: promoCode })}</span>
                 <button type="button" onClick={clearPromo}>
-                  Remove
+                  {t('common.actions.remove')}
                 </button>
               </p>
             )}
           </form>
 
           <Link to="/checkout" className="contact-btn cart-checkout-btn">
-            Proceed to Checkout
+            {t('cart.proceedToCheckout')}
           </Link>
           <Link to="/menu" className="cart-continue">
-            Continue shopping
+            {t('cart.continueShopping')}
           </Link>
         </aside>
       </div>
 
       {confirmClear && (
         <ConfirmDialog
-          title="Clear your cart?"
-          message="This removes all items from your cart. This cannot be undone."
-          confirmLabel="Clear Cart"
-          cancelLabel="Keep Items"
+          title={t('cart.clearCartTitle')}
+          message={t('cart.clearCartMessage')}
+          confirmLabel={t('cart.clearCart')}
+          cancelLabel={t('cart.keepItems')}
           danger
           onConfirm={handleConfirmClear}
           onCancel={() => setConfirmClear(false)}

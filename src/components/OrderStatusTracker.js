@@ -1,5 +1,6 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faReceipt,
   faCircleCheck,
@@ -24,6 +25,7 @@ const STATUS_ICONS = {
 };
 
 function OrderStatusTracker({ order }) {
+  const { t } = useTranslation();
   const fulfillmentType = order?.fulfillmentType || 'delivery';
   const flow = getOrderStatusFlow(fulfillmentType);
   const current = normalizeOrderStatus(order.orderStatus);
@@ -58,8 +60,12 @@ function OrderStatusTracker({ order }) {
               <FontAwesomeIcon icon={Icon} />
             </span>
             <div className="order-tracker-content">
-              <p className="order-tracker-label">{meta.label}</p>
-              <p className="order-tracker-desc">{meta.description}</p>
+              <p className="order-tracker-label">
+                {t(meta.labelKey, { defaultValue: meta.label })}
+              </p>
+              <p className="order-tracker-desc">
+                {t(meta.descriptionKey, { defaultValue: meta.description })}
+              </p>
             </div>
           </li>
         );
@@ -70,9 +76,11 @@ function OrderStatusTracker({ order }) {
             <FontAwesomeIcon icon={faXmark} />
           </span>
           <div className="order-tracker-content">
-            <p className="order-tracker-label">Cancelled</p>
+            <p className="order-tracker-label">
+              {t('common.orderStatus.cancelled')}
+            </p>
             <p className="order-tracker-desc">
-              This order was cancelled and is no longer being prepared.
+              {t('orders.cancelledStepDescription')}
             </p>
           </div>
         </li>

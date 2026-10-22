@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { fetchProducts, getCategories } from '../services/menuService';
@@ -25,6 +26,7 @@ const SKELETON_COUNT = 8;
 
 function MenuPage() {
   const location = useLocation();
+  const { t } = useTranslation();
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('loading');
   const [query, setQuery] = useState('');
@@ -83,33 +85,33 @@ function MenuPage() {
   const handleConfirmCustomization = (config) => {
     const item = createCartItem(customizing, config);
     if (!item) {
-      showToast('That configuration is not valid.', 'error');
+      showToast(t('menu.toastInvalidConfiguration'), 'error');
       return;
     }
     addItem(item);
-    showToast(`${customizing.name} added to cart.`);
+    showToast(t('menu.toastAddedToCart', { name: customizing.name }));
     setCustomizing(null);
   };
 
   const emptyMessage = query
-    ? `No ${pluralizeCategory(
-        filters.category === 'All' ? null : filters.category
-      )} found for '${query}'.`
-    : 'No products match your filters.';
+    ? t('menu.emptySearch', {
+        category: pluralizeCategory(
+          filters.category === 'All' ? null : filters.category
+        ),
+        query,
+      })
+    : t('menu.emptyNoMatch');
 
   return (
     <>
       <div className="landing-page landing-page--menu">
-        <h1 className="landing-title">OUR MENU</h1>
+        <h1 className="landing-title">{t('menu.title')}</h1>
       </div>
 
       <section className="catalog">
         <div className="catalog-heading">
-          <h2>Order in minutes</h2>
-          <p>
-            Freshly made with quality ingredients. Search, filter and customize
-            your favorites.
-          </p>
+          <h2>{t('menu.heading')}</h2>
+          <p>{t('menu.subheading')}</p>
         </div>
 
         <MenuToolbar
@@ -123,12 +125,12 @@ function MenuPage() {
           onToggleFilters={() => setFiltersOpen((open) => !open)}
         />
 
-        <nav className="menu-tabs" aria-label="Menu categories">
+        <nav className="menu-tabs" aria-label={t('menu.ariaMenuCategories')}>
           <button
             className={filters.category === 'All' ? 'active' : ''}
             onClick={() => selectCategory('All')}
           >
-            All
+            {t('menu.allCategories')}
           </button>
           {categories.map((category) => (
             <button
@@ -164,9 +166,9 @@ function MenuPage() {
 
             {status === 'error' && (
               <EmptyState
-                title="We couldn't load the menu"
-                message="Something went wrong while loading the products. Please try again."
-                actionLabel="Try again"
+                title={t('menu.loadErrorTitle')}
+                message={t('menu.loadErrorMessage')}
+                actionLabel={t('menu.tryAgain')}
                 onAction={loadProducts}
               />
             )}
@@ -174,7 +176,7 @@ function MenuPage() {
             {status === 'ready' && visibleProducts.length === 0 && (
               <EmptyState
                 message={emptyMessage}
-                actionLabel="Clear filters"
+                actionLabel={t('menu.clearFilters')}
                 onAction={resetFilters}
               />
             )}

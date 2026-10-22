@@ -1,0 +1,52 @@
+{
+  "links": {
+    "home": "Home",
+    "menu": "Menu",
+    "offers": "Offers",
+    "about": "About",
+    "contact": "Contact",
+    "cart": "Cart",
+    "login": "Log in",
+    "logout": "Log out",
+    "myAccount": "My account",
+    "orders": "Orders",
+    "favorites": "Favorites",
+    "dashboard": "Dashboard",
+    "yourCart": "Your cart",
+    "trackOrder": "Track order",
+    "savedAddresses": "Saved addresses"
+  },
+  "theme": {
+    "light": "Light mode",
+    "dark": "Dark mode"
+  },
+  "language": {
+    "label": "Language",
+    "select": "Choose language"
+  },
+  "aria": {
+    "mainNavigation": "Main navigation",
+    "pizzaHome": "Pizza home",
+    "browseMenu": "Browse the menu",
+    "openCart_one": "Open cart, {{count}} item",
+    "openCart_other": "Open cart, {{count}} items",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "toggleMenu": "Toggle navigation menu"
+  },
+  "messages": {
+    "loggedOut": "You have been logged out."
+  },
+  "footer": {
+    "tagline": "Hand-built pizzas, an honest menu, and delivery you can track from our ovens to your door.",
+    "explore": "Explore",
+    "customer": "Customer",
+    "getInTouch": "Get in touch",
+    "rightsReserved": "© {{year}} {{name}}. All rights reserved.",
+    "freshFromOven": "Fresh from the wood-fired oven."
+  },
+  "moveToTop": {
+    "title": "Go to top",
+    "label": "TOP"
+  }
+}

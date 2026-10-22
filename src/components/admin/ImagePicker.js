@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faImage,
   faUpload,
@@ -23,11 +24,12 @@ import {
 function ImagePicker({
   value,
   onChange,
-  label = 'Image',
+  label,
   path = 'menu',
   disabled = false,
   aspect = 'square',
 }) {
+  const { t } = useTranslation();
   const [preview, setPreview] = useState('');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -63,9 +65,7 @@ function ImagePicker({
     setPreview(localPreview);
 
     if (!configured) {
-      setError(
-        'File uploads require Firebase Storage. Paste an image URL, or configure REACT_APP_FIREBASE_STORAGE_BUCKET.'
-      );
+      setError(t('admin.imageStorageNotConfigured'));
       return;
     }
 
@@ -76,9 +76,9 @@ function ImagePicker({
       onChange(url);
       setPreview('');
       revokePreviewUrl(localPreview);
-      setSuccess('Image uploaded.');
+      setSuccess(t('admin.imageUploaded'));
     } catch (err) {
-      setError(err.message || 'Upload failed. Please try again.');
+      setError(err.message || t('admin.imageUploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -101,7 +101,7 @@ function ImagePicker({
 
   return (
     <div className="image-picker">
-      <span className="image-picker-label">{label}</span>
+      <span className="image-picker-label">{label || t('admin.imageFieldLabel')}</span>
       <div className="image-picker-row">
         <div className={`image-picker-preview is-${aspect}`}>
           {display ? (
@@ -122,7 +122,11 @@ function ImagePicker({
               disabled={disabled || uploading}
             >
               <FontAwesomeIcon icon={faUpload} />
-              {uploading ? 'Uploading…' : display ? 'Replace' : 'Upload'}
+              {uploading
+                ? t('admin.uploading')
+                : display
+                ? t('admin.replace')
+                : t('admin.upload')}
             </button>
             {display && (
               <button
@@ -131,7 +135,7 @@ function ImagePicker({
                 onClick={handleRemove}
                 disabled={disabled || uploading}
               >
-                <FontAwesomeIcon icon={faTrash} /> Remove
+                <FontAwesomeIcon icon={faTrash} /> {t('common.actions.remove')}
               </button>
             )}
           </div>
@@ -141,7 +145,7 @@ function ImagePicker({
             <input
               type="url"
               inputMode="url"
-              placeholder="Paste an image URL"
+              placeholder={t('admin.pasteImageUrl')}
               value={preview ? '' : value || ''}
               onChange={(event) => handleUrlChange(event.target.value)}
               disabled={disabled || uploading}
@@ -161,7 +165,7 @@ function ImagePicker({
           {!uploading && error && <p className="image-picker-error">{error}</p>}
           {!configured && !error && (
             <p className="image-picker-hint">
-              File uploads need Firebase Storage; pasted URLs always work.
+              {t('admin.imageStorageHint')}
             </p>
           )}
           {uploading && (

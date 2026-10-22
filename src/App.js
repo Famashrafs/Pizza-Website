@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import 'bootstrap/dist/css/bootstrap.css';
 import './App.css';
 import './admin.css';
+import './rtl.css';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
@@ -74,6 +76,7 @@ function PublicTopChrome({ isScrolled }) {
 
 function PublicBottomChrome({ showMoveToTop, onMoveToTop }) {
   const location = useLocation();
+  const { t } = useTranslation();
   const hidden =
     location.pathname.startsWith('/admin') ||
     location.pathname === '/owner/register';
@@ -83,8 +86,13 @@ function PublicBottomChrome({ showMoveToTop, onMoveToTop }) {
   return (
     <>
       {showMoveToTop && (
-        <button id="moveToTopBtn" title="Go to top" onClick={onMoveToTop}>
-          TOP
+        <button
+          id="moveToTopBtn"
+          title={t('nav.moveToTop.title')}
+          aria-label={t('nav.moveToTop.title')}
+          onClick={onMoveToTop}
+        >
+          {t('nav.moveToTop.label')}
         </button>
       )}
       <Footer />
@@ -95,6 +103,7 @@ function PublicBottomChrome({ showMoveToTop, onMoveToTop }) {
 function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMoveToTop, setShowMoveToTop] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     // The storefront has a sticky nav and a back-to-top button; both appear
@@ -137,7 +146,7 @@ function App() {
                 <Route path="/register/customer"element={<Register />}/>
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/account" element={
-                  <RequireAuth title="Login to manage your profile">
+                  <RequireAuth title={t('common.guard.manageProfile')}>
                     <Account />
                   </RequireAuth>
                 }>
@@ -151,22 +160,22 @@ function App() {
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="/orders" element={
-                  <RequireAuth title="Login to view your orders">
+                  <RequireAuth title={t('common.guard.viewOrders')}>
                     <Orders />
                   </RequireAuth>
                 } />
                 <Route path="/orders/:id" element={
-                  <RequireAuth title="Login to track your order">
+                  <RequireAuth title={t('common.guard.trackOrder')}>
                     <OrderDetails />
                   </RequireAuth>
                 } />
                 <Route path="/addresses" element={
-                  <RequireAuth title="Login to manage addresses">
+                  <RequireAuth title={t('common.guard.manageAddresses')}>
                     <Addresses />
                   </RequireAuth>
                 } />
                 <Route path="/favorites" element={
-                  <RequireAuth title="Login to see your favorites">
+                  <RequireAuth title={t('common.guard.viewFavorites')}>
                     <Favorites />
                   </RequireAuth>
                 } />
@@ -206,8 +215,8 @@ function App() {
                     element={
                       <AdminComingSoon
                         icon={faTicket}
-                        title="Coupons"
-                        description="Create and manage discount codes and promotions. This section will be built in the next phase."
+                        title={t('common.comingSoon.couponsTitle')}
+                        description={t('common.comingSoon.couponsDescription')}
                       />
                     }
                   />
@@ -216,8 +225,8 @@ function App() {
                     element={
                       <AdminComingSoon
                         icon={faStar}
-                        title="Reviews"
-                        description="Read and respond to customer reviews. This section will be built in the next phase."
+                        title={t('common.comingSoon.reviewsTitle')}
+                        description={t('common.comingSoon.reviewsDescription')}
                       />
                     }
                   />

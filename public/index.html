@@ -33,10 +33,27 @@
       content="Build your own pizza, order online and track it in real time."
     />
     <meta property="og:type" content="website" />
+    <script>
+      // Set the language + text direction on <html> BEFORE first paint, so the
+      // interface never renders in the wrong language or the wrong direction.
+      // Restores the saved choice, else falls back to English.
+      (function () {
+        try {
+          var saved = null;
+          try { saved = localStorage.getItem('pizza-language'); } catch (e) {}
+          var lang = saved === 'ar' || saved === 'it' || saved === 'en' ? saved : 'en';
+          document.documentElement.setAttribute('lang', lang);
+          document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+        } catch (e) {
+          document.documentElement.setAttribute('lang', 'en');
+          document.documentElement.setAttribute('dir', 'ltr');
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,640;9..144,700&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,640;9..144,700&family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />

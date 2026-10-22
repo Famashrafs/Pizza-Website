@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faLocationDot,
   faClock,
@@ -17,17 +18,22 @@ const INITIAL_FORM = {
   message: '',
 };
 
-const CONTACT_DETAILS = [
-  { icon: faLocationDot, label: 'Address', value: RESTAURANT_SETTINGS.pickup.address },
-  { icon: faClock, label: 'Hours', value: RESTAURANT_SETTINGS.pickup.hours },
-  { icon: faPhone, label: 'Phone', value: RESTAURANT_SETTINGS.phone },
-  { icon: faEnvelope, label: 'Email', value: RESTAURANT_SETTINGS.email },
-];
-
 function ContactPage() {
+  const { t } = useTranslation();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const { showToast } = useToast();
+
+  const CONTACT_DETAILS = [
+    {
+      icon: faLocationDot,
+      label: t('address', { ns: 'home' }),
+      value: RESTAURANT_SETTINGS.pickup.address,
+    },
+    { icon: faClock, label: t('hours', { ns: 'home' }), value: RESTAURANT_SETTINGS.pickup.hours },
+    { icon: faPhone, label: t('phone', { ns: 'home' }), value: RESTAURANT_SETTINGS.phone },
+    { icon: faEnvelope, label: t('email', { ns: 'home' }), value: RESTAURANT_SETTINGS.email },
+  ];
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -36,10 +42,10 @@ function ContactPage() {
 
   const validate = () => {
     const next = {};
-    if (!form.name.trim()) next.name = 'Please tell us your name.';
-    if (!/\S+@\S+\.\S+/.test(form.email)) next.email = 'Enter a valid email address.';
-    if (!form.subject.trim()) next.subject = 'Add a short subject.';
-    if (!form.message.trim()) next.message = 'Write us a message.';
+    if (!form.name.trim()) next.name = t('errorName', { ns: 'home' });
+    if (!/\S+@\S+\.\S+/.test(form.email)) next.email = t('errorEmail', { ns: 'home' });
+    if (!form.subject.trim()) next.subject = t('errorSubject', { ns: 'home' });
+    if (!form.message.trim()) next.message = t('errorMessage', { ns: 'home' });
     return next;
   };
 
@@ -48,25 +54,22 @@ function ContactPage() {
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    showToast('Thanks for reaching out — we’ll reply within one business day.');
+    showToast(t('contactSuccessToast', { ns: 'home' }));
     setForm(INITIAL_FORM);
   };
 
   return (
     <>
       <div className="landing-page landing-page--contact">
-        <h1 className="landing-title">CONTACT US</h1>
+        <h1 className="landing-title">{t('contactTitle', { ns: 'home' })}</h1>
       </div>
 
       <section className="section">
         <div className="container">
           <div className="section-head">
-            <span className="section-eyebrow">We&rsquo;re here</span>
-            <h2 className="section-title">Talk to the team</h2>
-            <p className="section-sub">
-              Questions about an order, feedback on the menu, or a big catering
-              idea? Send a note and we&rsquo;ll get back to you quickly.
-            </p>
+            <span className="section-eyebrow">{t('wereHere', { ns: 'home' })}</span>
+            <h2 className="section-title">{t('talkToTheTeam', { ns: 'home' })}</h2>
+            <p className="section-sub">{t('talkToTheTeamSub', { ns: 'home' })}</p>
           </div>
 
           <div className="contact-layout">
@@ -81,18 +84,18 @@ function ContactPage() {
                 ))}
               </ul>
               <figure className="contact-media">
-                <img src="/images/bg_2.jpg" alt="Fresh pizza in our kitchen" />
+                <img src="/images/bg_2.jpg" alt={t('contactImageAlt', { ns: 'home' })} />
               </figure>
             </div>
 
             <form className="contact-form contact-card" onSubmit={handleSubmit} noValidate>
               <div className="field-row">
                 <div className="field">
-                  <label htmlFor="contact-name">Your name</label>
+                  <label htmlFor="contact-name">{t('yourName', { ns: 'home' })}</label>
                   <input
                     id="contact-name"
                     type="text"
-                    placeholder="Jamie Doe"
+                    placeholder={t('namePlaceholder', { ns: 'home' })}
                     value={form.name}
                     onChange={(event) => updateField('name', event.target.value)}
                     aria-invalid={Boolean(errors.name)}
@@ -100,11 +103,11 @@ function ContactPage() {
                   {errors.name && <p className="form-error">{errors.name}</p>}
                 </div>
                 <div className="field">
-                  <label htmlFor="contact-email">Email</label>
+                  <label htmlFor="contact-email">{t('email', { ns: 'home' })}</label>
                   <input
                     id="contact-email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder={t('emailPlaceholder', { ns: 'home' })}
                     value={form.email}
                     onChange={(event) => updateField('email', event.target.value)}
                     aria-invalid={Boolean(errors.email)}
@@ -114,11 +117,11 @@ function ContactPage() {
               </div>
 
               <div className="field">
-                <label htmlFor="contact-subject">Subject</label>
+                <label htmlFor="contact-subject">{t('subject', { ns: 'home' })}</label>
                 <input
                   id="contact-subject"
                   type="text"
-                  placeholder="How can we help?"
+                  placeholder={t('subjectPlaceholder', { ns: 'home' })}
                   value={form.subject}
                   onChange={(event) => updateField('subject', event.target.value)}
                   aria-invalid={Boolean(errors.subject)}
@@ -127,10 +130,10 @@ function ContactPage() {
               </div>
 
               <div className="field">
-                <label htmlFor="contact-message">Message</label>
+                <label htmlFor="contact-message">{t('message', { ns: 'home' })}</label>
                 <textarea
                   id="contact-message"
-                  placeholder="Tell us everything…"
+                  placeholder={t('messagePlaceholder', { ns: 'home' })}
                   value={form.message}
                   onChange={(event) => updateField('message', event.target.value)}
                   aria-invalid={Boolean(errors.message)}
@@ -139,11 +142,10 @@ function ContactPage() {
               </div>
 
               <button type="submit" className="contact-btn">
-                <FontAwesomeIcon icon={faPaperPlane} /> Send message
+                <FontAwesomeIcon icon={faPaperPlane} /> {t('sendMessage', { ns: 'home' })}
               </button>
               <p className="contact-form-hint">
-                We usually reply within one business day. For urgent order issues,
-                call us on {RESTAURANT_SETTINGS.phone}.
+                {t('contactHint', { ns: 'home', phone: RESTAURANT_SETTINGS.phone })}
               </p>
             </form>
           </div>

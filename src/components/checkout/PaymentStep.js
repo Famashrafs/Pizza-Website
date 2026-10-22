@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMoneyBillWave, faCreditCard, faGlobe } from '@fortawesome/free-solid-svg-icons';
 import { getPaymentMethods } from '../../services/paymentService';
+import { PAYMENT_METHOD_DESCRIPTION_KEYS, PAYMENT_METHOD_LABEL_KEYS } from '../../utils/checkoutLogic';
 
 const ICONS = {
   cash: faMoneyBillWave,
@@ -10,13 +12,14 @@ const ICONS = {
 };
 
 function PaymentStep({ selected, onChange, error }) {
+  const { t } = useTranslation();
   const methods = getPaymentMethods();
 
   return (
     <section className="checkout-section" aria-labelledby="checkout-payment-title">
-      <h2 id="checkout-payment-title">Payment Method</h2>
+      <h2 id="checkout-payment-title">{t('checkout.paymentTitle')}</h2>
       <p className="checkout-section-sub">
-        Choose how you would like to pay. Online payments are on the way.
+        {t('checkout.paymentSubtitle')}
       </p>
 
       {error && (
@@ -25,9 +28,13 @@ function PaymentStep({ selected, onChange, error }) {
         </p>
       )}
 
-      <div className="payment-options" role="radiogroup" aria-label="Payment method">
+      <div className="payment-options" role="radiogroup" aria-label={t('checkout.ariaPaymentMethod')}>
         {methods.map((method) => {
           const disabled = !method.enabled;
+          const labelKey = PAYMENT_METHOD_LABEL_KEYS[method.id];
+          const descKey = PAYMENT_METHOD_DESCRIPTION_KEYS[method.id];
+          const label = labelKey ? t(labelKey) : method.label;
+          const description = descKey ? t(descKey) : method.description;
           return (
             <label
               key={method.id}
@@ -48,12 +55,12 @@ function PaymentStep({ selected, onChange, error }) {
               </span>
               <span className="choice-card-body">
                 <strong>
-                  {method.label}
+                  {label}
                   {method.comingSoon && (
-                    <span className="choice-card-badge">Coming soon</span>
+                    <span className="choice-card-badge">{t('checkout.comingSoon')}</span>
                   )}
                 </strong>
-                <small>{method.description}</small>
+                <small>{description}</small>
               </span>
             </label>
           );
@@ -61,7 +68,7 @@ function PaymentStep({ selected, onChange, error }) {
       </div>
 
       <p className="checkout-hint">
-        No payment is taken now. For cash orders you pay on delivery or pickup.
+        {t('checkout.paymentHint')}
       </p>
     </section>
   );

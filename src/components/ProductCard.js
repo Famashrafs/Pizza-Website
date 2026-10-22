@@ -5,12 +5,15 @@ import {
   faHeart as solidHeart,
 } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as regularHeart } from '@fortawesome/free-regular-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { createSimpleCartItem, hasCustomization } from '../utils/cartItem';
+import { formatMoney } from '../i18n/format';
 
 function ProductCard({ product, onCustomize }) {
+  const { t, i18n } = useTranslation();
   const { addItem } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { showToast } = useToast();
@@ -25,7 +28,7 @@ function ProductCard({ product, onCustomize }) {
       return;
     }
     addItem(createSimpleCartItem(product));
-    showToast(`${product.name} added to cart.`);
+    showToast(t('menu.toastAddedToCart', { name: product.name }));
   };
 
   const handleFavorite = () => {
@@ -37,8 +40,8 @@ function ProductCard({ product, onCustomize }) {
     });
     showToast(
       added
-        ? `${product.name} added to favorites.`
-        : `${product.name} removed from favorites.`
+        ? t('menu.toastAddedToFavorites', { name: product.name })
+        : t('menu.toastRemovedFromFavorites', { name: product.name })
     );
   };
 
@@ -47,15 +50,23 @@ function ProductCard({ product, onCustomize }) {
       <div className="product-media">
         <img src={product.image} alt={product.name} loading="lazy" />
         <div className="card-badges">
-          {product.featured && <span className="tag tag-featured">Featured</span>}
-          {product.popular && <span className="tag tag-popular">Popular</span>}
-          {product.vegetarian && <span className="tag tag-veg">Veg</span>}
-          {!product.available && <span className="tag tag-soldout">Sold Out</span>}
+          {product.featured && (
+            <span className="tag tag-featured">{t('menu.badgeFeatured')}</span>
+          )}
+          {product.popular && (
+            <span className="tag tag-popular">{t('menu.badgePopular')}</span>
+          )}
+          {product.vegetarian && (
+            <span className="tag tag-veg">{t('menu.badgeVegetarian')}</span>
+          )}
+          {!product.available && (
+            <span className="tag tag-soldout">{t('menu.badgeSoldOut')}</span>
+          )}
         </div>
         <button
           className={`favorite-toggle ${favorite ? 'active' : ''}`}
           onClick={handleFavorite}
-          aria-label="Toggle favorite"
+          aria-label={t('menu.ariaToggleFavorite')}
         >
           <FontAwesomeIcon icon={favorite ? solidHeart : regularHeart} />
         </button>
@@ -73,8 +84,10 @@ function ProductCard({ product, onCustomize }) {
         <div className="product-foot">
           <span className="price">
             {customizable
-              ? `from $${product.basePrice.toFixed(2)}`
-              : `$${product.basePrice.toFixed(2)}`}
+              ? t('menu.priceFrom', {
+                  price: formatMoney(product.basePrice, i18n.language),
+                })
+              : formatMoney(product.basePrice, i18n.language)}
           </span>
           <button
             className="product-add"
@@ -82,10 +95,10 @@ function ProductCard({ product, onCustomize }) {
             disabled={!product.available}
           >
             {!product.available
-              ? 'Sold Out'
+              ? t('menu.badgeSoldOut')
               : customizable
-              ? 'Customize'
-              : 'Add'}
+              ? t('menu.customize')
+              : t('common.actions.add')}
           </button>
         </div>
       </div>

@@ -22,12 +22,14 @@ import {
   updateCategory,
 } from '../../services/categoryService';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminEmptyState from '../../components/admin/AdminEmptyState';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
 function CategoryManager() {
+  const { t } = useTranslation();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
   const navigate = useNavigate();
@@ -53,9 +55,9 @@ function CategoryManager() {
     try {
       await createCategory({ restaurantId, name });
       setNewName('');
-      showToast(`Category "${name}" added.`);
+      showToast(t('admin.toastCategoryAdded', { name }));
     } catch (err) {
-      showToast(err.message || 'Could not add the category.', 'error');
+      showToast(err.message || t('admin.errorAddCategory'), 'error');
     } finally {
       setBusy(false);
     }
@@ -74,7 +76,7 @@ function CategoryManager() {
   const saveEdit = async (category) => {
     const name = editName.trim();
     if (!name) {
-      showToast('Category name is required.', 'error');
+      showToast(t('admin.errorCategoryNameRequired'), 'error');
       return;
     }
     if (name === category.name) {
@@ -83,10 +85,10 @@ function CategoryManager() {
     }
     try {
       await updateCategory(category.id, { name }, restaurantId);
-      showToast('Category renamed.');
+      showToast(t('admin.toastCategoryRenamed'));
       cancelEdit();
     } catch (err) {
-      showToast(err.message || 'Could not rename the category.', 'error');
+      showToast(err.message || t('admin.errorRenameCategory'), 'error');
     }
   };
 
@@ -97,12 +99,12 @@ function CategoryManager() {
     try {
       const result = await deleteCategory(category.id, restaurantId);
       if (result.success) {
-        showToast(`Category "${category.name}" deleted.`);
+        showToast(t('admin.toastCategoryDeleted', { name: category.name }));
       } else {
-        showToast(result.error || 'Could not delete the category.', 'error');
+        showToast(result.error || t('admin.errorDeleteCategory'), 'error');
       }
     } catch (err) {
-      showToast(err.message || 'Could not delete the category.', 'error');
+      showToast(err.message || t('admin.errorDeleteCategory'), 'error');
     }
   };
 
@@ -115,19 +117,19 @@ function CategoryManager() {
     try {
       await reorderCategories(restaurantId, ids);
     } catch (err) {
-      showToast(err.message || 'Could not reorder the categories.', 'error');
+      showToast(err.message || t('admin.errorReorderCategories'), 'error');
     }
   };
 
   return (
     <div className="admin-overview">
       <button type="button" className="admin-back-link" onClick={() => navigate('/admin/menu')}>
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to menu
+        <FontAwesomeIcon icon={faArrowLeft} /> {t('admin.backToMenu')}
       </button>
 
       <SectionTitle
-        title="Categories"
-        subtitle="Group your menu items and control the order customers see."
+        title={t('admin.navCategories')}
+        subtitle={t('admin.categoriesSubtitle')}
       />
 
       <form className="admin-panel admin-inline-form" onSubmit={handleCreate}>
@@ -135,7 +137,7 @@ function CategoryManager() {
           type="text"
           value={newName}
           onChange={(event) => setNewName(event.target.value)}
-          placeholder="New category name"
+          placeholder={t('admin.phNewCategoryName')}
           maxLength={40}
         />
         <button
@@ -143,7 +145,7 @@ function CategoryManager() {
           className="admin-btn admin-btn--primary"
           disabled={busy || !newName.trim()}
         >
-          <FontAwesomeIcon icon={faPlus} /> Add
+          <FontAwesomeIcon icon={faPlus} /> {t('common.actions.add')}
         </button>
       </form>
 
@@ -163,8 +165,8 @@ function CategoryManager() {
         {status === 'success' && categories.length === 0 && (
           <AdminEmptyState
             icon={faTag}
-            title="No categories yet"
-            message="Add a category above to start organizing your menu."
+            title={t('admin.noCategoriesYet')}
+            message={t('admin.noCategoriesYetMessage')}
           />
         )}
 
@@ -202,7 +204,7 @@ function CategoryManager() {
                         type="button"
                         className="admin-icon-btn is-success"
                         onClick={() => saveEdit(category)}
-                        aria-label="Save category"
+                        aria-label={t('admin.ariaSaveCategory')}
                       >
                         <FontAwesomeIcon icon={faCheck} />
                       </button>
@@ -210,7 +212,7 @@ function CategoryManager() {
                         type="button"
                         className="admin-icon-btn"
                         onClick={cancelEdit}
-                        aria-label="Cancel"
+                        aria-label={t('common.actions.cancel')}
                       >
                         <FontAwesomeIcon icon={faXmark} />
                       </button>
@@ -218,9 +220,7 @@ function CategoryManager() {
                   ) : (
                     <div className="admin-category-name">
                       <strong>{category.name}</strong>
-                      <span>
-                        {count} item{count === 1 ? '' : 's'}
-                      </span>
+                      <span>{t('common.units.items', { count })}</span>
                     </div>
                   )}
 
@@ -230,7 +230,7 @@ function CategoryManager() {
                       className="admin-icon-btn admin-icon-btn--sm"
                       onClick={() => move(category, -1)}
                       disabled={index === 0 || isEditing}
-                      aria-label={`Move ${category.name} up`}
+                      aria-label={t('admin.ariaMoveUp', { name: category.name })}
                     >
                       <FontAwesomeIcon icon={faArrowUp} />
                     </button>
@@ -239,7 +239,7 @@ function CategoryManager() {
                       className="admin-icon-btn admin-icon-btn--sm"
                       onClick={() => move(category, 1)}
                       disabled={index === categories.length - 1 || isEditing}
-                      aria-label={`Move ${category.name} down`}
+                      aria-label={t('admin.ariaMoveDown', { name: category.name })}
                     >
                       <FontAwesomeIcon icon={faArrowDown} />
                     </button>
@@ -248,7 +248,7 @@ function CategoryManager() {
                       className="admin-icon-btn admin-icon-btn--sm"
                       onClick={() => startEdit(category)}
                       disabled={isEditing}
-                      aria-label={`Rename ${category.name}`}
+                      aria-label={t('admin.ariaRenameCategory', { name: category.name })}
                     >
                       <FontAwesomeIcon icon={faPen} />
                     </button>
@@ -257,7 +257,7 @@ function CategoryManager() {
                       className="admin-icon-btn admin-icon-btn--sm is-danger"
                       onClick={() => setPendingDelete(category)}
                       disabled={isEditing}
-                      aria-label={`Delete ${category.name}`}
+                      aria-label={t('admin.ariaDeleteCategory', { name: category.name })}
                     >
                       <FontAwesomeIcon icon={faTrash} />
                     </button>
@@ -271,9 +271,9 @@ function CategoryManager() {
 
       {pendingDelete && (
         <ConfirmDialog
-          title="Delete this category?"
-          message={`"${pendingDelete.name}" will be removed. Categories with products can't be deleted.`}
-          confirmLabel="Delete"
+          title={t('admin.deleteCategoryTitle')}
+          message={t('admin.deleteCategoryMessage', { name: pendingDelete.name })}
+          confirmLabel={t('common.actions.delete')}
           danger
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}

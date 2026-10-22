@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTruckFast, faStore, faClock, faLocationDot, faPhone } from '@fortawesome/free-solid-svg-icons';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
@@ -14,14 +15,15 @@ function FulfillmentStep({
   saveAddress,
   onSaveChange,
 }) {
+  const { t } = useTranslation();
   return (
     <section className="checkout-section" aria-labelledby="checkout-delivery-title">
-      <h2 id="checkout-delivery-title">Delivery or Pickup?</h2>
+      <h2 id="checkout-delivery-title">{t('checkout.fulfillmentTitle')}</h2>
       <p className="checkout-section-sub">
-        Choose how you would like to receive your order.
+        {t('checkout.fulfillmentSubtitle')}
       </p>
 
-      <div className="fulfillment-options" role="radiogroup" aria-label="Fulfillment method">
+      <div className="fulfillment-options" role="radiogroup" aria-label={t('checkout.ariaFulfillmentMethod')}>
         {FULFILLMENT_TYPES.map((option) => {
           const selected = fulfillmentType === option.id;
           return (
@@ -40,8 +42,8 @@ function FulfillmentStep({
                 <FontAwesomeIcon icon={option.id === 'pickup' ? faStore : faTruckFast} />
               </span>
               <span className="choice-card-body">
-                <strong>{option.label}</strong>
-                <small>{option.description}</small>
+                <strong>{t(option.labelKey)}</strong>
+                <small>{t(option.descriptionKey)}</small>
                 <span className="choice-card-meta">
                   <FontAwesomeIcon icon={faClock} /> {getEstimatedTime(option.id)}
                 </span>
@@ -53,7 +55,7 @@ function FulfillmentStep({
 
       {fulfillmentType === 'pickup' ? (
         <div className="pickup-info">
-          <h3>Pickup details</h3>
+          <h3>{t('checkout.pickupDetailsTitle')}</h3>
           <p>
             <FontAwesomeIcon icon={faLocationDot} /> {RESTAURANT_SETTINGS.pickup.address}
           </p>
@@ -64,12 +66,12 @@ function FulfillmentStep({
             <FontAwesomeIcon icon={faClock} /> {RESTAURANT_SETTINGS.pickup.hours}
           </p>
           <p className="pickup-eta">
-            Estimated pickup time: <strong>{getEstimatedTime('pickup')}</strong>
+            {t('checkout.estimatedPickupTime')} <strong>{getEstimatedTime('pickup')}</strong>
           </p>
         </div>
       ) : (
         <div className="checkout-delivery-address">
-          <h3>Delivery address</h3>
+          <h3>{t('checkout.deliveryAddressTitle')}</h3>
           <AddressForm
             address={address}
             onChange={onAddressChange}

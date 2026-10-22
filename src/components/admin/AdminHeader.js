@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faBell,
   faBars,
@@ -16,27 +17,8 @@ import { useToast } from '../../context/ToastContext';
 import { useTheme } from '../../context/ThemeContext';
 import Avatar from '../account/Avatar';
 
-const ADMIN_TITLES = [
-  { path: '/admin', title: 'Dashboard' },
-  { path: '/admin/orders', title: 'Orders' },
-  { path: '/admin/menu', title: 'Menu' },
-  { path: '/admin/customers', title: 'Customers' },
-  { path: '/admin/coupons', title: 'Coupons' },
-  { path: '/admin/reviews', title: 'Reviews' },
-  { path: '/admin/analytics', title: 'Analytics' },
-  { path: '/admin/settings', title: 'Settings' },
-];
-
-function resolveTitle(pathname) {
-  const match = ADMIN_TITLES.find(
-    (entry) =>
-      pathname === entry.path ||
-      pathname.startsWith(`${entry.path}/`)
-  );
-  return match?.title || 'Dashboard';
-}
-
 function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
+  const { t } = useTranslation();
   const { currentUser, logout } = useAuth();
   const { showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
@@ -45,6 +27,27 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const isDark = theme === 'dark';
+
+  // The section titles live inside the component so they can be translated.
+  const adminTitles = [
+    { path: '/admin', titleKey: 'admin.titleDashboard' },
+    { path: '/admin/orders', titleKey: 'admin.navOrders' },
+    { path: '/admin/menu', titleKey: 'admin.navMenu' },
+    { path: '/admin/customers', titleKey: 'admin.navCustomers' },
+    { path: '/admin/coupons', titleKey: 'admin.navCoupons' },
+    { path: '/admin/reviews', titleKey: 'admin.navReviews' },
+    { path: '/admin/analytics', titleKey: 'admin.navAnalytics' },
+    { path: '/admin/settings', titleKey: 'admin.navSettings' },
+  ];
+
+  const resolveTitle = (pathname) => {
+    const match = adminTitles.find(
+      (entry) =>
+        pathname === entry.path ||
+        pathname.startsWith(`${entry.path}/`)
+    );
+    return t(match?.titleKey || 'admin.titleDashboard');
+  };
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -61,7 +64,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
     setMenuOpen(false);
     const result = await logout();
     if (result.success) {
-      showToast('Successfully logged out');
+      showToast(t('admin.toastLogoutSuccess'));
       navigate('/', { replace: true });
     }
   };
@@ -73,7 +76,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
           type="button"
           className="admin-burger"
           onClick={onOpenSidebar}
-          aria-label="Open menu"
+          aria-label={t('admin.ariaOpenMenu')}
         >
           <FontAwesomeIcon icon={faBars} />
         </button>
@@ -81,11 +84,11 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
           <h1>{resolveTitle(location.pathname)}</h1>
           <p>
             {restaurantLoading
-              ? 'Loading restaurant…'
+              ? t('admin.loadingRestaurant')
               : restaurant
               ? restaurant.name
-              : 'Restaurant'}
-            <span className="admin-header-sep">·</span> Owner
+              : t('admin.restaurantFallback')}
+            <span className="admin-header-sep">·</span> {t('admin.owner')}
           </p>
         </div>
       </div>
@@ -94,8 +97,10 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
         <button
           type="button"
           className="admin-icon-btn theme-toggle"
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={
+            isDark ? t('nav.aria.switchToLight') : t('nav.aria.switchToDark')
+          }
+          title={isDark ? t('nav.aria.switchToLight') : t('nav.aria.switchToDark')}
           onClick={toggleTheme}
         >
           <FontAwesomeIcon icon={isDark ? faSun : faMoon} />
@@ -104,7 +109,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
         <button
           type="button"
           className="admin-icon-btn"
-          aria-label="Notifications"
+          aria-label={t('admin.ariaNotifications')}
         >
           <FontAwesomeIcon icon={faBell} />
           <span className="admin-notif-dot" aria-hidden="true" />
@@ -124,7 +129,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
               size="sm"
             />
             <span className="admin-user-name">
-              {currentUser?.displayName || 'Owner'}
+              {currentUser?.displayName || t('admin.owner')}
             </span>
             <FontAwesomeIcon icon={faChevronDown} className="admin-user-chevron" />
           </button>
@@ -137,7 +142,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
                 className="admin-dropdown-item"
                 onClick={() => setMenuOpen(false)}
               >
-                <FontAwesomeIcon icon={faUser} /> Profile
+                <FontAwesomeIcon icon={faUser} /> {t('admin.profile')}
               </Link>
               <Link
                 to="/admin/settings"
@@ -145,7 +150,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
                 className="admin-dropdown-item"
                 onClick={() => setMenuOpen(false)}
               >
-                <FontAwesomeIcon icon={faGear} /> Restaurant Settings
+                <FontAwesomeIcon icon={faGear} /> {t('admin.restaurantSettings')}
               </Link>
               <div className="admin-dropdown-divider" />
               <button
@@ -154,7 +159,7 @@ function AdminHeader({ restaurant, restaurantLoading, onOpenSidebar }) {
                 className="admin-dropdown-item is-danger"
                 onClick={handleLogout}
               >
-                <FontAwesomeIcon icon={faRightFromBracket} /> Logout
+                <FontAwesomeIcon icon={faRightFromBracket} /> {t('nav.links.logout')}
               </button>
             </div>
           )}

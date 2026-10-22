@@ -19,14 +19,16 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import Avatar from './account/Avatar';
+import LanguageSelector from './LanguageSelector';
 
 const NAV_LINKS = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/menu', label: 'Menu' },
-  { to: '/offers', label: 'Offers' },
-  { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/', key: 'home', end: true },
+  { to: '/menu', key: 'menu' },
+  { to: '/offers', key: 'offers' },
+  { to: '/about', key: 'about' },
+  { to: '/contact', key: 'contact' },
 ];
 
 function NavBar({ isScrolled }) {
@@ -36,6 +38,7 @@ function NavBar({ isScrolled }) {
   const { count, openDrawer } = useCart();
   const { showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const menuRef = useRef(null);
   const isDark = theme === 'dark';
@@ -68,7 +71,7 @@ function NavBar({ isScrolled }) {
     const result = await logout();
     if (result.success) {
       closeAll();
-      showToast('You have been logged out.');
+      showToast(t('nav.messages.loggedOut'));
       navigate('/');
     }
   };
@@ -76,16 +79,16 @@ function NavBar({ isScrolled }) {
   const displayName =
     currentUser?.displayName ||
     currentUser?.email?.split('@')[0] ||
-    'My account';
+    t('nav.links.myAccount');
 
   return (
     <nav
       className={`site-nav ${isScrolled ? 'is-scrolled' : ''}`}
-      aria-label="Main navigation"
+      aria-label={t('nav.aria.mainNavigation')}
     >
       <div className="container">
         <div className="site-nav-inner">
-          <NavLink to="/" className="site-logo" aria-label="Pizza home">
+          <NavLink to="/" className="site-logo" aria-label={t('nav.aria.pizzaHome')}>
             <span className="site-logo-mark">P</span>
             <span>
               Pi<em>zz</em>a
@@ -103,7 +106,7 @@ function NavBar({ isScrolled }) {
                   }
                   onClick={() => setIsOpen(false)}
                 >
-                  {link.label}
+                  {t(`nav.links.${link.key}`)}
                 </NavLink>
               </li>
             ))}
@@ -117,7 +120,7 @@ function NavBar({ isScrolled }) {
                 }}
               >
                 <FontAwesomeIcon icon={isDark ? faSun : faMoon} />
-                {isDark ? 'Light mode' : 'Dark mode'}
+                {isDark ? t('nav.theme.light') : t('nav.theme.dark')}
               </button>
             </li>
           </ul>
@@ -125,11 +128,13 @@ function NavBar({ isScrolled }) {
           <div className="site-nav-spacer" />
 
           <div className="site-nav-actions">
+            <LanguageSelector />
+
             <NavLink
               to="/menu"
               className="site-icon-btn"
-              aria-label="Browse the menu"
-              title="Browse the menu"
+              aria-label={t('nav.aria.browseMenu')}
+              title={t('nav.aria.browseMenu')}
             >
               <FontAwesomeIcon icon={faMagnifyingGlass} />
             </NavLink>
@@ -138,7 +143,7 @@ function NavBar({ isScrolled }) {
               type="button"
               className="site-icon-btn nav-cart-btn"
               onClick={openDrawer}
-              aria-label={`Open cart, ${count} ${count === 1 ? 'item' : 'items'}`}
+              aria-label={t('nav.aria.openCart', { count })}
             >
               <FontAwesomeIcon icon={faCartShopping} />
               {count > 0 && <span className="cart-badge">{count}</span>}
@@ -178,7 +183,7 @@ function NavBar({ isScrolled }) {
                       role="menuitem"
                       onClick={closeAll}
                     >
-                      <FontAwesomeIcon icon={faUser} /> My account
+                      <FontAwesomeIcon icon={faUser} /> {t('nav.links.myAccount')}
                     </NavLink>
                     <NavLink
                       to="/account/orders"
@@ -186,7 +191,7 @@ function NavBar({ isScrolled }) {
                       role="menuitem"
                       onClick={closeAll}
                     >
-                      <FontAwesomeIcon icon={faBoxArchive} /> Orders
+                      <FontAwesomeIcon icon={faBoxArchive} /> {t('nav.links.orders')}
                     </NavLink>
                     <NavLink
                       to="/account/favorites"
@@ -194,7 +199,7 @@ function NavBar({ isScrolled }) {
                       role="menuitem"
                       onClick={closeAll}
                     >
-                      <FontAwesomeIcon icon={faHeart} /> Favorites
+                      <FontAwesomeIcon icon={faHeart} /> {t('nav.links.favorites')}
                     </NavLink>
 
                     {isAdmin && (
@@ -206,7 +211,7 @@ function NavBar({ isScrolled }) {
                           role="menuitem"
                           onClick={closeAll}
                         >
-                          <FontAwesomeIcon icon={faGaugeHigh} /> Dashboard
+                          <FontAwesomeIcon icon={faGaugeHigh} /> {t('nav.links.dashboard')}
                         </NavLink>
                       </>
                     )}
@@ -218,14 +223,14 @@ function NavBar({ isScrolled }) {
                       role="menuitem"
                       onClick={handleLogout}
                     >
-                      <FontAwesomeIcon icon={faRightFromBracket} /> Log out
+                      <FontAwesomeIcon icon={faRightFromBracket} /> {t('nav.links.logout')}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
               <NavLink to="/login" className="contact-btn account-login-btn">
-                Log in
+                {t('nav.links.login')}
               </NavLink>
             )}
 
@@ -233,8 +238,8 @@ function NavBar({ isScrolled }) {
               type="button"
               className="site-icon-btn theme-toggle"
               onClick={toggleTheme}
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? t('nav.aria.switchToLight') : t('nav.aria.switchToDark')}
+              title={isDark ? t('nav.aria.switchToLight') : t('nav.aria.switchToDark')}
             >
               <FontAwesomeIcon icon={isDark ? faSun : faMoon} />
             </button>
@@ -243,7 +248,7 @@ function NavBar({ isScrolled }) {
               type="button"
               className="nav-hamburger"
               onClick={() => setIsOpen((open) => !open)}
-              aria-label="Toggle navigation menu"
+              aria-label={t('nav.aria.toggleMenu')}
               aria-expanded={isOpen}
             >
               <FontAwesomeIcon icon={isOpen ? faXmark : faBars} />

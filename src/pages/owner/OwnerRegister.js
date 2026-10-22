@@ -5,11 +5,13 @@ import {
   faStore,
   faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
 function OwnerRegister() {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,21 +39,17 @@ function OwnerRegister() {
     clearError();
 
     if (password !== confirmPassword) {
-      setFormError('Passwords do not match.');
+      setFormError(t('auth.errorPasswordsDoNotMatch'));
       return;
     }
 
     if (password.length < 6) {
-      setFormError(
-        'Password must be at least 6 characters.'
-      );
+      setFormError(t('auth.errorPasswordTooShort'));
       return;
     }
 
     if (!restaurantName.trim()) {
-      setFormError(
-        'Please enter a restaurant name.'
-      );
+      setFormError(t('auth.errorRestaurantNameRequired'));
       return;
     }
 
@@ -67,9 +65,7 @@ function OwnerRegister() {
     setLoading(false);
 
     if (result.success) {
-      showToast(
-        'Restaurant account created successfully!'
-      );
+      showToast(t('auth.toastRestaurantAccountCreated'));
 
       navigate('/admin', {
         replace: true,
@@ -81,7 +77,7 @@ function OwnerRegister() {
     <div className="auth-page">
       <div className="landing-page">
         <h1 className="landing-title">
-          ADMIN SIGN UP
+          {t('auth.pageTitleAdminSignUp')}
         </h1>
       </div>
 
@@ -91,13 +87,11 @@ function OwnerRegister() {
         </span>
 
         <h2>
-          Create Restaurant Admin Account
+          {t('auth.headingCreateRestaurantAdminAccount')}
         </h2>
 
         <p className="auth-subtitle">
-          Create your restaurant and manage
-          orders, menu, customers and analytics
-          from one dashboard.
+          {t('auth.subtitleCreateRestaurantAdminAccount')}
         </p>
 
         {(formError || authError) && (
@@ -112,7 +106,7 @@ function OwnerRegister() {
         >
           <input
             type="text"
-            placeholder="Your full name"
+            placeholder={t('auth.fieldYourFullName')}
             value={name}
             onChange={(e) =>
               setName(e.target.value)
@@ -122,7 +116,7 @@ function OwnerRegister() {
 
           <input
             type="email"
-            placeholder="Admin email"
+            placeholder={t('auth.fieldAdminEmail')}
             value={email}
             onChange={(e) =>
               setEmail(e.target.value)
@@ -132,7 +126,7 @@ function OwnerRegister() {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('auth.fieldPassword')}
             value={password}
             onChange={(e) =>
               setPassword(e.target.value)
@@ -142,7 +136,7 @@ function OwnerRegister() {
 
           <input
             type="password"
-            placeholder="Confirm password"
+            placeholder={t('auth.fieldConfirmPassword')}
             value={confirmPassword}
             onChange={(e) =>
               setConfirmPassword(e.target.value)
@@ -152,7 +146,7 @@ function OwnerRegister() {
 
           <input
             type="text"
-            placeholder="Restaurant name"
+            placeholder={t('auth.fieldRestaurantName')}
             value={restaurantName}
             onChange={(e) =>
               setRestaurantName(e.target.value)
@@ -166,8 +160,8 @@ function OwnerRegister() {
             disabled={loading}
           >
             {loading
-              ? 'Creating restaurant...'
-              : 'Create Restaurant Account'}
+              ? t('auth.buttonCreatingRestaurant')
+              : t('auth.createRestaurantAccount')}
 
             {!loading && (
               <FontAwesomeIcon
@@ -178,16 +172,16 @@ function OwnerRegister() {
         </form>
 
         <p className="auth-switch">
-          Already have an admin account?{' '}
+          {t('auth.promptAlreadyHaveAdminAccount')}{' '}
           <Link to="/admin/login">
-            Admin Login
+            {t('auth.adminLogin')}
           </Link>
         </p>
 
         <p className="auth-switch">
-          Are you a customer?{' '}
+          {t('auth.promptAreYouCustomer')}{' '}
           <Link to="/register/customer">
-            Customer Sign Up
+            {t('auth.linkCustomerSignUp')}
           </Link>
         </p>
       </div>

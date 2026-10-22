@@ -5,21 +5,28 @@ import {
   faUser,
   faStore,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 
 function AuthChoice() {
+  const { t } = useTranslation();
+
   return (
     <div className="auth-page">
       <div className="landing-page">
         <h1 className="landing-title">
-          LOGIN
+          {t('auth.pageTitleLogin')}
         </h1>
       </div>
 
       <div className="auth-card">
-        <h2>Welcome to Pizza</h2>
+        <h2>
+          {t('auth.headingWelcomeToPizza', {
+            name: t('common.app.name'),
+          })}
+        </h2>
 
         <p className="auth-subtitle">
-          Choose how you want to continue
+          {t('auth.subtitleChooseHowToContinue')}
         </p>
 
         <div className="auth-choice-grid">
@@ -32,15 +39,14 @@ function AuthChoice() {
               className="auth-choice-icon"
             />
 
-            <h3>Customer</h3>
+            <h3>{t('auth.choiceCustomerTitle')}</h3>
 
             <p>
-              Order pizza, track your orders,
-              manage favorites and your account.
+              {t('auth.choiceCustomerText')}
             </p>
 
             <span>
-              Customer Login →
+              {t('auth.choiceCustomerCta')}
             </span>
           </Link>
 
@@ -53,15 +59,14 @@ function AuthChoice() {
               className="auth-choice-icon"
             />
 
-            <h3>Restaurant Admin</h3>
+            <h3>{t('auth.choiceAdminTitle')}</h3>
 
             <p>
-              Manage your restaurant, menu,
-              orders, customers and dashboard.
+              {t('auth.choiceAdminText')}
             </p>
 
             <span>
-              Admin Login →
+              {t('auth.choiceAdminCta')}
             </span>
           </Link>
         </div>

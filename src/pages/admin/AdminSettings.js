@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
 import { updateRestaurant } from '../../services/restaurantService';
 import { useToast } from '../../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import ImagePicker from '../../components/admin/ImagePicker';
@@ -68,6 +69,7 @@ function SettingsSkeleton() {
 }
 
 function AdminSettings() {
+  const { t } = useTranslation();
   const { restaurant, restaurantLoading, restaurantError, reloadRestaurant } =
     useOutletContext();
   const { showToast } = useToast();
@@ -84,13 +86,13 @@ function AdminSettings() {
 
   const validate = () => {
     const next = {};
-    if (!form.name.trim()) next.name = 'Restaurant name is required.';
+    if (!form.name.trim()) next.name = t('admin.errorRestaurantNameRequired');
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      next.email = 'Enter a valid email address.';
+      next.email = t('admin.errorInvalidEmail');
     }
     ['taxRate', 'minOrder', 'deliveryFee', 'freeDeliveryThreshold'].forEach((key) => {
       const value = Number(form[key]);
-      if (Number.isNaN(value) || value < 0) next[key] = 'Enter a number of 0 or more.';
+      if (Number.isNaN(value) || value < 0) next[key] = t('admin.errorNumberMinZero');
     });
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -121,13 +123,13 @@ function AdminSettings() {
         coverImage: form.coverImage,
       });
       if (updated) {
-        showToast('Restaurant settings saved.');
+        showToast(t('admin.toastSettingsSaved'));
         reloadRestaurant();
       } else {
-        showToast('Could not save settings.', 'error');
+        showToast(t('admin.errorSaveSettings'), 'error');
       }
     } catch (err) {
-      showToast('Could not save settings.', 'error');
+      showToast(t('admin.errorSaveSettings'), 'error');
     } finally {
       setSaving(false);
     }
@@ -136,8 +138,8 @@ function AdminSettings() {
   return (
     <div className="admin-overview">
       <SectionTitle
-        title="Restaurant Settings"
-        subtitle="How your restaurant appears to customers and how orders are priced."
+        title={t('admin.restaurantSettings')}
+        subtitle={t('admin.settingsSubtitle')}
       />
 
       {restaurantLoading && !restaurant && <SettingsSkeleton />}
@@ -152,11 +154,11 @@ function AdminSettings() {
         <form className="admin-form" onSubmit={handleSubmit} noValidate>
           <section className="admin-panel">
             <div className="admin-panel-head">
-              <h3>Identity</h3>
+              <h3>{t('admin.settingsIdentity')}</h3>
             </div>
             <div className="admin-form-grid">
               <label className="admin-field">
-                <span>Restaurant name</span>
+                <span>{t('admin.fieldRestaurantName')}</span>
                 <input
                   type="text"
                   value={form.name}
@@ -166,7 +168,7 @@ function AdminSettings() {
                 {errors.name && <small className="admin-field-error">{errors.name}</small>}
               </label>
               <label className="admin-field">
-                <span>Tagline</span>
+                <span>{t('admin.fieldTagline')}</span>
                 <input
                   type="text"
                   value={form.tagline}
@@ -175,7 +177,7 @@ function AdminSettings() {
                 />
               </label>
               <label className="admin-field admin-field--full">
-                <span>Description</span>
+                <span>{t('admin.fieldDescription')}</span>
                 <textarea
                   rows={3}
                   value={form.description}
@@ -186,7 +188,7 @@ function AdminSettings() {
 
               <div className="admin-field">
                 <ImagePicker
-                  label="Logo"
+                  label={t('admin.fieldLogo')}
                   value={form.logo}
                   onChange={(url) => update({ logo: url })}
                   path="branding/logo"
@@ -195,7 +197,7 @@ function AdminSettings() {
               </div>
               <div className="admin-field">
                 <ImagePicker
-                  label="Cover image"
+                  label={t('admin.fieldCoverImage')}
                   value={form.coverImage}
                   onChange={(url) => update({ coverImage: url })}
                   path="branding/cover"
@@ -207,11 +209,11 @@ function AdminSettings() {
 
           <section className="admin-panel">
             <div className="admin-panel-head">
-              <h3>Contact & Location</h3>
+              <h3>{t('admin.settingsContact')}</h3>
             </div>
             <div className="admin-form-grid">
               <label className="admin-field">
-                <span>Phone</span>
+                <span>{t('admin.colPhone')}</span>
                 <input
                   type="tel"
                   value={form.phone}
@@ -219,7 +221,7 @@ function AdminSettings() {
                 />
               </label>
               <label className="admin-field">
-                <span>Email</span>
+                <span>{t('admin.colEmail')}</span>
                 <input
                   type="email"
                   value={form.email}
@@ -228,7 +230,7 @@ function AdminSettings() {
                 {errors.email && <small className="admin-field-error">{errors.email}</small>}
               </label>
               <label className="admin-field admin-field--full">
-                <span>Address</span>
+                <span>{t('admin.colAddress')}</span>
                 <input
                   type="text"
                   value={form.address}
@@ -236,12 +238,12 @@ function AdminSettings() {
                 />
               </label>
               <label className="admin-field admin-field--full">
-                <span>Opening hours</span>
+                <span>{t('admin.fieldOpeningHours')}</span>
                 <input
                   type="text"
                   value={form.openingHours}
                   onChange={(event) => update({ openingHours: event.target.value })}
-                  placeholder="Daily · 11:00 – 23:00"
+                  placeholder={t('admin.phOpeningHours')}
                 />
               </label>
             </div>
@@ -249,11 +251,11 @@ function AdminSettings() {
 
           <section className="admin-panel">
             <div className="admin-panel-head">
-              <h3>Ordering & Delivery</h3>
+              <h3>{t('admin.settingsOrdering')}</h3>
             </div>
             <div className="admin-form-grid">
               <label className="admin-field">
-                <span>Currency symbol</span>
+                <span>{t('admin.fieldCurrencySymbol')}</span>
                 <input
                   type="text"
                   value={form.currency}
@@ -262,7 +264,7 @@ function AdminSettings() {
                 />
               </label>
               <label className="admin-field">
-                <span>Tax rate (%)</span>
+                <span>{t('admin.fieldTaxRate')}</span>
                 <input
                   type="number"
                   min="0"
@@ -273,7 +275,7 @@ function AdminSettings() {
                 {errors.taxRate && <small className="admin-field-error">{errors.taxRate}</small>}
               </label>
               <label className="admin-field">
-                <span>Minimum order</span>
+                <span>{t('admin.fieldMinOrder')}</span>
                 <input
                   type="number"
                   min="0"
@@ -284,7 +286,7 @@ function AdminSettings() {
                 {errors.minOrder && <small className="admin-field-error">{errors.minOrder}</small>}
               </label>
               <label className="admin-field">
-                <span>Delivery fee</span>
+                <span>{t('admin.fieldDeliveryFee')}</span>
                 <input
                   type="number"
                   min="0"
@@ -297,7 +299,7 @@ function AdminSettings() {
                 )}
               </label>
               <label className="admin-field">
-                <span>Free delivery over</span>
+                <span>{t('admin.fieldFreeDeliveryOver')}</span>
                 <input
                   type="number"
                   min="0"
@@ -316,7 +318,7 @@ function AdminSettings() {
                     checked={form.deliveryEnabled}
                     onChange={(event) => update({ deliveryEnabled: event.target.checked })}
                   />
-                  <span>Offer delivery (customers can still choose pickup)</span>
+                  <span>{t('admin.fieldOfferDelivery')}</span>
                 </label>
               </div>
             </div>
@@ -329,7 +331,7 @@ function AdminSettings() {
               disabled={saving}
             >
               <FontAwesomeIcon icon={faFloppyDisk} />
-              {saving ? 'Saving…' : 'Save settings'}
+              {saving ? t('admin.saving') : t('admin.saveSettings')}
             </button>
           </div>
         </form>

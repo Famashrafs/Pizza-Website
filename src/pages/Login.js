@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle } from '@fortawesome/free-brands-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { roleHasAdminAccess } from '../config/roles';
 
 function Login({ adminMode = false }) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -36,7 +38,7 @@ function Login({ adminMode = false }) {
     if (adminMode) {
       if (!isAdmin) {
         showToast(
-          'This is a customer account. Please use a restaurant admin account.',
+          t('auth.errorCustomerAccountInAdminMode'),
           'error'
         );
 
@@ -44,7 +46,7 @@ function Login({ adminMode = false }) {
         return;
       }
 
-      showToast('Welcome back, Admin!');
+      showToast(t('auth.toastWelcomeBackAdmin'));
       navigate('/admin', { replace: true });
       return;
     }
@@ -52,7 +54,7 @@ function Login({ adminMode = false }) {
     // CUSTOMER LOGIN
     if (isAdmin) {
       showToast(
-        'This is a restaurant admin account. Please use Admin Login.',
+        t('auth.errorAdminAccountInCustomerMode'),
         'error'
       );
 
@@ -76,7 +78,9 @@ function Login({ adminMode = false }) {
 
     if (result.success) {
       completeLogin(
-        adminMode ? 'Welcome back, Admin!' : 'Welcome back!',
+        adminMode
+          ? t('auth.toastWelcomeBackAdmin')
+          : t('auth.toastWelcomeBack'),
         result.value?.profile
       );
     }
@@ -93,8 +97,8 @@ function Login({ adminMode = false }) {
     if (result.success) {
       completeLogin(
         adminMode
-          ? 'Welcome back, Admin!'
-          : 'Signed in with Google!',
+          ? t('auth.toastWelcomeBackAdmin')
+          : t('auth.toastSignedInWithGoogle'),
         result.value?.profile
       );
     }
@@ -104,21 +108,23 @@ function Login({ adminMode = false }) {
     <div className="auth-page">
       <div className="landing-page">
         <h1 className="landing-title">
-          {adminMode ? 'ADMIN LOGIN' : 'CUSTOMER LOGIN'}
+          {adminMode
+            ? t('auth.pageTitleAdminLogin')
+            : t('auth.pageTitleCustomerLogin')}
         </h1>
       </div>
 
       <div className="auth-card">
         <h2>
           {adminMode
-            ? 'Restaurant Admin'
-            : 'Welcome Back'}
+            ? t('auth.headingRestaurantAdmin')
+            : t('auth.headingWelcomeBack')}
         </h2>
 
         <p className="auth-subtitle">
           {adminMode
-            ? 'Sign in to manage your restaurant'
-            : 'Sign in to order pizza and manage your account'}
+            ? t('auth.subtitleSignInToManageRestaurant')
+            : t('auth.subtitleSignInToOrder')}
         </p>
 
         {authError && (
@@ -133,7 +139,7 @@ function Login({ adminMode = false }) {
         >
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('auth.fieldEmail')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -141,7 +147,7 @@ function Login({ adminMode = false }) {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('auth.fieldPassword')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -156,14 +162,14 @@ function Login({ adminMode = false }) {
                   setRemember(e.target.checked)
                 }
               />
-              Remember me
+              {t('auth.labelRememberMe')}
             </label>
 
             <Link
               to="/forgot-password"
               className="auth-link"
             >
-              Forgot password?
+              {t('auth.linkForgotPassword')}
             </Link>
           </div>
 
@@ -173,15 +179,15 @@ function Login({ adminMode = false }) {
             disabled={action !== null}
           >
             {action === 'email'
-              ? 'Logging in...'
+              ? t('auth.buttonLoggingIn')
               : adminMode
-              ? 'Admin Login'
-              : 'Customer Login'}
+              ? t('auth.adminLogin')
+              : t('auth.customerLogin')}
           </button>
         </form>
 
         <div className="auth-divider">
-          <span>or</span>
+          <span>{t('auth.dividerOr')}</span>
         </div>
 
         <button
@@ -196,39 +202,39 @@ function Login({ adminMode = false }) {
           />
 
           {action === 'google'
-            ? 'Signing in...'
-            : 'Continue with Google'}
+            ? t('auth.buttonSigningIn')
+            : t('auth.buttonContinueWithGoogle')}
         </button>
 
         {adminMode ? (
           <>
             <p className="auth-switch">
-              Don't have a restaurant account?{' '}
+              {t('auth.promptNoRestaurantAccount')}{' '}
               <Link to="/admin/register">
-                Create Admin Account
+                {t('auth.createAdminAccount')}
               </Link>
             </p>
 
             <p className="auth-switch">
-              Are you a customer?{' '}
+              {t('auth.promptAreYouCustomer')}{' '}
               <Link to="/login/customer">
-                Customer Login
+                {t('auth.customerLogin')}
               </Link>
             </p>
           </>
         ) : (
           <>
             <p className="auth-switch">
-              Don't have an account?{' '}
+              {t('auth.promptNoAccount')}{' '}
               <Link to="/register/customer">
-                Create Customer Account
+                {t('auth.headingCreateCustomerAccount')}
               </Link>
             </p>
 
             <p className="auth-switch">
-              Restaurant owner?{' '}
+              {t('auth.promptRestaurantOwner')}{' '}
               <Link to="/admin/login">
-                Admin Login
+                {t('auth.adminLogin')}
               </Link>
             </p>
           </>

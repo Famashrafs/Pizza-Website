@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCircleCheck,
@@ -8,9 +9,9 @@ import {
   faClock,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../context/AuthContext';
-import { getEstimatedTime, ORDER_STATUS_LABELS } from '../utils/checkoutLogic';
+import { getEstimatedTime } from '../utils/checkoutLogic';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
-import { normalizeOrderStatus } from '../config/orderStatus';
+import { getOrderStatusMeta, normalizeOrderStatus } from '../config/orderStatus';
 import {
   getOrderForUser,
   getGuestOrder,
@@ -34,6 +35,7 @@ const ACTIVE_STATUSES = new Set([
 const GUEST_REFRESH_MS = 15000;
 
 function OrderConfirmation() {
+  const { t } = useTranslation();
   const location = useLocation();
   const { currentUser, isGuest } = useAuth();
 
@@ -116,10 +118,10 @@ function OrderConfirmation() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">ORDER</h1>
+          <h1 className="landing-title">{t('checkout.orderPageTitle')}</h1>
         </div>
         <div className="auth-card">
-          <p>Loading your order…</p>
+          <p>{t('checkout.loadingOrder')}</p>
         </div>
       </div>
     );
@@ -129,19 +131,19 @@ function OrderConfirmation() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">ORDER</h1>
+          <h1 className="landing-title">{t('checkout.orderPageTitle')}</h1>
         </div>
         <div className="auth-card empty-cart">
-          <h2>Something went wrong</h2>
+          <h2>{t('checkout.loadErrorTitle')}</h2>
           <p className="auth-subtitle">
-            We couldn&apos;t load your order details. Please try again.
+            {t('checkout.loadErrorText')}
           </p>
           <button
             type="button"
             className="contact-btn empty-cart-btn"
             onClick={() => setReloadKey((key) => key + 1)}
           >
-            Try Again
+            {t('common.actions.retry')}
           </button>
         </div>
       </div>
@@ -152,17 +154,15 @@ function OrderConfirmation() {
     return (
       <div className="auth-page">
         <div className="landing-page">
-          <h1 className="landing-title">ORDER</h1>
+          <h1 className="landing-title">{t('checkout.orderPageTitle')}</h1>
         </div>
         <div className="auth-card">
-          <h2>No order found</h2>
+          <h2>{t('checkout.notFoundTitle')}</h2>
           <p className="auth-subtitle">
-            We couldn&apos;t find a recent order to confirm. If you just placed
-            one, you can find it in your account&apos;s order history — or
-            contact us and we&apos;ll help right away.
+            {t('checkout.notFoundText')}
           </p>
           <Link to="/menu" className="contact-btn empty-cart-btn">
-            Browse Menu
+            {t('checkout.browseMenu')}
           </Link>
         </div>
       </div>
@@ -172,31 +172,34 @@ function OrderConfirmation() {
   const isPickup = order.fulfillmentType === 'pickup';
   const estimated =
     order.estimatedTime || getEstimatedTime(order.fulfillmentType);
+  const statusMeta = getOrderStatusMeta(order.orderStatus);
+  const statusLabel = statusMeta?.labelKey ? t(statusMeta.labelKey) : (statusMeta?.label || 'Order placed');
+  const customerName = order.customer?.fullName || t('checkout.defaultCustomerName');
 
   return (
     <div className="auth-page">
       <div className="landing-page">
-        <h1 className="landing-title">THANK YOU!</h1>
+        <h1 className="landing-title">{t('checkout.thankYouTitle')}</h1>
       </div>
 
       <div className="confirmation-card">
         <div className="confirmation-icon" aria-hidden="true">
           <FontAwesomeIcon icon={faCircleCheck} />
         </div>
-        <h2>Order confirmed 🎉</h2>
+        <h2>{t('checkout.orderConfirmedTitle')}</h2>
         <p className="confirmation-sub">
-          Thanks {order.customer?.fullName || 'friend'}! We&apos;ve received your
-          order. You can follow its progress below
-          {isGuest ? ' and on this page any time you return to it.' : '.'}
+          {isGuest
+            ? t('checkout.confirmationSubGuest', { name: customerName })
+            : t('checkout.confirmationSubSignedIn', { name: customerName })}
         </p>
 
         <div className="confirmation-facts">
           <div className="confirmation-fact">
-            <span>Order number</span>
+            <span>{t('checkout.orderNumber')}</span>
             <strong>{order.id}</strong>
           </div>
           <div className="confirmation-fact">
-            <span>Total</span>
+            <span>{t('checkout.total')}</span>
             <strong>
               {RESTAURANT_SETTINGS.currency}
               {Number(order.total || 0).toFixed(2)}
@@ -204,51 +207,51 @@ function OrderConfirmation() {
           </div>
           <div className="confirmation-fact">
             <span>
-              <FontAwesomeIcon icon={faClock} /> Estimated{' '}
-              {isPickup ? 'preparation' : 'delivery'}
+              <FontAwesomeIcon icon={faClock} />{' '}
+              {isPickup ? t('checkout.estimatedPreparation') : t('checkout.estimatedDelivery')}
             </span>
             <strong>{estimated}</strong>
           </div>
           <div className="confirmation-fact">
             <span>
-              <FontAwesomeIcon icon={isPickup ? faStore : faTruckFast} /> Method
+              <FontAwesomeIcon icon={isPickup ? faStore : faTruckFast} /> {t('checkout.method')}
             </span>
-            <strong>{isPickup ? 'Pickup' : 'Delivery'}</strong>
+            <strong>{isPickup ? t('checkout.fulfillmentPickup') : t('checkout.fulfillmentDelivery')}</strong>
           </div>
         </div>
 
         {isPickup ? (
           <p className="confirmation-address">
-            Pick up from <strong>{RESTAURANT_SETTINGS.pickup.address}</strong>
+            {t('checkout.pickUpFrom', { address: RESTAURANT_SETTINGS.pickup.address })}
           </p>
         ) : (
           order.addressText && (
             <p className="confirmation-address">
-              Delivering to <strong>{order.addressText}</strong>
+              {t('checkout.deliveringTo', { address: order.addressText })}
             </p>
           )
         )}
 
         <p className="confirmation-status">
-          Status:{' '}
-          <strong>{ORDER_STATUS_LABELS[order.orderStatus] || 'Order placed'}</strong>
+          {t('checkout.statusLabel')}{' '}
+          <strong>{statusLabel}</strong>
           {order.paymentStatus === 'pending' && order.paymentMethod === 'cash' && (
             <span className="confirmation-pay-note">
               {' '}
-              · Payment due on {isPickup ? 'pickup' : 'delivery'}
+              · {isPickup ? t('checkout.paymentDueOnPickup') : t('checkout.paymentDueOnDelivery')}
             </span>
           )}
         </p>
 
         <div className="confirmation-tracker">
-          <h3>Order progress</h3>
+          <h3>{t('checkout.orderProgress')}</h3>
           <OrderStatusTracker order={order} />
         </div>
 
         <div className="confirmation-actions">
           {isGuest ? (
             <Link to="/menu" className="contact-btn confirmation-primary">
-              Continue Shopping
+              {t('checkout.continueShopping')}
             </Link>
           ) : (
             <>
@@ -256,13 +259,13 @@ function OrderConfirmation() {
                 to={`/orders/${order.id}`}
                 className="contact-btn confirmation-primary"
               >
-                Track Order
+                {t('checkout.trackOrder')}
               </Link>
               <Link to="/orders" className="menu-btn">
-                View Orders
+                {t('checkout.viewOrders')}
               </Link>
               <Link to="/menu" className="confirmation-link">
-                Continue Shopping
+                {t('checkout.continueShopping')}
               </Link>
             </>
           )}

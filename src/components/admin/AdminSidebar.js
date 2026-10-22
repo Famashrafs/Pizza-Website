@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import {
   faGaugeHigh,
   faReceipt,
@@ -17,17 +18,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Avatar from '../account/Avatar';
 
-const NAV_ITEMS = [
-  { to: '/admin', end: true, label: 'Overview', icon: faGaugeHigh },
-  { to: '/admin/orders', label: 'Orders', icon: faReceipt },
-  { to: '/admin/menu', label: 'Menu', icon: faUtensils },
-  { to: '/admin/customers', label: 'Customers', icon: faUsers },
-  { to: '/admin/coupons', label: 'Coupons', icon: faTicket },
-  { to: '/admin/reviews', label: 'Reviews', icon: faStar },
-  { to: '/admin/analytics', label: 'Analytics', icon: faChartLine },
-  { to: '/admin/settings', label: 'Settings', icon: faGear },
-];
-
 function initials(name) {
   return (name || 'R')
     .split(' ')
@@ -39,15 +29,28 @@ function initials(name) {
 }
 
 function AdminSidebar({ restaurant, owner, restaurantLoading, open, onClose }) {
+  const { t } = useTranslation();
   const { logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  // The navigation labels live inside the component so they can be translated.
+  const navItems = [
+    { to: '/admin', end: true, labelKey: 'admin.navOverview', icon: faGaugeHigh },
+    { to: '/admin/orders', labelKey: 'admin.navOrders', icon: faReceipt },
+    { to: '/admin/menu', labelKey: 'admin.navMenu', icon: faUtensils },
+    { to: '/admin/customers', labelKey: 'admin.navCustomers', icon: faUsers },
+    { to: '/admin/coupons', labelKey: 'admin.navCoupons', icon: faTicket },
+    { to: '/admin/reviews', labelKey: 'admin.navReviews', icon: faStar },
+    { to: '/admin/analytics', labelKey: 'admin.navAnalytics', icon: faChartLine },
+    { to: '/admin/settings', labelKey: 'admin.navSettings', icon: faGear },
+  ];
 
   const handleLogout = async () => {
     onClose();
     const result = await logout();
     if (result.success) {
-      showToast('Successfully logged out');
+      showToast(t('admin.toastLogoutSuccess'));
       navigate('/', { replace: true });
     }
   };
@@ -57,22 +60,22 @@ function AdminSidebar({ restaurant, owner, restaurantLoading, open, onClose }) {
       {open && <div className="admin-sidebar-overlay" onClick={onClose} aria-hidden="true" />}
       <aside
         className={`admin-sidebar ${open ? 'is-open' : ''}`}
-        aria-label="Restaurant dashboard navigation"
+        aria-label={t('admin.ariaSidebarNav')}
       >
         <div className="admin-sidebar-top">
-          <div className="admin-sidebar-brand">Slice Admin</div>
+          <div className="admin-sidebar-brand">{t('admin.brand')}</div>
           <button
             type="button"
             className="admin-sidebar-close"
             onClick={onClose}
-            aria-label="Close menu"
+            aria-label={t('admin.ariaCloseMenu')}
           >
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
         <nav className="admin-nav">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -83,7 +86,7 @@ function AdminSidebar({ restaurant, owner, restaurantLoading, open, onClose }) {
               onClick={onClose}
             >
               <FontAwesomeIcon icon={item.icon} />
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
             </NavLink>
           ))}
         </nav>
@@ -107,13 +110,13 @@ function AdminSidebar({ restaurant, owner, restaurantLoading, open, onClose }) {
                 </span>
                 <div className="admin-restaurant-meta">
                   <strong>{restaurant.name}</strong>
-                  <span>{restaurant.tagline || 'Restaurant'}</span>
+                  <span>{restaurant.tagline || t('admin.restaurantFallback')}</span>
                 </div>
               </>
             ) : (
               <div className="admin-restaurant-meta">
-                <strong>Restaurant</strong>
-                <span>Not configured yet</span>
+                <strong>{t('admin.restaurantFallback')}</strong>
+                <span>{t('admin.notConfiguredYet')}</span>
               </div>
             )}
           </div>
@@ -121,13 +124,13 @@ function AdminSidebar({ restaurant, owner, restaurantLoading, open, onClose }) {
           <div className="admin-owner-tile">
             <Avatar name={owner?.displayName} photoURL={owner?.photoURL} size="sm" />
             <div className="admin-owner-meta">
-              <strong>{owner?.displayName || 'Owner'}</strong>
-              <span>Restaurant Owner</span>
+              <strong>{owner?.displayName || t('admin.owner')}</strong>
+              <span>{t('admin.restaurantOwner')}</span>
             </div>
           </div>
 
           <button type="button" className="admin-logout-btn" onClick={handleLogout}>
-            <FontAwesomeIcon icon={faRightFromBracket} /> Log out
+            <FontAwesomeIcon icon={faRightFromBracket} /> {t('nav.links.logout')}
           </button>
         </div>
       </aside>

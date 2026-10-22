@@ -12,8 +12,9 @@ import {
   faChartLine,
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useTranslation } from 'react-i18next';
 import { computeSalesSeries } from '../../services/adminService';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { formatMoney } from '../../i18n/format';
 import { useTheme } from '../../context/ThemeContext';
 import AdminEmptyState from './AdminEmptyState';
 import AdminErrorState from './AdminErrorState';
@@ -39,10 +40,12 @@ function readPalette() {
   };
 }
 
-const RANGES = [
-  { key: 'today', label: 'Today' },
-  { key: '7d', label: '7 Days' },
-  { key: '30d', label: '30 Days' },
+// Default ranges carry a translation key instead of copy so the labels stay
+// translatable while the keys remain the shared source of truth.
+const DEFAULT_RANGES = [
+  { key: 'today', labelKey: 'admin.rangeToday' },
+  { key: '7d', labelKey: 'admin.range7Days' },
+  { key: '30d', labelKey: 'admin.range30Days' },
 ];
 
 function SalesSkeleton() {
@@ -63,18 +66,21 @@ function SalesOverview({
   status,
   error,
   onRetry,
-  ranges = RANGES,
+  ranges,
   range: controlledRange,
   onRangeChange,
   defaultRange = '7d',
 }) {
+  const { t, i18n } = useTranslation();
   const [internalRange, setInternalRange] = useState(defaultRange);
   const range = controlledRange || internalRange;
   const setRange = (key) => {
     if (onRangeChange) onRangeChange(key);
     else setInternalRange(key);
   };
-  const currency = RESTAURANT_SETTINGS.currency || '$';
+  const rangeOptions = ranges && ranges.length ? ranges : DEFAULT_RANGES;
+  const labelFor = (entry) =>
+    entry.labelKey ? t(entry.labelKey) : entry.label || entry.key;
   useTheme();
   const palette = readPalette();
 
@@ -93,18 +99,20 @@ function SalesOverview({
       <div className="admin-panel-head">
         <div>
           <h3>
-            <FontAwesomeIcon icon={faChartLine} /> Sales Overview
+            <FontAwesomeIcon icon={faChartLine} /> {t('admin.salesOverview')}
           </h3>
           <p className="admin-panel-sub">
             {range === 'today'
-              ? 'Revenue by hour'
-              : `Revenue · ${
-                  ranges.find((entry) => entry.key === range)?.label || range
-                }`}
+              ? t('admin.revenueByHour')
+              : t('admin.revenueRange', {
+                  range: labelFor(
+                    rangeOptions.find((entry) => entry.key === range) || { key: range }
+                  ),
+                })}
           </p>
         </div>
-        <div className="admin-tabs" role="tablist" aria-label="Sales range">
-          {ranges.map((r) => (
+        <div className="admin-tabs" role="tablist" aria-label={t('admin.ariaSalesRange')}>
+          {rangeOptions.map((r) => (
             <button
               key={r.key}
               type="button"
@@ -113,7 +121,7 @@ function SalesOverview({
               className={range === r.key ? 'admin-tab active' : 'admin-tab'}
               onClick={() => setRange(r.key)}
             >
-              {r.label}
+              {labelFor(r)}
             </button>
           ))}
         </div>
@@ -122,22 +130,25 @@ function SalesOverview({
       {status === 'loading' && <SalesSkeleton />}
 
       {status === 'error' && (
-        <AdminErrorState message={error || 'Unable to load sales data.'} onRetry={onRetry} />
+        <AdminErrorState
+          message={error || t('admin.errorLoadSales')}
+          onRetry={onRetry}
+        />
       )}
 
       {status === 'success' && orders.length === 0 && (
         <AdminEmptyState
           icon={faChartLine}
-          title="No sales to display yet"
-          message="Sales trends will appear here as soon as your first order comes in."
+          title={t('admin.noSalesYet')}
+          message={t('admin.noSalesYetMessage')}
         />
       )}
 
       {status === 'success' && orders.length > 0 && (
         <>
           <div className="admin-sales-total">
-            {currency}
-            {rangeTotal.toFixed(2)} <span>in selected range</span>
+            {formatMoney(rangeTotal, i18n.language)}{' '}
+            <span>{t('admin.inSelectedRange')}</span>
           </div>
           <div className="admin-chart">
             <ResponsiveContainer width="100%" height={280}>
@@ -160,13 +171,16 @@ function SalesOverview({
                   tick={{ fill: palette.tick, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) => `${currency}${v}`}
+                  tickFormatter={(v) => formatMoney(v, i18n.language)}
                   width={64}
                 />
                 <Tooltip
                   contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, borderRadius: 8 }}
                   labelStyle={{ color: palette.label }}
-                  formatter={(value) => [`${currency}${Number(value).toFixed(2)}`, 'Revenue']}
+                  formatter={(value) => [
+                    formatMoney(Number(value), i18n.language),
+                    t('admin.revenue'),
+                  ]}
                   cursor={{ stroke: palette.accent, strokeDasharray: '3 3' }}
                 />
                 <Area

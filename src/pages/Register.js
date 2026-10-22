@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 function Register() {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,14 +36,12 @@ function Register() {
     clearError();
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('auth.errorPasswordsDoNotMatch'));
       return;
     }
 
     if (password.length < 6) {
-      setError(
-        'Password must be at least 6 characters.'
-      );
+      setError(t('auth.errorPasswordTooShort'));
       return;
     }
 
@@ -58,9 +58,7 @@ function Register() {
     setLoading(false);
 
     if (result.success) {
-      showToast(
-        'Customer account created successfully!'
-      );
+      showToast(t('auth.toastCustomerAccountCreated'));
 
       navigate(from, {
         replace: true,
@@ -72,16 +70,15 @@ function Register() {
     <div className="auth-page">
       <div className="landing-page">
         <h1 className="landing-title">
-          CUSTOMER SIGN UP
+          {t('auth.pageTitleCustomerSignUp')}
         </h1>
       </div>
 
       <div className="auth-card">
-        <h2>Create Customer Account</h2>
+        <h2>{t('auth.headingCreateCustomerAccount')}</h2>
 
         <p className="auth-subtitle">
-          Create your account and start ordering
-          delicious pizza.
+          {t('auth.subtitleCreateCustomerAccount')}
         </p>
 
         {(error || authError) && (
@@ -96,7 +93,7 @@ function Register() {
         >
           <input
             type="text"
-            placeholder="Full name"
+            placeholder={t('auth.fieldFullName')}
             value={name}
             onChange={(e) =>
               setName(e.target.value)
@@ -106,7 +103,7 @@ function Register() {
 
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('auth.fieldEmail')}
             value={email}
             onChange={(e) =>
               setEmail(e.target.value)
@@ -116,7 +113,7 @@ function Register() {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('auth.fieldPassword')}
             value={password}
             onChange={(e) =>
               setPassword(e.target.value)
@@ -126,7 +123,7 @@ function Register() {
 
           <input
             type="password"
-            placeholder="Confirm password"
+            placeholder={t('auth.fieldConfirmPassword')}
             value={confirmPassword}
             onChange={(e) =>
               setConfirmPassword(e.target.value)
@@ -136,7 +133,7 @@ function Register() {
 
           <input
             type="tel"
-            placeholder="Phone number"
+            placeholder={t('auth.fieldPhoneNumber')}
             value={phone}
             onChange={(e) =>
               setPhone(e.target.value)
@@ -146,7 +143,7 @@ function Register() {
 
           <input
             type="text"
-            placeholder="Default delivery address (optional)"
+            placeholder={t('auth.fieldDefaultAddress')}
             value={address}
             onChange={(e) =>
               setAddress(e.target.value)
@@ -159,22 +156,22 @@ function Register() {
             disabled={loading}
           >
             {loading
-              ? 'Creating account...'
-              : 'Create Customer Account'}
+              ? t('auth.buttonCreatingAccount')
+              : t('auth.headingCreateCustomerAccount')}
           </button>
         </form>
 
         <p className="auth-switch">
-          Already have an account?{' '}
+          {t('auth.promptAlreadyHaveAccount')}{' '}
           <Link to="/login/customer">
-            Customer Login
+            {t('auth.customerLogin')}
           </Link>
         </p>
 
         <p className="auth-switch">
-          Own a restaurant?{' '}
+          {t('auth.promptOwnRestaurant')}{' '}
           <Link to="/admin/register">
-            Create Admin Account
+            {t('auth.createAdminAccount')}
           </Link>
         </p>
       </div>

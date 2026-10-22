@@ -8,6 +8,7 @@ import {
   faTriangleExclamation,
   faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import SectionTitle from '../../components/account/SectionTitle';
@@ -21,6 +22,7 @@ import {
 import { isPaymentProviderConfigured } from '../../services/paymentService';
 
 function PaymentsPage() {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const { account } = useOutletContext();
@@ -35,10 +37,7 @@ function PaymentsPage() {
   const handleAdd = () => {
     if (!providerConfigured) {
       // No provider → honest blocker, never a fake card form.
-      showToast(
-        'Saving a card requires a PCI-compliant payment provider, which is not configured for this project yet.',
-        'warning'
-      );
+      showToast(t('account.toastProviderRequired'), 'warning');
       return;
     }
     setAdding(true);
@@ -55,7 +54,7 @@ function PaymentsPage() {
     if (!result.success && result.reason === 'provider-required') {
       showToast(result.error, 'warning');
     } else if (result.success) {
-      showToast('Payment method added.');
+      showToast(t('account.toastPaymentMethodAdded'));
     }
     setAdding(false);
   };
@@ -64,48 +63,49 @@ function PaymentsPage() {
     setPendingRemoval(null);
     const next = removePaymentMethod(uid, method.id);
     showToast(
-      `Payment method removed${next.length ? '. Another method is now the default.' : '.'}`
+      next.length
+        ? t('account.toastPaymentMethodRemovedWithDefault')
+        : t('account.toastPaymentMethodRemoved')
     );
   };
 
   const handleSetDefault = (id) => {
     setDefaultPaymentMethod(uid, id);
-    showToast('Default payment method updated.');
+    showToast(t('account.toastDefaultPaymentUpdated'));
   };
 
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Payment Methods"
-        subtitle="Saved payment methods used at checkout"
+        title={t('account.paymentMethodsTitle')}
+        subtitle={t('account.paymentMethodsSubtitle')}
       />
 
       <div className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faWallet} /> Saved Methods
+            <FontAwesomeIcon icon={faWallet} /> {t('account.savedMethods')}
           </h3>
           <button type="button" className="menu-btn dash-btn-sm" onClick={handleAdd}>
             <FontAwesomeIcon icon={adding ? faSpinner : faPlus} spin={adding} />
-            &nbsp; Add Payment Method
+            &nbsp; {t('account.addPaymentMethod')}
           </button>
         </div>
 
         <p className="dash-card-sub">
-          <FontAwesomeIcon icon={faLock} /> Cards are stored with your payment
-          provider. Full card numbers and CVVs are never kept in this app.
+          <FontAwesomeIcon icon={faLock} /> {t('account.cardsStoredNote')}
         </p>
 
         {methods.length === 0 ? (
           <div className="dash-empty">
             <FontAwesomeIcon icon={faWallet} className="dash-empty-icon" />
-            <p>No payment methods saved.</p>
+            <p>{t('account.noPaymentMethods')}</p>
             <button
               type="button"
               className="menu-btn dash-btn-sm"
               onClick={handleAdd}
             >
-              Add Payment Method
+              {t('account.addPaymentMethod')}
             </button>
           </div>
         ) : (
@@ -124,20 +124,16 @@ function PaymentsPage() {
         {!providerConfigured && (
           <div className="dash-provider-note">
             <FontAwesomeIcon icon={faTriangleExclamation} />
-            <span>
-              Card and online payments are not available yet. Their UI is in
-              place and will activate once a PCI-compliant provider (e.g.
-              Stripe) is connected.
-            </span>
+            <span>{t('account.providerUnavailableNote')}</span>
           </div>
         )}
       </div>
 
       {adding && (
         <ConfirmDialog
-          title="Add a payment method"
-          message="Secure card entry uses hosted payment fields provided by the PCI-compliant provider. Connect a payment provider (e.g. Stripe) in the restaurant dashboard before using this."
-          confirmLabel="Continue"
+          title={t('account.addPaymentMethodTitle')}
+          message={t('account.secureCardEntryNote')}
+          confirmLabel={t('common.actions.continue')}
           onConfirm={handleSimulatedToken}
           onCancel={() => setAdding(false)}
         />
@@ -145,13 +141,13 @@ function PaymentsPage() {
 
       {pendingRemoval && (
         <ConfirmDialog
-          title="Remove this payment method?"
+          title={t('account.removePaymentMethodTitle')}
           message={
             pendingRemoval.isDefault
-              ? 'This is your default payment method. Removing it will make the first remaining method the new default.'
-              : 'This payment method will be removed from your account.'
+              ? t('account.removeDefaultPaymentWarning')
+              : t('account.removePaymentMethodWarning')
           }
-          confirmLabel="Remove"
+          confirmLabel={t('common.actions.remove')}
           danger
           onConfirm={() => handleRemove(pendingRemoval)}
           onCancel={() => setPendingRemoval(null)}

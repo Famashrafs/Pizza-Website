@@ -7,6 +7,7 @@ import {
   faRotateRight,
   faPen,
 } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../../services/phoneAuth';
 
 function PhoneVerification({ account, onVerified }) {
+  const { t } = useTranslation();
   const { updateProfileData } = useAuth();
   const { showToast } = useToast();
 
@@ -69,7 +71,7 @@ function PhoneVerification({ account, onVerified }) {
     setError('');
     setExpired(false);
     if (!phone.trim()) {
-      setError('Please enter your phone number.');
+      setError(t('account.errorEnterPhone'));
       return;
     }
     setSending(true);
@@ -80,12 +82,9 @@ function PhoneVerification({ account, onVerified }) {
       setAttempts(0);
       setMode('confirm');
       startCountdown();
-      showToast('Message sent. Enter the code to verify your number.');
+      showToast(t('account.toastCodeSent'));
     } catch (err) {
-      setError(
-        err.message ||
-          'We could not send the verification code. Please try again.'
-      );
+      setError(err.message || t('account.toastSendCodeFailed'));
     } finally {
       setSending(false);
     }
@@ -94,11 +93,11 @@ function PhoneVerification({ account, onVerified }) {
   const handleConfirm = async (event) => {
     event?.preventDefault();
     if (!code || code.length !== OTP_LENGTH) {
-      setError(`Please enter the ${OTP_LENGTH}-digit code.`);
+      setError(t('account.errorEnterCode', { length: OTP_LENGTH }));
       return;
     }
     if (!confirmationRef.current) {
-      setError('Please request a new code first.');
+      setError(t('account.errorRequestNewCode'));
       return;
     }
     setConfirming(true);
@@ -115,21 +114,19 @@ function PhoneVerification({ account, onVerified }) {
       });
       setMode('verified');
       onVerified?.();
-      showToast('Phone number verified.');
+      showToast(t('account.toastPhoneVerified'));
     } catch (err) {
       const nextAttempts = attempts + 1;
       setAttempts(nextAttempts);
       if (err.code === 'auth/code-expired') {
         setExpired(true);
-        setError('This code has expired. Please request a new one.');
+        setError(t('account.errorCodeExpired'));
       } else if (nextAttempts >= 5) {
         confirmationRef.current = null;
         setMode('enter');
-        setError(
-          'Too many incorrect attempts. Please request a new code and try again.'
-        );
+        setError(t('account.errorTooManyAttempts'));
       } else {
-        setError(err.message || 'The code you entered is incorrect.');
+        setError(err.message || t('account.errorCodeIncorrect'));
       }
     } finally {
       setConfirming(false);
@@ -163,14 +160,14 @@ function PhoneVerification({ account, onVerified }) {
             <p className="dash-phone-value">
               <FontAwesomeIcon icon={faPhone} /> {displayedPhone}
             </p>
-            <p className="dash-phone-verified">Verified</p>
+            <p className="dash-phone-verified">{t('account.verified')}</p>
           </div>
           <button
             type="button"
             className="menu-btn dash-btn-sm"
             onClick={handleChangePhone}
           >
-            <FontAwesomeIcon icon={faPen} /> Change
+            <FontAwesomeIcon icon={faPen} /> {t('account.change')}
           </button>
         </div>
       ) : (
@@ -181,7 +178,7 @@ function PhoneVerification({ account, onVerified }) {
                 type="tel"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
-                placeholder="+20 10XXXXXXXX"
+                placeholder={t('account.phonePlaceholder')}
                 autoComplete="tel"
               />
               <button
@@ -191,17 +188,17 @@ function PhoneVerification({ account, onVerified }) {
               >
                 {sending ? (
                   <>
-                    <FontAwesomeIcon icon={faSpinner} spin /> Sending…
+                    <FontAwesomeIcon icon={faSpinner} spin /> {t('account.sending')}
                   </>
                 ) : (
-                  'Send Verification Code'
+                  t('account.sendVerificationCode')
                 )}
               </button>
             </form>
           ) : (
             <form onSubmit={handleConfirm} className="dash-phone-confirm">
               <p>
-                We sent a {OTP_LENGTH}-digit code to{' '}
+                {t('account.codeSentToPrefix', { length: OTP_LENGTH })}{' '}
                 <strong>{maskedInput}</strong>
               </p>
               <input
@@ -212,9 +209,9 @@ function PhoneVerification({ account, onVerified }) {
                 onChange={(event) =>
                   setCode(event.target.value.replace(/[^\d]/g, ''))
                 }
-                placeholder="000000"
+                placeholder={t('account.codePlaceholder')}
                 autoFocus
-                aria-label="Verification code"
+                aria-label={t('account.verificationCodeAria')}
               />
               <div className="dash-phone-actions">
                 <button
@@ -224,10 +221,10 @@ function PhoneVerification({ account, onVerified }) {
                 >
                   {confirming ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin /> Verifying…
+                      <FontAwesomeIcon icon={faSpinner} spin /> {t('account.verifying')}
                     </>
                   ) : (
-                    'Verify'
+                    t('account.verify')
                   )}
                 </button>
                 <button
@@ -236,7 +233,7 @@ function PhoneVerification({ account, onVerified }) {
                   onClick={handleChangePhone}
                   disabled={confirming}
                 >
-                  Change phone
+                  {t('account.changePhone')}
                 </button>
               </div>
               <div className="dash-phone-resend">
@@ -247,17 +244,17 @@ function PhoneVerification({ account, onVerified }) {
                 >
                   <FontAwesomeIcon icon={faRotateRight} />
                   {countdown > 0
-                    ? `Resend code in ${countdown}s`
+                    ? t('account.resendIn', { seconds: countdown })
                     : sending
-                    ? 'Sending…'
-                    : 'Resend code'}
+                    ? t('account.sending')
+                    : t('account.resendCode')}
                 </button>
               </div>
             </form>
           )}
           {error && <p className="dash-field-error">{error}</p>}
           {expired && (
-            <p className="dash-field-error">Request a new code to continue.</p>
+            <p className="dash-field-error">{t('account.requestNewCode')}</p>
           )}
         </div>
       )}

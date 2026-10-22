@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark, faCartShopping } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
+import { formatMoney } from '../i18n/format';
 import CartLine from './CartLine';
 import CartItemEditor from './CartItemEditor';
 
@@ -11,6 +13,7 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function CartDrawer() {
+  const { t, i18n } = useTranslation();
   const {
     items,
     count,
@@ -76,7 +79,7 @@ function CartDrawer() {
   const handleDecrease = (item) => updateQty(item.id, item.qty - 1);
   const handleRemove = (item) => {
     removeItem(item.id);
-    showToast(`${item.name} removed from cart.`);
+    showToast(t('cart.toastRemoved', { name: item.name }));
   };
 
   return (
@@ -91,7 +94,7 @@ function CartDrawer() {
           className="cart-drawer"
           role="dialog"
           aria-modal="true"
-          aria-label="Shopping cart"
+          aria-label={t('cart.ariaShoppingCart')}
           ref={panelRef}
           tabIndex={-1}
           onKeyDown={handleTab}
@@ -100,14 +103,14 @@ function CartDrawer() {
           <header className="cart-drawer-head">
             <h2>
               <FontAwesomeIcon icon={faCartShopping} />
-              <span>Your Cart</span>
+              <span>{t('cart.title')}</span>
               {count > 0 && <span className="cart-drawer-count">({count})</span>}
             </h2>
             <button
               type="button"
               className="cart-drawer-close"
               onClick={closeDrawer}
-              aria-label="Close cart"
+              aria-label={t('cart.ariaCloseCart')}
             >
               <FontAwesomeIcon icon={faXmark} />
             </button>
@@ -119,10 +122,10 @@ function CartDrawer() {
                 <p className="cart-empty-emoji" aria-hidden="true">
                   🍕
                 </p>
-                <h3>Your cart is empty</h3>
-                <p>Add something delicious from the menu.</p>
+                <h3>{t('cart.emptyTitle')}</h3>
+                <p>{t('cart.emptyText')}</p>
                 <Link to="/menu" className="contact-btn" onClick={closeDrawer}>
-                  Explore Menu
+                  {t('cart.exploreMenu')}
                 </Link>
               </div>
             ) : (
@@ -144,26 +147,26 @@ function CartDrawer() {
           {items.length > 0 && (
             <footer className="cart-drawer-foot">
               <div className="cart-drawer-row">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{t('cart.subtotal')}</span>
+                <span>{formatMoney(subtotal, i18n.language)}</span>
               </div>
               <div className="cart-drawer-row cart-drawer-row--total">
-                <span>Total</span>
-                <span>${grandTotal.toFixed(2)}</span>
+                <span>{t('cart.total')}</span>
+                <span>{formatMoney(grandTotal, i18n.language)}</span>
               </div>
               <Link
                 to="/checkout"
                 className="contact-btn cart-drawer-checkout"
                 onClick={closeDrawer}
               >
-                Checkout
+                {t('cart.checkout')}
               </Link>
               <Link
                 to="/cart"
                 className="cart-drawer-viewall"
                 onClick={closeDrawer}
               >
-                View full cart
+                {t('cart.viewFullCart')}
               </Link>
             </footer>
           )}

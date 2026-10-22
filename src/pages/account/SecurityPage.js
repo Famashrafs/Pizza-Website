@@ -2,38 +2,37 @@ import React from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPhone, faLock } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import PhoneVerification from '../../components/account/PhoneVerification';
 import PasswordChangeForm from '../../components/account/PasswordChangeForm';
 import DangerZone from '../../components/account/DangerZone';
 
 function SecurityPage() {
+  const { t } = useTranslation();
   const { account } = useOutletContext();
 
   return (
     <div className="dash-section">
       <SectionTitle
-        title="Security"
-        subtitle="Phone verification, password and account safety"
+        title={t('account.navSecurity')}
+        subtitle={t('account.securitySubtitle')}
       />
 
       <section className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faPhone} /> Phone Number
+            <FontAwesomeIcon icon={faPhone} /> {t('account.phoneNumberTitle')}
           </h3>
         </div>
-        <p className="dash-card-sub">
-          Verify your phone number to receive order updates by SMS. A 6-digit
-          code will be sent to your phone.
-        </p>
+        <p className="dash-card-sub">{t('account.phoneVerifyInfo')}</p>
         <PhoneVerification account={account} />
       </section>
 
       <section className="dash-card">
         <div className="dash-card-head">
           <h3>
-            <FontAwesomeIcon icon={faLock} /> Change Password
+            <FontAwesomeIcon icon={faLock} /> {t('account.changePasswordTitle')}
           </h3>
         </div>
         <PasswordChangeForm />

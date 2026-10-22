@@ -2,8 +2,10 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLock } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 
 function AuthPrompt({ title, message, fullPage }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const from = location.pathname;
 
@@ -13,17 +15,16 @@ function AuthPrompt({ title, message, fullPage }) {
         <span className="auth-prompt-icon">
           <FontAwesomeIcon icon={faLock} />
         </span>
-        <h2>{title || 'Sign in required'}</h2>
+        <h2>{title || t('auth.promptSignInRequiredTitle')}</h2>
         <p>
-          {message ||
-            'Log in to your account to continue. Your cart is saved so you can finish anytime.'}
+          {message || t('auth.promptSignInRequiredText')}
         </p>
         <div className="auth-prompt-actions">
           <Link to="/login" state={{ from }} className="contact-btn">
-            Log In
+            {t('auth.buttonLogIn')}
           </Link>
           <Link to="/register" className="menu-btn">
-            Create Account
+            {t('auth.createAccount')}
           </Link>
         </div>
       </div>

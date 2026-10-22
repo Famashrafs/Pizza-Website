@@ -13,20 +13,21 @@ import {
   faLocationDot,
 } from '@fortawesome/free-solid-svg-icons';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
+import { useTranslation } from 'react-i18next';
 
 const EXPLORE_LINKS = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/menu', label: 'Menu' },
-  { to: '/offers', label: 'Offers' },
-  { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/', key: 'home', end: true },
+  { to: '/menu', key: 'menu' },
+  { to: '/offers', key: 'offers' },
+  { to: '/about', key: 'about' },
+  { to: '/contact', key: 'contact' },
 ];
 
 const CUSTOMER_LINKS = [
-  { to: '/cart', label: 'Your cart' },
-  { to: '/orders', label: 'Track order' },
-  { to: '/account/favorites', label: 'Favorites' },
-  { to: '/account/addresses', label: 'Saved addresses' },
+  { to: '/cart', key: 'yourCart' },
+  { to: '/orders', key: 'trackOrder' },
+  { to: '/account/favorites', key: 'favorites' },
+  { to: '/account/addresses', key: 'savedAddresses' },
 ];
 
 const SOCIAL_LINKS = [
@@ -37,21 +38,21 @@ const SOCIAL_LINKS = [
 
 function Footer() {
   const year = new Date().getFullYear();
+  const { t } = useTranslation();
 
   return (
     <footer className="site-footer">
       <div className="container">
         <div className="site-footer-inner">
           <div className="site-footer-brand">
-            <Link to="/" className="site-logo" aria-label="Pizza home">
+            <Link to="/" className="site-logo" aria-label={t('nav.aria.pizzaHome')}>
               <span className="site-logo-mark">P</span>
               <span>
                 Pi<em>zz</em>a
               </span>
             </Link>
             <p>
-              {RESTAURANT_SETTINGS.tagline}. Hand-built pizzas, an honest menu,
-              and delivery you can track from our ovens to your door.
+              {t('common.app.tagline')}. {t('nav.footer.tagline')}
             </p>
             <div className="footer-social">
               {SOCIAL_LINKS.map((social) => (
@@ -69,12 +70,12 @@ function Footer() {
           </div>
 
           <div>
-            <h4>Explore</h4>
+            <h4>{t('nav.footer.explore')}</h4>
             <ul>
               {EXPLORE_LINKS.map((link) => (
                 <li key={link.to}>
                   <NavLink to={link.to} end={Boolean(link.end)}>
-                    {link.label}
+                    {t(`nav.links.${link.key}`)}
                   </NavLink>
                 </li>
               ))}
@@ -82,18 +83,18 @@ function Footer() {
           </div>
 
           <div>
-            <h4>Customer</h4>
+            <h4>{t('nav.footer.customer')}</h4>
             <ul>
               {CUSTOMER_LINKS.map((link) => (
                 <li key={link.to}>
-                  <NavLink to={link.to}>{link.label}</NavLink>
+                  <NavLink to={link.to}>{t(`nav.links.${link.key}`)}</NavLink>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <h4>Get in touch</h4>
+            <h4>{t('nav.footer.getInTouch')}</h4>
             <ul className="footer-contact">
               <li>
                 <FontAwesomeIcon icon={faLocationDot} />
@@ -120,8 +121,13 @@ function Footer() {
         </div>
 
         <div className="site-footer-bottom">
-          <span>© {year} {RESTAURANT_SETTINGS.name}. All rights reserved.</span>
-          <span>Fresh from the wood-fired oven.</span>
+          <span>
+            {t('nav.footer.rightsReserved', {
+              year,
+              name: RESTAURANT_SETTINGS.name,
+            })}
+          </span>
+          <span>{t('nav.footer.freshFromOven')}</span>
         </div>
       </div>
     </footer>

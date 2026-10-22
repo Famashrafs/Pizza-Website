@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "Pizza",
+    "tagline": "Cucina a legna e consegna a domicilio"
+  },
+  "actions": {
+    "save": "Salva",
+    "saveChanges": "Salva le modifiche",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "close": "Chiudi",
+    "delete": "Elimina",
+    "remove": "Rimuovi",
+    "edit": "Modifica",
+    "add": "Aggiungi",
+    "back": "Indietro",
+    "next": "Avanti",
+    "continue": "Continua",
+    "submit": "Invia",
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "apply": "Applica",
+    "clear": "Cancella",
+    "search": "Cerca",
+    "viewAll": "Vedi tutto",
+    "seeMore": "Scopri di più",
+    "loading": "Caricamento…",
+    "optional": "Facoltativo",
+    "required": "Obbligatorio"
+  },
+  "states": {
+    "empty": "Non c'è ancora nulla qui",
+    "error": "Qualcosa è andato storto. Riprova.",
+    "loading": "Caricamento…",
+    "noResults": "Nessun risultato trovato"
+  },
+  "a11y": {
+    "dismiss": "Chiudi",
+    "close": "Chiudi",
+    "loading": "Caricamento",
+    "requiredField": "Campo obbligatorio",
+    "confirmTitle": "Sei sicuro?"
+  },
+  "guard": {
+    "manageProfile": "Accedi per gestire il tuo profilo",
+    "viewOrders": "Accedi per vedere i tuoi ordini",
+    "trackOrder": "Accedi per seguire il tuo ordine",
+    "manageAddresses": "Accedi per gestire i tuoi indirizzi",
+    "viewFavorites": "Accedi per vedere i tuoi preferiti"
+  },
+  "comingSoon": {
+    "couponsTitle": "Coupon",
+    "couponsDescription": "Crea e gestisci codici sconto e promozioni. Questa sezione sarà costruita nella prossima fase.",
+    "reviewsTitle": "Recensioni",
+    "reviewsDescription": "Leggi e rispondi alle recensioni dei clienti. Questa sezione sarà costruita nella prossima fase."
+  },
+  "orderStatus": {
+    "placed": "Ordine ricevuto",
+    "confirmed": "Confermato",
+    "preparing": "In preparazione",
+    "ready": "Pronto per il ritiro",
+    "out_for_delivery": "In consegna",
+    "delivered": "Consegnato",
+    "cancelled": "Annullato"
+  },
+  "orderStatusDescription": {
+    "placed": "Abbiamo ricevuto il tuo ordine e lo confermeremo a breve.",
+    "confirmed": "Il tuo ordine è stato confermato.",
+    "preparing": "La nostra cucina sta preparando il tuo ordine.",
+    "ready": "Il tuo ordine è pronto per essere ritirato.",
+    "out_for_delivery": "Il tuo ordine è in viaggio.",
+    "delivered": "Buon appetito! Il tuo ordine è stato consegnato.",
+    "cancelled": "Questo ordine è stato annullato."
+  },
+  "paymentStatus": {
+    "pending": "In sospeso",
+    "paid": "Pagato",
+    "unpaid": "Non pagato",
+    "failed": "Non riuscito",
+    "refunded": "Rimborsato"
+  },
+  "errors": {
+    "generic": "Qualcosa è andato storto. Riprova.",
+    "network": "Problema di rete. Controlla la connessione e riprova.",
+    "notFound": "Non abbiamo trovato quello che cercavi.",
+    "signInRequired": "Devi effettuare l'accesso per continuare.",
+    "permission": "Non hai il permesso di farlo.",
+    "somethingWrong": "Qualcosa è andato storto durante il caricamento di questa sezione."
+  },
+  "units": {
+    "items_one": "{{count}} articolo",
+    "items_other": "{{count}} articoli",
+    "orders_one": "{{count}} ordine",
+    "orders_other": "{{count}} ordini",
+    "minutes_one": "{{count}} minuto",
+    "minutes_other": "{{count}} minuti",
+    "toppings_one": "{{count}} extra",
+    "toppings_other": "{{count}} extra"
+  }
+}

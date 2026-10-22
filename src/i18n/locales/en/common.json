@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "Pizza",
+    "tagline": "Wood-fired kitchen & delivery"
+  },
+  "actions": {
+    "save": "Save",
+    "saveChanges": "Save changes",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "delete": "Delete",
+    "remove": "Remove",
+    "edit": "Edit",
+    "add": "Add",
+    "back": "Back",
+    "next": "Next",
+    "continue": "Continue",
+    "submit": "Submit",
+    "retry": "Try Again",
+    "dismiss": "Dismiss",
+    "apply": "Apply",
+    "clear": "Clear",
+    "search": "Search",
+    "viewAll": "View all",
+    "seeMore": "See more",
+    "loading": "Loading…",
+    "optional": "Optional",
+    "required": "Required"
+  },
+  "states": {
+    "empty": "Nothing here yet",
+    "error": "Something went wrong. Please try again.",
+    "loading": "Loading…",
+    "noResults": "No results found"
+  },
+  "a11y": {
+    "dismiss": "Dismiss",
+    "close": "Close",
+    "loading": "Loading",
+    "requiredField": "Required field",
+    "confirmTitle": "Are you sure?"
+  },
+  "guard": {
+    "manageProfile": "Login to manage your profile",
+    "viewOrders": "Login to view your orders",
+    "trackOrder": "Login to track your order",
+    "manageAddresses": "Login to manage addresses",
+    "viewFavorites": "Login to see your favorites"
+  },
+  "comingSoon": {
+    "couponsTitle": "Coupons",
+    "couponsDescription": "Create and manage discount codes and promotions. This section will be built in the next phase.",
+    "reviewsTitle": "Reviews",
+    "reviewsDescription": "Read and respond to customer reviews. This section will be built in the next phase."
+  },
+  "orderStatus": {
+    "placed": "Order placed",
+    "confirmed": "Confirmed",
+    "preparing": "Preparing",
+    "ready": "Ready for pickup",
+    "out_for_delivery": "Out for delivery",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  },
+  "orderStatusDescription": {
+    "placed": "We received your order and will confirm it shortly.",
+    "confirmed": "Your order has been confirmed.",
+    "preparing": "Our kitchen is working on your order.",
+    "ready": "Your order is ready to collect.",
+    "out_for_delivery": "Your order is on the way.",
+    "delivered": "Enjoy! Your order has been delivered.",
+    "cancelled": "This order was cancelled."
+  },
+  "paymentStatus": {
+    "pending": "Pending",
+    "paid": "Paid",
+    "unpaid": "Unpaid",
+    "failed": "Failed",
+    "refunded": "Refunded"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network problem. Please check your connection and try again.",
+    "notFound": "We couldn't find what you were looking for.",
+    "signInRequired": "You need to be signed in to continue.",
+    "permission": "You do not have permission to do that.",
+    "somethingWrong": "Something went wrong while loading this section."
+  },
+  "units": {
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "orders_one": "{{count}} order",
+    "orders_other": "{{count}} orders",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "toppings_one": "{{count}} topping",
+    "toppings_other": "{{count}} toppings"
+  }
+}

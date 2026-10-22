@@ -11,25 +11,13 @@ import {
 import { useRestaurantCustomers } from '../../hooks/useRestaurantCustomers';
 import { useRestaurantOrders } from '../../hooks/useRestaurantOrders';
 import { getCustomerKey } from '../../services/customerService';
-import { RESTAURANT_SETTINGS } from '../../config/restaurant';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime, formatMoney } from '../../i18n/format';
 import StatusBadge from '../../components/admin/StatusBadge';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 
-function formatDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function initials(customer) {
-  const source = customer?.name || customer?.email || 'Guest';
+function initials(customer, guestLabel) {
+  const source = customer?.name || customer?.email || guestLabel;
   return source
     .split(/\s+/)
     .filter(Boolean)
@@ -39,10 +27,10 @@ function initials(customer) {
 }
 
 function AdminCustomerDetails() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { restaurant } = useOutletContext();
   const restaurantId = restaurant?.id || null;
-  const currency = RESTAURANT_SETTINGS.currency || '$';
   const navigate = useNavigate();
 
   const { status, customers, error, reload } = useRestaurantCustomers(restaurantId);
@@ -88,7 +76,7 @@ function AdminCustomerDetails() {
       <div className="admin-overview">
         <div className="admin-panel">
           <AdminErrorState
-            message="We couldn't find that customer."
+            message={t('admin.errorCustomerNotFound')}
             onRetry={() => navigate('/admin/customers')}
           />
         </div>
@@ -97,10 +85,13 @@ function AdminCustomerDetails() {
   }
 
   const stats = [
-    { label: 'Orders', value: customer.orderCount },
-    { label: 'Completed', value: customer.completedOrders },
-    { label: 'Cancelled', value: customer.cancelledOrders },
-    { label: 'Total spent', value: `${currency}${Number(customer.totalSpent).toFixed(2)}` },
+    { label: t('admin.statOrders'), value: customer.orderCount },
+    { label: t('admin.statCompleted'), value: customer.completedOrders },
+    { label: t('admin.statCancelled'), value: customer.cancelledOrders },
+    {
+      label: t('admin.statTotalSpent'),
+      value: formatMoney(Number(customer.totalSpent), i18n.language),
+    },
   ];
 
   return (
@@ -110,31 +101,35 @@ function AdminCustomerDetails() {
         className="admin-back-link"
         onClick={() => navigate('/admin/customers')}
       >
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to customers
+        <FontAwesomeIcon icon={faArrowLeft} /> {t('admin.backToCustomers')}
       </button>
 
       <section className="admin-panel admin-customer-profile">
-        <span className="admin-avatar admin-avatar--lg">{initials(customer)}</span>
+        <span className="admin-avatar admin-avatar--lg">
+          {initials(customer, t('admin.guest'))}
+        </span>
         <div className="admin-customer-profile-body">
           <h2>
             {customer.name}
             {customer.customerId && !customer.isGuest && (
               <span className="admin-badge tone-success admin-badge--inline">
-                <FontAwesomeIcon icon={faCrown} /> Registered
+                <FontAwesomeIcon icon={faCrown} /> {t('admin.registered')}
               </span>
             )}
           </h2>
           <div className="admin-customer-profile-contact">
             <span>
-              <FontAwesomeIcon icon={faEnvelope} /> {customer.email || 'No email'}
+              <FontAwesomeIcon icon={faEnvelope} /> {customer.email || t('admin.noEmail')}
             </span>
             <span>
-              <FontAwesomeIcon icon={faPhone} /> {customer.phone || 'No phone'}
+              <FontAwesomeIcon icon={faPhone} /> {customer.phone || t('admin.noPhone')}
             </span>
           </div>
           <p className="admin-muted">
-            First order {formatDateTime(customer.firstOrderAt)} · Last order{' '}
-            {formatDateTime(customer.lastOrderAt)}
+            {t('admin.firstAndLastOrder', {
+              first: formatDateTime(customer.firstOrderAt, i18n.language) || '—',
+              last: formatDateTime(customer.lastOrderAt, i18n.language) || '—',
+            })}
           </p>
         </div>
       </section>
@@ -153,47 +148,50 @@ function AdminCustomerDetails() {
       <section className="admin-panel">
         <div className="admin-panel-head">
           <h3>
-            <FontAwesomeIcon icon={faReceipt} /> Order history
+            <FontAwesomeIcon icon={faReceipt} /> {t('admin.orderHistory')}
           </h3>
         </div>
         {customerOrders.length === 0 ? (
-          <p className="admin-muted">No orders found for this customer.</p>
+          <p className="admin-muted">{t('admin.noOrdersForCustomer')}</p>
         ) : (
-          <div className="admin-table admin-table--orders" role="table" aria-label="Customer orders">
+          <div
+            className="admin-table admin-table--orders"
+            role="table"
+            aria-label={t('admin.ariaCustomerOrders')}
+          >
             <div className="admin-table-head" role="row">
-              <span role="columnheader">Order</span>
-              <span role="columnheader">Items</span>
-              <span role="columnheader">Total</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader">Placed</span>
+              <span role="columnheader">{t('admin.colOrder')}</span>
+              <span role="columnheader">{t('admin.colItems')}</span>
+              <span role="columnheader">{t('admin.colTotal')}</span>
+              <span role="columnheader">{t('admin.colStatus')}</span>
+              <span role="columnheader">{t('admin.colPlaced')}</span>
               <span role="columnheader" className="admin-table-actions-head">
-                View
+                {t('admin.view')}
               </span>
             </div>
             {customerOrders.map((order) => (
               <div className="admin-table-row" role="row" key={order.id}>
-                <span className="admin-table-id" role="cell" data-label="Order">
+                <span className="admin-table-id" role="cell" data-label={t('admin.colOrder')}>
                   {order.id}
                 </span>
-                <span role="cell" data-label="Items">
+                <span role="cell" data-label={t('admin.colItems')}>
                   {(order.items || []).length}
                 </span>
-                <span className="admin-table-price" role="cell" data-label="Total">
-                  {currency}
-                  {Number(order.total).toFixed(2)}
+                <span className="admin-table-price" role="cell" data-label={t('admin.colTotal')}>
+                  {formatMoney(Number(order.total), i18n.language)}
                 </span>
-                <span role="cell" data-label="Status">
+                <span role="cell" data-label={t('admin.colStatus')}>
                   <StatusBadge type="order" value={order.orderStatus} />
                 </span>
-                <span className="admin-table-date" role="cell" data-label="Placed">
-                  {formatDateTime(order.createdAt)}
+                <span className="admin-table-date" role="cell" data-label={t('admin.colPlaced')}>
+                  {formatDateTime(order.createdAt, i18n.language) || '—'}
                 </span>
-                <span className="admin-table-actions" role="cell" data-label="View">
+                <span className="admin-table-actions" role="cell" data-label={t('admin.view')}>
                   <Link
                     to={`/admin/orders/${order.id}`}
                     className="admin-btn admin-btn--ghost admin-btn--xs"
                   >
-                    View
+                    {t('admin.view')}
                   </Link>
                 </span>
               </div>

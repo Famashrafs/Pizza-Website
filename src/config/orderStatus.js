@@ -33,43 +33,57 @@ export const ORDER_STATUS_FLOW = {
 export const ORDER_STATUS_META = {
   [ORDER_STATUS.PENDING]: {
     label: 'Order placed',
+    labelKey: 'common.orderStatus.placed',
     description: 'We received your order and will confirm it shortly.',
+    descriptionKey: 'common.orderStatusDescription.placed',
     icon: 'receipt',
     tone: 'info',
   },
   [ORDER_STATUS.CONFIRMED]: {
     label: 'Confirmed',
+    labelKey: 'common.orderStatus.confirmed',
     description: 'Your order has been confirmed.',
+    descriptionKey: 'common.orderStatusDescription.confirmed',
     icon: 'check',
     tone: 'info',
   },
   [ORDER_STATUS.PREPARING]: {
     label: 'Preparing',
+    labelKey: 'common.orderStatus.preparing',
     description: 'Our kitchen is working on your order.',
+    descriptionKey: 'common.orderStatusDescription.preparing',
     icon: 'fire',
     tone: 'warning',
   },
   [ORDER_STATUS.READY]: {
     label: 'Ready for pickup',
+    labelKey: 'common.orderStatus.ready',
     description: 'Your order is ready to collect.',
+    descriptionKey: 'common.orderStatusDescription.ready',
     icon: 'bag',
     tone: 'success',
   },
   [ORDER_STATUS.OUT_FOR_DELIVERY]: {
     label: 'Out for delivery',
+    labelKey: 'common.orderStatus.out_for_delivery',
     description: 'Your order is on the way.',
+    descriptionKey: 'common.orderStatusDescription.out_for_delivery',
     icon: 'truck',
     tone: 'warning',
   },
   [ORDER_STATUS.DELIVERED]: {
     label: 'Delivered',
+    labelKey: 'common.orderStatus.delivered',
     description: 'Enjoy! Your order has been delivered.',
+    descriptionKey: 'common.orderStatusDescription.delivered',
     icon: 'check',
     tone: 'success',
   },
   [ORDER_STATUS.CANCELLED]: {
     label: 'Cancelled',
+    labelKey: 'common.orderStatus.cancelled',
     description: 'This order was cancelled.',
+    descriptionKey: 'common.orderStatusDescription.cancelled',
     icon: 'xmark',
     tone: 'danger',
   },
@@ -191,11 +205,31 @@ export const PAYMENT_STATUS = {
 };
 
 export const PAYMENT_STATUS_META = {
-  [PAYMENT_STATUS.PENDING]: { label: 'Pending', tone: 'info' },
-  [PAYMENT_STATUS.PAID]: { label: 'Paid', tone: 'success' },
-  [PAYMENT_STATUS.UNPAID]: { label: 'Unpaid', tone: 'warning' },
-  [PAYMENT_STATUS.FAILED]: { label: 'Failed', tone: 'danger' },
-  [PAYMENT_STATUS.REFUNDED]: { label: 'Refunded', tone: 'muted' },
+  [PAYMENT_STATUS.PENDING]: {
+    label: 'Pending',
+    labelKey: 'common.paymentStatus.pending',
+    tone: 'info',
+  },
+  [PAYMENT_STATUS.PAID]: {
+    label: 'Paid',
+    labelKey: 'common.paymentStatus.paid',
+    tone: 'success',
+  },
+  [PAYMENT_STATUS.UNPAID]: {
+    label: 'Unpaid',
+    labelKey: 'common.paymentStatus.unpaid',
+    tone: 'warning',
+  },
+  [PAYMENT_STATUS.FAILED]: {
+    label: 'Failed',
+    labelKey: 'common.paymentStatus.failed',
+    tone: 'danger',
+  },
+  [PAYMENT_STATUS.REFUNDED]: {
+    label: 'Refunded',
+    labelKey: 'common.paymentStatus.refunded',
+    tone: 'muted',
+  },
 };
 
 export const PAYMENT_STATUS_LABELS = Object.fromEntries(

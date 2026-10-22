@@ -1,9 +1,11 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCreditCard, faStar } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 import { maskCardNumber } from '../../services/accountService';
 
 function PaymentMethodCard({ method, onSetDefault, onRemove }) {
+  const { t } = useTranslation();
   const expires =
     method.expMonth && method.expYear
       ? `${String(method.expMonth).padStart(2, '0')}/${String(
@@ -17,16 +19,18 @@ function PaymentMethodCard({ method, onSetDefault, onRemove }) {
         <FontAwesomeIcon icon={faCreditCard} />
       </span>
       <div className="dash-payment-info">
-        <p className="dash-payment-brand">{method.brand || 'Card'}</p>
+        <p className="dash-payment-brand">{method.brand || t('account.cardFallback')}</p>
         <p className="dash-payment-number">
           {maskCardNumber(method.brand, method.last4)}
         </p>
-        <p className="dash-payment-expiry">Expires {expires}</p>
+        <p className="dash-payment-expiry">
+          {t('account.expiresOn', { date: expires })}
+        </p>
       </div>
       <div className="dash-payment-actions">
         {method.isDefault ? (
           <span className="dash-payment-default">
-            <FontAwesomeIcon icon={faStar} /> Default
+            <FontAwesomeIcon icon={faStar} /> {t('account.defaultBadge')}
           </span>
         ) : (
           <button
@@ -34,7 +38,7 @@ function PaymentMethodCard({ method, onSetDefault, onRemove }) {
             className="menu-btn dash-btn-xs"
             onClick={() => onSetDefault(method.id)}
           >
-            Set Default
+            {t('account.setDefault')}
           </button>
         )}
         <button
@@ -42,7 +46,7 @@ function PaymentMethodCard({ method, onSetDefault, onRemove }) {
           className="menu-btn dash-btn-xs is-danger"
           onClick={() => onRemove(method)}
         >
-          Remove
+          {t('common.actions.remove')}
         </button>
       </div>
     </div>

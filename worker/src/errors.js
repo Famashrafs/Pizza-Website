@@ -23,6 +23,22 @@ export function isConfigurationError(err) {
   return Boolean(err) && err.name === 'ConfigurationError';
 }
 
+// A DEPENDENCY (not the client, not the token) failed: Identity Toolkit was
+// unreachable, quota-limited or rejected the API key. The caller's session may
+// be perfectly valid, so this must NOT be reported as "your session expired"
+// (that would tell a customer to sign in again for a backend outage) — it is a
+// 503 with CORS headers instead.
+export class UpstreamUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'UpstreamUnavailableError';
+  }
+}
+
+export function isUpstreamUnavailable(err) {
+  return Boolean(err) && err.name === 'UpstreamUnavailableError';
+}
+
 // Log-safe error message. Redacts OAuth/Firestore access tokens that can show
 // up inside upstream error messages (query strings) and truncates the rest, so
 // a server log can never leak a credential.

@@ -208,6 +208,155 @@ test('non-retryable commit failures throw instead of looping', async () => {
   );
 });
 
+// --- Commit payload (REST wire format) --------------------------------------
+
+// The real Firestore REST API REJECTS the Admin-SDK transform shape with
+//   400 Invalid JSON payload received. Unknown name "serverTimestamp" at
+//      'writes[0].update_transforms[0]'. Cannot find field.
+// so the adapter must emit the REST DocumentTransform shape
+//   { "fieldPath": "createdAt", "setToServerValue": "REQUEST_TIME" }.
+
+test('a set() commit serializes server timestamps as REST updateTransforms', async () => {
+  const { db, fake } = makeDb();
+  await db.runTransaction(async (tx) => {
+    tx.set(db.collection('orders').doc('ORD-TS'), {
+      total: 30,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  const commit = fake.requests.find((r) => r.url.includes(':commit'));
+  assert.ok(commit, 'expected a commit request');
+  assert.equal(commit.method, 'POST');
+
+  const write = commit.body.writes[0];
+  assert.deepEqual(write.updateTransforms, [
+    { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+    { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+
+  // The Admin-SDK shape must never reach the wire.
+  assert.ok(!JSON.stringify(commit.body).includes('serverTimestamp'));
+  // Stamped fields are carried by the transform, not by `fields`.
+  assert.deepEqual(Object.keys(write.update.fields), ['total']);
+  // Field paths / update mask / transaction id are preserved.
+  assert.deepEqual(write.updateMask.fieldPaths, ['total', 'createdAt', 'updatedAt']);
+  assert.match(write.update.name, /\/documents\/orders\/ORD-TS$/);
+  assert.ok(commit.body.transaction);
+});
+
+test('an update() commit serializes server timestamps as REST updateTransforms', async () => {
+  const { db, fake } = makeDb();
+  fake.seedDoc('orders/ORD-UPD', { total: 50, guestTokenHash: 'old-hash', customerType: 'guest' });
+
+  await db.runTransaction(async (tx) => {
+    const ref = db.collection('orders').doc('ORD-UPD');
+    const snap = await tx.get(ref);
+    assert.equal(snap.exists, true);
+    tx.update(ref, { guestTokenHash: 'new-hash', updatedAt: serverTimestamp() });
+  });
+
+  const commit = fake.requests.find((r) => r.url.includes(':commit'));
+  const write = commit.body.writes[0];
+  assert.deepEqual(write.updateTransforms, [
+    { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+  assert.ok(!JSON.stringify(commit.body).includes('serverTimestamp'));
+  // Masked merge: only the listed fields are written.
+  assert.deepEqual(Object.keys(write.update.fields), ['guestTokenHash']);
+  assert.deepEqual(write.updateMask.fieldPaths, ['guestTokenHash', 'updatedAt']);
+  assert.match(write.update.name, /\/documents\/orders\/ORD-UPD$/);
+});
+
+test('a write without server timestamps carries no updateTransforms', async () => {
+  const { db, fake } = makeDb();
+  await db.runTransaction(async (tx) => {
+    tx.set(db.collection('orders').doc('ORD-PLAIN'), { total: 12 });
+  });
+  const commit = fake.requests.find((r) => r.url.includes(':commit'));
+  assert.equal(commit.body.writes[0].updateTransforms, undefined);
+});
+
+// The check above inspects the parsed payload; this one inspects the RAW
+// string that is actually written to the HTTP request body, so the exact JSON
+// casing required by the REST API ("setToServerValue": "REQUEST_TIME") is
+// verified on the wire, not on an intermediate object.
+test('the RAW serialized commit body uses the exact Firestore REST casing', async () => {
+  const { fake } = makeDb();
+  const rawBodies = [];
+  const spy = async (url, options = {}) => {
+    if (String(url).includes(':commit')) rawBodies.push(options.body);
+    return fake.fetchImpl(url, options);
+  };
+  const db = createFirestore({
+    projectId: PROJECT,
+    getAccessToken: async () => 'test-token',
+    fetchImpl: spy,
+  });
+
+  await db.runTransaction(async (tx) => {
+    tx.set(db.collection('orders').doc('ORD-RAW'), {
+      total: 7,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  assert.equal(rawBodies.length, 1);
+  const raw = rawBodies[0];
+  assert.equal(typeof raw, 'string');
+  // Exact wire casing.
+  assert.ok(raw.includes('"updateTransforms"'));
+  assert.ok(raw.includes('"setToServerValue":"REQUEST_TIME"'));
+  assert.ok(raw.includes('"fieldPath":"createdAt"'));
+  assert.ok(raw.includes('"fieldPath":"updatedAt"'));
+  // The Admin-SDK property must never be serialized.
+  assert.ok(!raw.includes('serverTimestamp'));
+
+  // Same content, parsed from the wire.
+  const parsed = JSON.parse(raw);
+  assert.deepEqual(parsed.writes[0].updateTransforms, [
+    { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+    { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+});
+
+// The fake mirrors the REST API's strict transform validation, so a regression
+// to the Admin-SDK shape fails loudly instead of passing silently.
+test('the fake rejects an Admin-SDK style transform exactly like the real Firestore API', async () => {  const { fake } = makeDb();
+  const base = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
+
+  const started = await fake.fetchImpl(`${base}:beginTransaction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ options: { readWrite: {} } }),
+  });
+  const { transaction } = await started.json();
+
+  const res = await fake.fetchImpl(`${base}:commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transaction,
+      writes: [
+        {
+          update: { name: `${base}/orders/ORD-BAD`, fields: {} },
+          updateMask: { fieldPaths: ['createdAt'] },
+          updateTransforms: [{ fieldPath: 'createdAt', serverTimestamp: {} }],
+        },
+      ],
+    }),
+  });
+
+  assert.equal(res.status, 400);
+  const payload = await res.json();
+  assert.match(
+    payload.error.message,
+    /Unknown name "serverTimestamp" at 'writes\[0\]\.update_transforms\[0\]'/
+  );
+});
+
 // --- Emulator mode ----------------------------------------------------------
 
 test('emulator mode targets FIRESTORE_EMULATOR_HOST over plain HTTP without OAuth', async () => {

@@ -116,6 +116,13 @@ function encodeFilter(field, op, value) {
 // fields become updateTransforms (the server, not the client, stamps them).
 // `documentsBase` is the `.../documents` prefix so update.name is a FULL
 // document resource name, as the REST API requires.
+//
+// REST transform shape (Firestore v1 DocumentTransform):
+//   { "fieldPath": "createdAt", "setToServerValue": "REQUEST_TIME" }
+// The Admin SDK's `serverTimestamp: {}` is the Admin/gRPC shape and is REJECTED
+// by the REST API with:
+//   400 Invalid JSON payload received. Unknown name "serverTimestamp" at
+//       'writes[0].update_transforms[0]'. Cannot find field.
 function toWrite({ type, path, data }, documentsBase) {
   const transforms = [];
   const maskPaths = [];
@@ -126,7 +133,7 @@ function toWrite({ type, path, data }, documentsBase) {
     if (value === undefined) continue;
     if (isServerTimestamp(value)) {
       maskPaths.push(key);
-      transforms.push({ fieldPath: key, serverTimestamp: {} });
+      transforms.push({ fieldPath: key, setToServerValue: 'REQUEST_TIME' });
       continue;
     }
     maskPaths.push(key);

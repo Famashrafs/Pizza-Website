@@ -160,6 +160,65 @@ test('anonymous checkout recomputes authoritative prices and persists the order 
   assert.equal(receiptPaths.length, 1);
 });
 
+// Regression: the commit payload must use the Firestore REST transform shape
+// { fieldPath, setToServerValue: "REQUEST_TIME" }. The Admin-SDK shape
+// (serverTimestamp) makes the real API answer
+//   400 Invalid JSON payload received. Unknown name "serverTimestamp" at
+//      'writes[0].update_transforms[0]'. Cannot find field.
+test('the checkout commit payload uses the Firestore REST server-timestamp format', async () => {
+  const { handle, fake } = setup();
+  const res = await postOrder(handle, checkoutPayload());
+  assert.equal(res.status, 200);
+
+  const commits = fake.requests.filter((r) => r.url.includes(':commit'));
+  assert.ok(commits.length >= 1, 'expected a commit request');
+  const wire = JSON.stringify(commits.map((c) => c.body));
+
+  const transforms = commits.flatMap((c) =>
+    c.body.writes.flatMap((w) => w.updateTransforms || [])
+  );
+  assert.ok(transforms.length >= 3, 'expected transforms for the order and the receipt');
+  for (const transform of transforms) {
+    assert.deepEqual(Object.keys(transform).sort(), ['fieldPath', 'setToServerValue']);
+    assert.equal(transform.setToServerValue, 'REQUEST_TIME');
+    assert.equal(typeof transform.fieldPath, 'string');
+  }
+
+  // The order write stamps createdAt + updatedAt; the receipt stamps createdAt.
+  const orderWrite = commits[0].body.writes.find((w) => w.update.name.includes('/orders/'));
+  const receiptWrite = commits[0].body.writes.find((w) =>
+    w.update.name.includes('/checkoutReceipts/')
+  );
+  assert.deepEqual(orderWrite.updateTransforms, [
+    { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+    { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+  assert.deepEqual(receiptWrite.updateTransforms, [
+    { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+
+  // No Admin-SDK transform shape anywhere on the wire, and the stamped fields
+  // are not sent as plain values.
+  assert.ok(!wire.includes('serverTimestamp'));
+  assert.deepEqual(Object.keys(orderWrite.update.fields).includes('createdAt'), false);
+});
+
+test('the guest-token rotation update also uses the REST server-timestamp format', async () => {
+  const { handle, fake } = setup();
+  await postOrder(handle, checkoutPayload());
+  const res = await postOrder(handle, checkoutPayload());
+  assert.equal(res.status, 200);
+
+  const commits = fake.requests.filter((r) => r.url.includes(':commit'));
+  const last = commits[commits.length - 1];
+  const update = last.body.writes.find((w) => w.update.name.includes('/orders/'));
+  assert.deepEqual(update.updateTransforms, [
+    { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' },
+  ]);
+  assert.deepEqual(Object.keys(update.update.fields), ['guestTokenHash']);
+  assert.ok(!JSON.stringify(last.body).includes('serverTimestamp'));
+});
+
 test('replaying the SAME idempotency key returns the original order and rotates the guest token', async () => {
   const { handle } = setup();
   const first = await (await postOrder(handle, checkoutPayload())).json();

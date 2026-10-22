@@ -263,3 +263,51 @@ test('an engine failure becomes a generic 500 and is logged internally', async (
   assert.ok(!/internal-host|9999/.test(JSON.stringify(body)));
   assert.deepEqual(logged, ['db down at internal-host:9999']);
 });
+
+// An Identity Toolkit outage (or a rejected API key) is a BACKEND problem, not
+// a customer problem: the session may be perfectly valid, so it must not be
+// answered with "your session expired" (which would send the customer to
+// re-authenticate for a server-side fault).
+test('a token-verification dependency outage is a 503 with CORS, not "session expired"', async () => {
+  const { handle, calls } = makeApp({
+    verifyToken: async () => {
+      const err = new Error('Identity Toolkit lookup failed (503, UNKNOWN).');
+      err.name = 'UpstreamUnavailableError';
+      throw err;
+    },
+  });
+
+  const res = await post(handle, '/api/orders/create', {
+    headers: { Authorization: `Bearer ${GOOD_TOKEN}`, Origin: 'http://localhost:3000' },
+    body: { items: [] },
+  });
+
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get('access-control-allow-origin'), 'http://localhost:3000');
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.match(body.error, /temporarily unavailable/i);
+  assert.ok(!/session is invalid/i.test(body.error));
+  assert.equal(calls.create.length, 0);
+});
+
+// Guest checkout: an anonymous Firebase session is a FIRST-CLASS customer. The
+// verified token decides who the order belongs to; the body cannot.
+test('a guest (anonymous) session orders under the verified guest uid', async () => {
+  const { handle, calls } = makeApp({
+    verifyToken: async () => ({
+      sub: 'guest-uid-1',
+      firebase: { sign_in_provider: 'anonymous' },
+    }),
+  });
+
+  const res = await post(handle, '/api/orders/create', {
+    headers: { Authorization: `Bearer ${GOOD_TOKEN}` },
+    body: { customerId: 'someone-else', customerType: 'customer', items: [] },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(calls.create.length, 1);
+  assert.equal(calls.create[0].auth.uid, 'guest-uid-1');
+  assert.equal(calls.create[0].auth.token.firebase.sign_in_provider, 'anonymous');
+});

@@ -20,7 +20,7 @@ import {
   corsHeadersFor,
   bearerToken,
 } from './cors.js';
-import { isConfigurationError, safeErrorMessage } from './errors.js';
+import { isConfigurationError, isUpstreamUnavailable, safeErrorMessage } from './errors.js';
 
 const API_VERSION = '2.5.0';
 const MAX_BODY_BYTES = 100 * 1024; // matches express.json({ limit: '100kb' })
@@ -146,9 +146,10 @@ export function createWorkerApp({
         try {
           decoded = await verifyToken(token);
         } catch (err) {
-          // A configuration failure (missing/broken credentials) is NOT a
-          // client problem: report it as 503, never as "session expired".
-          if (isConfigurationError(err)) throw err;
+          // A broken deployment or an unavailable dependency (Identity Toolkit
+          // outage, bad API key) is NOT a client problem: report it as 503,
+          // never as "session expired".
+          if (isConfigurationError(err) || isUpstreamUnavailable(err)) throw err;
           // Never surface why a token failed (expired/revoked/malformed).
           return json(
             401,
@@ -195,11 +196,11 @@ export function createWorkerApp({
       return json(404, corsHeaders, { success: false, error: 'Not found.' });
     } catch (err) {
       logError(err);
-      if (isConfigurationError(err)) {
-        // Deployment problem, not a client problem. The message stays generic
-        // (the machine-readable reason is logged server-side and exposed via
-        // /api/diagnostics) but the response DOES carry CORS headers so the
-        // browser can read it.
+      if (isConfigurationError(err) || isUpstreamUnavailable(err)) {
+        // Deployment/dependency problem, not a client problem. The message
+        // stays generic (the machine-readable reason is logged server-side and
+        // exposed via /api/diagnostics) but the response DOES carry CORS
+        // headers so the browser can read it.
         return json(503, corsHeaders, {
           success: false,
           error: 'The order service is temporarily unavailable. Please try again.',

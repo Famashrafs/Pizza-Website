@@ -8,6 +8,49 @@
 let txCounter = 0;
 let clockCounter = 0;
 
+// Firestore REST validates DocumentTransform strictly: an unknown property
+// (e.g. the Admin-SDK/gRPC shape `serverTimestamp: {}`) is rejected with
+//   400 Invalid JSON payload received. Unknown name "serverTimestamp" at
+//      'writes[0].update_transforms[0]'. Cannot find field.
+// The fake mirrors that validation so a regression in the adapter's
+// serializer fails the tests loudly instead of passing silently.
+const ALLOWED_TRANSFORM_KEYS = new Set([
+  'fieldPath',
+  'setToServerValue',
+  'increment',
+  'maximum',
+  'minimum',
+  'appendMissingElements',
+  'removeAllFromArray',
+]);
+const TRANSFORM_TYPE_KEYS = [
+  'setToServerValue',
+  'increment',
+  'maximum',
+  'minimum',
+  'appendMissingElements',
+  'removeAllFromArray',
+];
+
+function validateWrites(writes) {
+  for (let w = 0; w < writes.length; w += 1) {
+    const transforms = (writes[w] && writes[w].updateTransforms) || [];
+    for (let t = 0; t < transforms.length; t += 1) {
+      const transform = transforms[t];
+      for (const key of Object.keys(transform)) {
+        if (ALLOWED_TRANSFORM_KEYS.has(key)) continue;
+        const message = `Invalid JSON payload received. Unknown name "${key}" at 'writes[${w}].update_transforms[${t}]'. Cannot find field.`;
+        return { error: { code: 400, message, errors: [{ message, domain: 'global', reason: 'invalid' }] } };
+      }
+      if (!TRANSFORM_TYPE_KEYS.some((key) => key in transform)) {
+        const message = `Invalid JSON payload received. Missing one of [${TRANSFORM_TYPE_KEYS.join(', ')}] at 'writes[${w}].update_transforms[${t}]'.`;
+        return { error: { code: 400, message, errors: [{ message, domain: 'global', reason: 'invalid' }] } };
+      }
+    }
+  }
+  return null;
+}
+
 export function createFakeFirestoreRest() {
   /** @type {Map<string, { fields: object, version: number }>} */
   const docs = new Map();
@@ -62,6 +105,7 @@ export function createFakeFirestoreRest() {
     }
 
     for (const transform of write.updateTransforms || []) {
+      if (transform.setToServerValue !== 'REQUEST_TIME') continue;
       clockCounter += 1;
       fields[transform.fieldPath] = {
         timestampValue: new Date(1700000000000 + clockCounter * 1000).toISOString(),
@@ -153,6 +197,10 @@ export function createFakeFirestoreRest() {
       if (rpc === 'commit') {
         const tx = transactions.get(body.transaction);
         if (!tx) return json(409, { error: { code: 9, message: 'invalid transaction' } });
+
+        // Strict transform validation (mirrors the real REST API).
+        const invalid = validateWrites(body.writes || []);
+        if (invalid) return json(400, invalid);
 
         // Conflict detection: any write document that was READ in this
         // transaction (or whose COLLECTION was read) must be unchanged.

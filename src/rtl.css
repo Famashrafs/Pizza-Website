@@ -102,7 +102,10 @@ html[lang='ar'] .site-logo-mark {
 }
 
 /* The cart drawer and modals slide in from the inline-end side. */
-[dir='rtl'] .cart-drawer,
+[dir='rtl'] .cart-drawer {
+  transform: none;
+}
+
 [dir='rtl'] .drawer-panel {
   transform: translateX(100%);
 }

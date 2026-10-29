@@ -36,6 +36,19 @@ export const FULFILLMENT_TYPES = [
   },
 ];
 
+// Selects the configured default only when it is a supported checkout option
+// and delivery is not disabled. Otherwise checkout keeps its historical
+// delivery-first behavior (or pickup when delivery is unavailable).
+export function getDefaultFulfillmentType(settings = RESTAURANT_SETTINGS) {
+  const requested = settings?.fulfillment?.defaultType;
+  const deliveryEnabled = settings?.fulfillment?.deliveryEnabled !== false;
+  const requestedSupported = FULFILLMENT_TYPES.some(({ id }) => id === requested);
+  if (requestedSupported && (requested !== 'delivery' || deliveryEnabled)) {
+    return requested;
+  }
+  return deliveryEnabled ? 'delivery' : 'pickup';
+}
+
 // Payment method copy lives in services/paymentService.js (shared with the
 // rest of the app), so the UI looks the translated label/description up by
 // method id instead of hardcoding it. The English text of the service stays

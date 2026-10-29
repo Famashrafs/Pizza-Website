@@ -2405,3 +2405,240 @@
 .admin-stat-icon.is-gold, .admin-quick-icon {
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 10%, transparent));
 }
+
+/* ===========================================================================
+   Mobile / RTL / safe-area hardening
+   =========================================================================== */
+
+/* Long, unbreakable admin values must never widen grid tracks or the page */
+.admin-header-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-header-title h1,
+.admin-header-title p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-table-row > *,
+.admin-order-row > *,
+.admin-order-details > *,
+.admin-order-summary > div > *,
+.admin-detail-list dd {
+  min-width: 0;
+}
+
+.admin-detail-list dd,
+.admin-order-summary span,
+.admin-order-item-body strong,
+.admin-order-item-body span,
+.admin-order-note p {
+  overflow-wrap: anywhere;
+}
+
+.admin-table-actions-head {
+  text-align: end;
+}
+
+.admin-detail-list dd {
+  text-align: end;
+}
+
+/* Sidebar and nav follow the writing direction */
+.admin-sidebar {
+  border-right: 0;
+  border-inline-end: 1px solid var(--border);
+}
+
+.admin-nav-link {
+  border-left: 0;
+  border-inline-start: 2px solid transparent;
+}
+
+.admin-nav-link.active {
+  border-inline-start-color: var(--accent);
+}
+
+.admin-user-menu {
+  min-width: 0;
+}
+
+.admin-dropdown {
+  right: auto;
+  inset-inline-end: 0;
+  max-width: calc(100vw - 24px);
+}
+
+.admin-notif-dot {
+  right: auto;
+  inset-inline-end: 10px;
+}
+
+[dir='rtl'] .admin-switch-thumb,
+[dir='rtl'] .admin-toggle-thumb {
+  left: auto;
+  right: 2px;
+}
+
+[dir='rtl'] .admin-switch.is-on .admin-switch-thumb,
+[dir='rtl'] .admin-toggle input:checked + .admin-toggle-track .admin-toggle-thumb {
+  transform: translateX(-18px);
+}
+
+/* Notches / gesture areas (Capacitor + mobile Safari) */
+.admin-sidebar-top {
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+}
+
+.admin-sidebar-bottom {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.admin-header {
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+}
+
+.admin-content {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+}
+
+.admin-switch {
+  min-height: 36px;
+}
+
+@media screen and (max-width: 1024px) {
+  .admin-sidebar {
+    height: 100dvh;
+    max-width: 86vw;
+    overscroll-behavior: contain;
+  }
+
+  [dir='rtl'] .admin-sidebar {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+  }
+
+  [dir='rtl'] .admin-sidebar.is-open {
+    transform: translateX(0);
+  }
+}
+
+@media screen and (max-width: 880px) {
+  /* Card labels: align with the writing direction */
+  .admin-table-row > [role='cell'] {
+    text-align: end;
+  }
+
+  .admin-table-row > [role='cell']::before {
+    text-align: start;
+  }
+
+  .admin-table-product,
+  .admin-customer-cell {
+    text-align: start;
+  }
+
+  .admin-order-date {
+    text-align: end;
+  }
+
+  .admin-order-row {
+    align-items: start;
+  }
+
+  .admin-tabs {
+    max-width: 100%;
+  }
+
+  .admin-icon-btn--sm {
+    width: 38px;
+    height: 38px;
+  }
+
+  .admin-table-actions .admin-btn--xs {
+    min-height: 34px;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .admin-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
+
+  .admin-header-right {
+    gap: 8px;
+  }
+
+  .admin-header-left {
+    gap: 10px;
+  }
+
+  .admin-user-button {
+    padding: 4px 6px;
+    gap: 6px;
+  }
+
+  .admin-content {
+    padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .admin-options-head {
+    flex-wrap: wrap;
+  }
+
+  .admin-inline-form input {
+    min-width: 0;
+  }
+
+  .admin-order-summary > div {
+    flex-wrap: wrap;
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .admin-tabs {
+    display: flex;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .admin-tab {
+    flex: 0 0 auto;
+  }
+
+  .admin-category-edit-fields {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .admin-search {
+    min-width: 0;
+  }
+
+  .admin-toolbar select {
+    flex: 1 1 auto;
+  }
+}
+
+@media screen and (max-width: 430px) {
+  .admin-header-right {
+    gap: 6px;
+  }
+
+  .admin-icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .admin-burger {
+    width: 38px;
+    height: 38px;
+  }
+}

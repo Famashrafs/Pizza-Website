@@ -27,7 +27,7 @@
 // (Cloudflare Error 1101) — including on /health.
 const crypto = require('node:crypto');
 
-const { RESTAURANT_SETTINGS } = require('./restaurantDefaults');
+const { RESTAURANT_SETTINGS, PROMO_CODES } = require('./restaurantDefaults');
 
 const MAX_INSTRUCTIONS = 200;
 
@@ -40,12 +40,6 @@ const PAYMENT_METHODS = [
   { id: 'card', label: 'Card', provider: null, enabled: false },
   { id: 'online', label: 'Online Payment', provider: null, enabled: false },
 ];
-
-const PROMO_CODES = {
-  PIZZA10: { type: 'percent', value: 10, label: '10% off your order' },
-  WELCOME5: { type: 'fixed', value: 5, label: '$5 off your order' },
-  FREEDELIVERY: { type: 'free-delivery', value: 0, label: 'Free delivery' },
-};
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 

@@ -17,23 +17,22 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
+import { RESTAURANT_SETTINGS } from '../config/restaurant';
 import en from './locales/en';
 import ar from './locales/ar';
 import it from './locales/it';
 
-export const LANGUAGE_STORAGE_KEY = 'pizza-language';
+export const LANGUAGE_STORAGE_KEY = RESTAURANT_SETTINGS.locale.storageKey;
 
-export const DEFAULT_LANGUAGE = 'en';
+export const DEFAULT_LANGUAGE = RESTAURANT_SETTINGS.locale.defaultLanguage;
 
 // The language names are shown in their own language (the standard way to
 // present a language switcher) and are therefore never translated.
-export const SUPPORTED_LANGUAGES = [
-  { code: 'en', label: 'English' },
-  { code: 'ar', label: 'العربية' },
-  { code: 'it', label: 'Italiano' },
-];
+export const SUPPORTED_LANGUAGES = RESTAURANT_SETTINGS.locale.supportedLanguages.map(
+  (language) => ({ ...language })
+);
 
-export const RTL_LANGUAGES = ['ar'];
+export const RTL_LANGUAGES = [...RESTAURANT_SETTINGS.locale.rtlLanguages];
 
 export function isSupportedLanguage(code) {
   return SUPPORTED_LANGUAGES.some((language) => language.code === code);
@@ -80,7 +79,7 @@ i18n.use(initReactI18next).init({
   resources: { en, ar, it },
   lng: readStoredLanguage(),
   fallbackLng: DEFAULT_LANGUAGE,
-  supportedLngs: ['en', 'ar', 'it'],
+  supportedLngs: SUPPORTED_LANGUAGES.map((language) => language.code),
   load: 'languageOnly',
   // Namespaces are addressed with a dot: t('menu.title') -> namespace "menu",
   // key "title". The namespace list has to contain every feature namespace,

@@ -9,11 +9,7 @@ export const FREE_DELIVERY_THRESHOLD =
   RESTAURANT_SETTINGS.delivery.freeDeliveryThreshold;
 export const DEFAULT_TAX_RATE = RESTAURANT_SETTINGS.taxRate;
 
-export const PROMO_CODES = {
-  PIZZA10: { type: 'percent', value: 10, label: '10% off your order' },
-  WELCOME5: { type: 'fixed', value: 5, label: '$5 off your order' },
-  FREEDELIVERY: { type: 'free-delivery', value: 0, label: 'Free delivery' },
-};
+export const PROMO_CODES = RESTAURANT_SETTINGS.promotions.codes;
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 

@@ -7,7 +7,10 @@ import React, {
   useState,
 } from 'react';
 
-const STORAGE_KEY = 'pizza-theme';
+import { RESTAURANT_SETTINGS } from '../config/restaurant';
+
+const STORAGE_KEY = RESTAURANT_SETTINGS.theme.storageKey;
+const DEFAULT_THEME = RESTAURANT_SETTINGS.theme.defaultMode;
 
 const ThemeContext = createContext(null);
 
@@ -20,6 +23,11 @@ function resolveSystemTheme() {
     return 'light';
   }
   return 'dark';
+}
+
+function resolveDefaultTheme() {
+  if (DEFAULT_THEME === 'light' || DEFAULT_THEME === 'dark') return DEFAULT_THEME;
+  return resolveSystemTheme();
 }
 
 function applyDocumentTheme(theme) {
@@ -45,7 +53,7 @@ export function ThemeProvider({ children }) {
       /* storage unavailable */
     }
     if (saved === 'light' || saved === 'dark') return saved;
-    return resolveSystemTheme();
+    return resolveDefaultTheme();
   });
 
   useEffect(() => {

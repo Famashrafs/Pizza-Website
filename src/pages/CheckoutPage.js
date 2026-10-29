@@ -12,7 +12,9 @@ import ReviewStep from '../components/checkout/ReviewStep';
 import OrderSummaryPanel from '../components/checkout/OrderSummaryPanel';
 import { fetchProducts } from '../services/menuService';
 import { getRestaurantSettings } from '../services/restaurantService';
+import { getDefaultPaymentMethod } from '../services/paymentService';
 import { createOrder, recalculateItems } from '../services/orderService';
+import { RESTAURANT_SETTINGS } from '../config/restaurant';
 import {
   getSavedAddresses,
   saveSavedAddresses,
@@ -26,6 +28,7 @@ import {
   diffCartPrices,
   formatAddress,
   getCheckoutTotals,
+  getDefaultFulfillmentType,
   getPricingReadiness,
   validateAddress,
   validateCustomerInfo,
@@ -62,10 +65,14 @@ function CheckoutPage() {
   const [customer, setCustomer] = useState(() =>
     createEmptyCustomer(currentUser, userProfile)
   );
-  const [fulfillmentType, setFulfillmentType] = useState('delivery');
+  const [fulfillmentType, setFulfillmentType] = useState(() =>
+    getDefaultFulfillmentType(RESTAURANT_SETTINGS)
+  );
   const [address, setAddress] = useState(() => createEmptyAddress());
   const [saveAddress, setSaveAddress] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState(() =>
+    getDefaultPaymentMethod(RESTAURANT_SETTINGS)
+  );
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);

@@ -22,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import Avatar from './account/Avatar';
 import LanguageSelector from './LanguageSelector';
+import { BrandMark, BrandName } from './RestaurantBrand';
 
 const NAV_LINKS = [
   { to: '/', key: 'home', end: true },
@@ -89,9 +90,9 @@ function NavBar({ isScrolled }) {
       <div className="container">
         <div className="site-nav-inner">
           <NavLink to="/" className="site-logo" aria-label={t('nav.aria.pizzaHome')}>
-            <span className="site-logo-mark">P</span>
+            <BrandMark />
             <span>
-              Pi<em>zz</em>a
+              <BrandName />
             </span>
           </NavLink>
 
@@ -123,16 +124,33 @@ function NavBar({ isScrolled }) {
                 {isDark ? t('nav.theme.light') : t('nav.theme.dark')}
               </button>
             </li>
+            <li className="nav-language-row">
+              <LanguageSelector />
+            </li>
+            {(!currentUser || isGuest) && (
+              <li className="nav-login-row">
+                <NavLink
+                  to="/login"
+                  className="site-nav-link"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <FontAwesomeIcon icon={faUser} />
+                  {t('nav.links.login')}
+                </NavLink>
+              </li>
+            )}
           </ul>
 
           <div className="site-nav-spacer" />
 
           <div className="site-nav-actions">
-            <LanguageSelector />
+            <div className="nav-actions-language">
+              <LanguageSelector />
+            </div>
 
             <NavLink
               to="/menu"
-              className="site-icon-btn"
+              className="site-icon-btn nav-search-btn"
               aria-label={t('nav.aria.browseMenu')}
               title={t('nav.aria.browseMenu')}
             >

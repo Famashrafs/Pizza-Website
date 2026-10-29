@@ -8,23 +8,28 @@ import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import ImagePicker from '../../components/admin/ImagePicker';
+import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
+// New/empty forms start from the deployment config. Saved Firestore values
+// always win in toForm(), so opening the page never overwrites live settings.
 const emptyForm = {
-  name: '',
-  tagline: '',
-  description: '',
-  phone: '',
-  email: '',
-  address: '',
-  openingHours: '',
-  currency: '$',
-  taxRate: '0',
-  minOrder: '0',
-  deliveryEnabled: true,
-  deliveryFee: '0',
-  freeDeliveryThreshold: '0',
-  logo: '',
-  coverImage: '',
+  name: RESTAURANT_SETTINGS.name || '',
+  tagline: RESTAURANT_SETTINGS.tagline || '',
+  description: RESTAURANT_SETTINGS.description || '',
+  phone: RESTAURANT_SETTINGS.phone || '',
+  email: RESTAURANT_SETTINGS.email || '',
+  address: RESTAURANT_SETTINGS.pickup?.address || '',
+  openingHours: RESTAURANT_SETTINGS.pickup?.hours || '',
+  currency: RESTAURANT_SETTINGS.currency || '$',
+  taxRate: String(Number(RESTAURANT_SETTINGS.taxRate ?? 0) * 100),
+  minOrder: String(RESTAURANT_SETTINGS.minOrder ?? 0),
+  deliveryEnabled: RESTAURANT_SETTINGS.fulfillment?.deliveryEnabled !== false,
+  deliveryFee: String(RESTAURANT_SETTINGS.delivery?.baseFee ?? 0),
+  freeDeliveryThreshold: String(
+    RESTAURANT_SETTINGS.delivery?.freeDeliveryThreshold ?? 0
+  ),
+  logo: RESTAURANT_SETTINGS.logo || '',
+  coverImage: RESTAURANT_SETTINGS.coverImage || '',
 };
 
 function toForm(restaurant) {

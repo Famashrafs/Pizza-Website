@@ -13,6 +13,7 @@ import {
   faLocationDot,
 } from '@fortawesome/free-solid-svg-icons';
 import { RESTAURANT_SETTINGS } from '../config/restaurant';
+import { BrandMark, BrandName } from './RestaurantBrand';
 import { useTranslation } from 'react-i18next';
 
 const EXPLORE_LINKS = [
@@ -31,10 +32,22 @@ const CUSTOMER_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
-  { icon: faFacebookF, label: 'Facebook', href: 'https://facebook.com' },
-  { icon: faInstagram, label: 'Instagram', href: 'https://instagram.com' },
-  { icon: faXTwitter, label: 'X (Twitter)', href: 'https://x.com' },
-];
+  {
+    icon: faFacebookF,
+    label: 'Facebook',
+    href: RESTAURANT_SETTINGS.social.facebook,
+  },
+  {
+    icon: faInstagram,
+    label: 'Instagram',
+    href: RESTAURANT_SETTINGS.social.instagram,
+  },
+  {
+    icon: faXTwitter,
+    label: 'X (Twitter)',
+    href: RESTAURANT_SETTINGS.social.x,
+  },
+].filter((social) => Boolean(social.href));
 
 function Footer() {
   const year = new Date().getFullYear();
@@ -46,9 +59,9 @@ function Footer() {
         <div className="site-footer-inner">
           <div className="site-footer-brand">
             <Link to="/" className="site-logo" aria-label={t('nav.aria.pizzaHome')}>
-              <span className="site-logo-mark">P</span>
+              <BrandMark />
               <span>
-                Pi<em>zz</em>a
+                <BrandName />
               </span>
             </Link>
             <p>

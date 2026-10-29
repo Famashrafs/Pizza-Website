@@ -27,9 +27,9 @@ function generateId() {
 // place means a new restaurant and the seeded deployment restaurant never drift.
 function defaultSettings() {
   return {
-    description: RESTAURANT_SETTINGS.tagline || '',
-    logo: '',
-    coverImage: '',
+    description: RESTAURANT_SETTINGS.description || RESTAURANT_SETTINGS.tagline || '',
+    logo: RESTAURANT_SETTINGS.logo || '',
+    coverImage: RESTAURANT_SETTINGS.coverImage || '',
     tagline: RESTAURANT_SETTINGS.tagline || '',
     phone: RESTAURANT_SETTINGS.phone || '',
     email: RESTAURANT_SETTINGS.email || '',
@@ -38,7 +38,7 @@ function defaultSettings() {
     currency: RESTAURANT_SETTINGS.currency || '$',
     taxRate: RESTAURANT_SETTINGS.taxRate ?? 0,
     minOrder: RESTAURANT_SETTINGS.minOrder ?? 0,
-    deliveryEnabled: true,
+    deliveryEnabled: RESTAURANT_SETTINGS.fulfillment?.deliveryEnabled !== false,
     deliveryFee: RESTAURANT_SETTINGS.delivery?.baseFee ?? 0,
     freeDeliveryThreshold: RESTAURANT_SETTINGS.delivery?.freeDeliveryThreshold ?? 0,
   };
@@ -88,7 +88,9 @@ export async function getRestaurantSettings(restaurantId = RESTAURANT_ID) {
     currency: String(restaurant?.currency || base.currency || '$').trim() || '$',
     taxRate: numberOr(restaurant?.taxRate, base.taxRate),
     minOrder: numberOr(restaurant?.minOrder, base.minOrder),
-    deliveryEnabled: restaurant ? restaurant.deliveryEnabled !== false : true,
+    deliveryEnabled: restaurant
+      ? restaurant.deliveryEnabled !== false
+      : base.fulfillment.deliveryEnabled !== false,
     delivery: {
       baseFee: numberOr(restaurant?.deliveryFee, base.delivery.baseFee),
       freeDeliveryThreshold: numberOr(

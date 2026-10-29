@@ -15,6 +15,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const read = (rel) => fs.readFileSync(path.join(repoRoot, rel), 'utf8');
@@ -79,6 +80,55 @@ test('runtime and dependencies match the callable implementation', () => {
     `firebase-functions must be v2-capable (>=5), found "${functionsVersion}"`
   );
   assert.ok(pkg.dependencies['firebase-admin'], 'firebase-admin is required by the callable');
+});
+
+test('server restaurant defaults stay in sync with the client config', () => {
+  const {
+    RESTAURANT_ID,
+    RESTAURANT_SETTINGS,
+    PROMO_CODES,
+  } = require('./restaurantDefaults');
+  const { normalizeSettings } = require('./orderCore');
+
+  const clientSource = read('src/config/restaurant.js')
+    .replace(/^export\s+const\s+/gm, 'const ')
+    .replace(/^export\s+default\s+RESTAURANT_SETTINGS;\s*$/m, '');
+  const client = vm.runInNewContext(
+    `${clientSource}\n;({ RESTAURANT_ID, RESTAURANT_SETTINGS });`,
+    {}
+  );
+
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+
+  assert.equal(RESTAURANT_ID, client.RESTAURANT_ID);
+  assert.equal(RESTAURANT_SETTINGS.currency, client.RESTAURANT_SETTINGS.currency);
+  assert.equal(RESTAURANT_SETTINGS.taxRate, client.RESTAURANT_SETTINGS.taxRate);
+  assert.equal(RESTAURANT_SETTINGS.minOrder, client.RESTAURANT_SETTINGS.minOrder);
+  assert.deepEqual(
+    plain(RESTAURANT_SETTINGS.delivery),
+    plain(client.RESTAURANT_SETTINGS.delivery)
+  );
+  assert.deepEqual(
+    plain(RESTAURANT_SETTINGS.pickup),
+    plain(client.RESTAURANT_SETTINGS.pickup)
+  );
+  assert.deepEqual(
+    plain(PROMO_CODES),
+    plain(client.RESTAURANT_SETTINGS.promotions.codes)
+  );
+
+  // The trusted server's fallback plan must use the same total-affecting
+  // defaults as the client config, so an unseeded restaurant cannot quote one
+  // amount and charge another.
+  const plan = normalizeSettings({});
+  assert.equal(plan.currency, client.RESTAURANT_SETTINGS.currency);
+  assert.equal(plan.taxRate, client.RESTAURANT_SETTINGS.taxRate);
+  assert.equal(plan.minOrder, client.RESTAURANT_SETTINGS.minOrder);
+  assert.equal(plan.deliveryFee, client.RESTAURANT_SETTINGS.delivery.baseFee);
+  assert.equal(
+    plan.freeDeliveryThreshold,
+    client.RESTAURANT_SETTINGS.delivery.freeDeliveryThreshold
+  );
 });
 
 test('opt-in: the deployed endpoints answer the browser preflight', { skip: !process.env.FUNCTION_LIVE_CHECK }, async () => {

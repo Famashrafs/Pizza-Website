@@ -4,6 +4,7 @@ import { useRestaurantProducts } from '../../hooks/useRestaurantProducts';
 import { useRestaurantCategories } from '../../hooks/useRestaurantCategories';
 import { createProduct, updateProduct } from '../../services/menuService';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import ProductForm from '../../components/admin/ProductForm';
 import AdminErrorState from '../../components/admin/AdminErrorState';
@@ -30,6 +31,7 @@ function AdminProductForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const { restaurant } = useOutletContext();
+  const { currentUser } = useAuth();
   const restaurantId = restaurant?.id || null;
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -53,7 +55,6 @@ function AdminProductForm() {
         const created = await createProduct(values, restaurantId);
         showToast(t('admin.toastProductAdded', { name: created.name }));
       }
-      navigate('/admin/menu');
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message || t('admin.errorSaveProduct') };
@@ -105,6 +106,9 @@ function AdminProductForm() {
         categories={categories}
         onSubmit={handleSubmit}
         onCancel={() => navigate('/admin/menu')}
+        onSaved={() => navigate('/admin/menu')}
+        ownerUid={currentUser?.uid || ''}
+        restaurantId={restaurantId || ''}
       />
     </div>
   );

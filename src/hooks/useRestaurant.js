@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  fetchOwnerRestaurant,
+  getRestaurantById,
   subscribeRestaurant,
 } from '../services/restaurantService';
+import { RESTAURANT_ID } from '../config/restaurant';
 
-// Loads the restaurant record that belongs to an owner. Returns a normalized
-// { status, restaurant, error, reload } state used by the admin layout.
-export function useOwnerRestaurant(ownerId) {
+// Loads the single deployment restaurant for the admin layout. Both the owner
+// and owner-granted admins resolve the same fixed document, so an admin can
+// work in the dashboard without being the restaurant's ownerId.
+export function useRestaurant() {
   const [state, setState] = useState({
     status: 'loading',
     restaurant: null,
@@ -18,13 +20,8 @@ export function useOwnerRestaurant(ownerId) {
     let cancelled = false;
     setState((prev) => ({ ...prev, status: 'loading' }));
 
-    if (!ownerId) {
-      setState({ status: 'success', restaurant: null, error: null });
-      return undefined;
-    }
-
     const load = () => {
-      fetchOwnerRestaurant(ownerId).then(
+      getRestaurantById(RESTAURANT_ID).then(
         (restaurant) => {
           if (cancelled) return;
           setState({ status: 'success', restaurant, error: null });
@@ -34,24 +31,24 @@ export function useOwnerRestaurant(ownerId) {
           setState({
             status: 'error',
             restaurant: null,
-            error: 'We could not load your restaurant. Please try again.',
+            error: 'We could not load the restaurant. Please try again.',
           });
         }
       );
     };
 
     load();
-    const unsubscribe = subscribeRestaurant(load, { ownerId });
+    const unsubscribe = subscribeRestaurant(load);
 
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, [ownerId, reloadKey]);
+  }, [reloadKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   return { ...state, reload };
 }
 
-export default useOwnerRestaurant;
+export default useRestaurant;

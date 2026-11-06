@@ -1501,7 +1501,6 @@
 .admin-field textarea,
 .admin-field select {
   width: 100%;
-  background: var(--on-accent);
   border: 1px solid var(--border);
   color: var(--text-primary);
   border-radius: 10px;
@@ -1809,7 +1808,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--on-accent);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0 12px;

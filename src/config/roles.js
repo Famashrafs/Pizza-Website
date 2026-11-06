@@ -1,9 +1,9 @@
-// Canonical role system for the platform.
+// Canonical role system for the single-restaurant deployment.
 //
-// Only `customer` and `restaurant_owner` are fully implemented in this phase.
-// The other roles are defined here (and guarded in the admin area) so future
-// features (staff accounts, multi-branch admins, platform operations) can be
-// added without restructuring the application.
+// There are exactly three roles:
+//   - customer: browses the store and places orders.
+//   - restaurant_owner: the single verified owner of this restaurant.
+//   - restaurant_admin: operational access granted by the owner.
 //
 // IMPORTANT: Roles stored on the client are a convenience for rendering and
 // route guards only. Authorization must also be enforced server-side — see
@@ -14,22 +14,15 @@ export const ROLES = {
   CUSTOMER: 'customer',
   RESTAURANT_OWNER: 'restaurant_owner',
   RESTAURANT_ADMIN: 'restaurant_admin',
-  STAFF: 'staff',
-  PLATFORM_ADMIN: 'platform_admin',
 };
 
 // Fallback for any profile that has no stored role (e.g. accounts created
-// before the role system existed).
+// before the role system existed) and for retired roles.
 export const DEFAULT_ROLE = ROLES.CUSTOMER;
 
 // Every role that is allowed inside the /admin area. This list drives the
 // RoleProtectedRoute guard; the guard only opens doors for these roles.
-export const ADMIN_ROLES = [
-  ROLES.RESTAURANT_OWNER,
-  ROLES.RESTAURANT_ADMIN,
-  ROLES.STAFF,
-  ROLES.PLATFORM_ADMIN,
-];
+export const ADMIN_ROLES = [ROLES.RESTAURANT_OWNER, ROLES.RESTAURANT_ADMIN];
 
 export const ROLE_META = {
   [ROLES.CUSTOMER]: {
@@ -38,22 +31,16 @@ export const ROLE_META = {
   },
   [ROLES.RESTAURANT_OWNER]: {
     label: 'Restaurant Owner',
-    description: 'Owns and manages a restaurant from the admin dashboard.',
+    description: 'Owns this restaurant and controls admin access.',
   },
   [ROLES.RESTAURANT_ADMIN]: {
     label: 'Restaurant Admin',
-    description: 'Full operational access to one restaurant. (Reserved for a future phase.)',
-  },
-  [ROLES.STAFF]: {
-    label: 'Staff',
-    description: 'Restricted operational access. (Reserved for a future phase.)',
-  },
-  [ROLES.PLATFORM_ADMIN]: {
-    label: 'Platform Admin',
-    description: 'Administers the whole platform. (Reserved for a future phase.)',
+    description: 'Operational access to this restaurant, granted by the owner.',
   },
 };
 
+// Retired roles are deliberately normalized to customer so a stale profile can
+// never keep admin access after the platform is reduced to one restaurant.
 export function normalizeRole(role) {
   return ROLE_META[role] ? role : DEFAULT_ROLE;
 }

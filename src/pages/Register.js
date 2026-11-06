@@ -167,13 +167,6 @@ function Register() {
             {t('auth.customerLogin')}
           </Link>
         </p>
-
-        <p className="auth-switch">
-          {t('auth.promptOwnRestaurant')}{' '}
-          <Link to="/admin/register">
-            {t('auth.createAdminAccount')}
-          </Link>
-        </p>
       </div>
     </div>
   );

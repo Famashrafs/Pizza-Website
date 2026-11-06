@@ -8,6 +8,9 @@ import { useTranslation } from 'react-i18next';
 import SectionTitle from '../../components/account/SectionTitle';
 import AdminErrorState from '../../components/admin/AdminErrorState';
 import ImagePicker from '../../components/admin/ImagePicker';
+import { useAuth } from '../../context/AuthContext';
+import { commitImagePipeline } from '../../services/imagePipeline';
+import { IMAGE_KINDS, uploadImageAsset } from '../../services/imageService';
 import { RESTAURANT_SETTINGS } from '../../config/restaurant';
 
 // New/empty forms start from the deployment config. Saved Firestore values
@@ -77,11 +80,17 @@ function AdminSettings() {
   const { t } = useTranslation();
   const { restaurant, restaurantLoading, restaurantError, reloadRestaurant } =
     useOutletContext();
+  const { currentUser } = useAuth();
   const { showToast } = useToast();
 
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [imageError, setImageError] = useState('');
+  const [logoProgress, setLogoProgress] = useState(0);
+  const [coverProgress, setCoverProgress] = useState(0);
 
   useEffect(() => {
     setForm(toForm(restaurant));
@@ -109,31 +118,72 @@ function AdminSettings() {
     if (!validate()) return;
 
     setSaving(true);
+    setImageError('');
+    setLogoProgress(0);
+    setCoverProgress(0);
+
     try {
-      const updated = await updateRestaurant(restaurant.id, {
-        name: form.name.trim(),
-        tagline: form.tagline.trim(),
-        description: form.description.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        address: form.address.trim(),
-        openingHours: form.openingHours.trim(),
-        currency: form.currency.trim() || '$',
-        taxRate: Number(form.taxRate) / 100,
-        minOrder: Number(form.minOrder),
-        deliveryEnabled: form.deliveryEnabled,
-        deliveryFee: Number(form.deliveryFee),
-        freeDeliveryThreshold: Number(form.freeDeliveryThreshold),
-        logo: form.logo,
-        coverImage: form.coverImage,
+      const result = await commitImagePipeline({
+        changes: [
+          {
+            key: 'logo',
+            upload: logoFile
+              ? () =>
+                  uploadImageAsset(logoFile, {
+                    kind: IMAGE_KINDS.RESTAURANT_LOGO,
+                    ownerUid: currentUser?.uid || '',
+                    restaurantId: restaurant.id,
+                    onProgress: setLogoProgress,
+                  })
+              : null,
+            value: form.logo,
+            oldUrl: restaurant.logo || '',
+          },
+          {
+            key: 'coverImage',
+            upload: coverFile
+              ? () =>
+                  uploadImageAsset(coverFile, {
+                    kind: IMAGE_KINDS.RESTAURANT_COVER,
+                    ownerUid: currentUser?.uid || '',
+                    restaurantId: restaurant.id,
+                    onProgress: setCoverProgress,
+                  })
+              : null,
+            value: form.coverImage,
+            oldUrl: restaurant.coverImage || '',
+          },
+        ],
+        save: (images) =>
+          updateRestaurant(restaurant.id, {
+            name: form.name.trim(),
+            tagline: form.tagline.trim(),
+            description: form.description.trim(),
+            phone: form.phone.trim(),
+            email: form.email.trim(),
+            address: form.address.trim(),
+            openingHours: form.openingHours.trim(),
+            currency: form.currency.trim() || '$',
+            taxRate: Number(form.taxRate) / 100,
+            minOrder: Number(form.minOrder),
+            deliveryEnabled: form.deliveryEnabled,
+            deliveryFee: Number(form.deliveryFee),
+            freeDeliveryThreshold: Number(form.freeDeliveryThreshold),
+            logo: images.logo,
+            coverImage: images.coverImage,
+          }),
       });
-      if (updated) {
+
+      if (result.saved) {
+        setLogoFile(null);
+        setCoverFile(null);
         showToast(t('admin.toastSettingsSaved'));
         reloadRestaurant();
       } else {
         showToast(t('admin.errorSaveSettings'), 'error');
       }
     } catch (err) {
+      setImageError(err.message || t('admin.errorSaveSettings'));
       showToast(t('admin.errorSaveSettings'), 'error');
     } finally {
       setSaving(false);
@@ -195,8 +245,19 @@ function AdminSettings() {
                 <ImagePicker
                   label={t('admin.fieldLogo')}
                   value={form.logo}
-                  onChange={(url) => update({ logo: url })}
-                  path="branding/logo"
+                  onChange={(url) => {
+                    update({ logo: url });
+                    setLogoFile(null);
+                    setImageError('');
+                  }}
+                  onFileSelect={(file, fileError) => {
+                    setLogoFile(file);
+                    setImageError(fileError || '');
+                  }}
+                  selectedFile={logoFile}
+                  uploading={saving && Boolean(logoFile)}
+                  progress={logoProgress}
+                  error={imageError}
                   aspect="square"
                 />
               </div>
@@ -204,8 +265,19 @@ function AdminSettings() {
                 <ImagePicker
                   label={t('admin.fieldCoverImage')}
                   value={form.coverImage}
-                  onChange={(url) => update({ coverImage: url })}
-                  path="branding/cover"
+                  onChange={(url) => {
+                    update({ coverImage: url });
+                    setCoverFile(null);
+                    setImageError('');
+                  }}
+                  onFileSelect={(file, fileError) => {
+                    setCoverFile(file);
+                    setImageError(fileError || '');
+                  }}
+                  selectedFile={coverFile}
+                  uploading={saving && Boolean(coverFile)}
+                  progress={coverProgress}
+                  error={imageError}
                   aspect="wide"
                 />
               </div>

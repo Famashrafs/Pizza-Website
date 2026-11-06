@@ -1,14 +1,10 @@
-// Restaurant records — the hub of multi-tenant data isolation.
+// The single restaurant document owned by this deployment.
 //
-// Every restaurant-owned resource (orders, products, categories, …) carries a
-// `restaurantId`. This module owns the restaurant documents themselves, the
-// Owner -> Restaurant relationship, and the restaurant's business settings
-// (identity, branding, hours, delivery).
-//
-// Persistence: documents live in the `restaurants` collection of Firestore.
-// Reads/writes go through `src/services/db.js`, which centralizes timestamp
-// handling. The API surface is unchanged from the localStorage era so callers
-// did not have to move — but every function is now async.
+// Every restaurant-owned resource (orders, products, categories) carries the
+// same `restaurantId` from `src/config/restaurant.js`. This module only exposes
+// the fixed restaurant: there is no restaurant creation, claiming or listing
+// API. Owner -> restaurant verification lives in Firestore Security Rules and
+// is re-checked during owner-profile recovery.
 
 import { RESTAURANT_ID, RESTAURANT_SETTINGS } from '../config/restaurant';
 import db from './db';
@@ -16,15 +12,8 @@ import db from './db';
 const COLLECTION = 'restaurants';
 const path = (id) => `${COLLECTION}/${id}`;
 
-function generateId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `rest-${crypto.randomUUID().slice(0, 13)}`;
-  }
-  return `rest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 // The full set of owner-editable business settings. Keeping the shape in one
-// place means a new restaurant and the seeded deployment restaurant never drift.
+// place means the deployment restaurant never drifts from the admin form.
 function defaultSettings() {
   return {
     description: RESTAURANT_SETTINGS.description || RESTAURANT_SETTINGS.tagline || '',
@@ -55,23 +44,20 @@ function normalize(record) {
   };
 }
 
-export async function getRestaurants() {
-  const docs = await db.getDocs(COLLECTION);
-  return docs.map(normalize);
+export function getDefaultRestaurantSettings() {
+  return defaultSettings();
 }
 
-export async function getRestaurantById(id) {
-  if (!id) return null;
+export async function getRestaurantById(id = RESTAURANT_ID) {
+  if (id !== RESTAURANT_ID) return null;
   return normalize(await db.getDoc(path(id)));
 }
 
-// Resolves the RESTAURANT-SCOPED settings the whole storefront should use for
-// pricing and estimates. The Firestore `restaurants/{id}` document — which the
-// AdminSettings page edits via `updateRestaurant` — is the AUTHORITATIVE source;
-// the static RESTAURANT_SETTINGS constants are only a fallback for fields the
-// document does not carry yet. The trusted `createOrder` Cloud Function reads
-// the same document, so the checkout estimate and the charged amount cannot
-// drift.
+// Resolves the settings the whole storefront should use for pricing and
+// estimates. The Firestore `restaurants/{RESTAURANT_ID}` document — which the
+// AdminSettings page edits via `updateRestaurant` — is authoritative; the
+// static RESTAURANT_SETTINGS constants are only a fallback for fields the
+// document does not carry yet.
 function numberOr(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
@@ -107,49 +93,18 @@ export async function getRestaurantSettings(restaurantId = RESTAURANT_ID) {
   };
 }
 
-export async function getOwnerRestaurant(ownerId) {
-  const matches = await getOwnerRestaurants(ownerId);
-  return matches.length ? matches[0] : null;
-}
-
-// All restaurants that list an ownerId (never just the first match). Called by
-// ownership recovery so ambiguity can be detected and logged explicitly.
-export async function getOwnerRestaurants(ownerId) {
-  if (!ownerId) return [];
-  const docs = await db.getDocs(COLLECTION, {
-    where: [{ field: 'ownerId', op: '==', value: ownerId }],
-  });
-  return docs.map(normalize);
-}
-
-export async function fetchOwnerRestaurant(ownerId) {
-  return getOwnerRestaurant(ownerId);
-}
-
-export async function createRestaurant({ ownerId = null, name, id, ...extra } = {}) {
-  const trimmedName = String(name || '').trim();
-  const restaurantId = id || generateId();
-  const data = {
-    id: restaurantId,
-    name: trimmedName || 'My Restaurant',
-    ownerId,
-    branches: [],
-    ...defaultSettings(),
-    createdAt: db.serversNow(),
-    updatedAt: db.serversNow(),
-    ...extra,
-  };
-  await db.setDoc(path(restaurantId), data);
-  return (await getRestaurantById(restaurantId)) || { ...data, id: restaurantId };
-}
-
 export async function updateRestaurant(id, patch = {}) {
-  if (!id) return null;
+  if (id !== RESTAURANT_ID) return null;
   const existing = await getRestaurantById(id);
   if (!existing) return null;
 
-  // Never allow the record id to be overwritten through a settings form.
-  const { id: _ignoredId, ...safePatch } = patch;
+  // Never allow the record id or ownership to be overwritten through settings.
+  const {
+    id: _ignoredId,
+    ownerId: _ignoredOwnerId,
+    ownerTakenAt: _ignoredOwnerTakenAt,
+    ...safePatch
+  } = patch;
 
   const next = {
     ...existing,
@@ -157,107 +112,38 @@ export async function updateRestaurant(id, patch = {}) {
     updatedAt: db.serversNow(),
   };
   await db.setDoc(path(id), next);
-  return getRestaurantById(id);
+  // Return the committed value directly. A post-write read failure must not be
+  // reported as a failed save (which could trigger deletion of a new image
+  // that Firestore already references).
+  return normalize({ ...next, id });
 }
 
-// Claiming must be a NARROW field update, not a full document rewrite:
-// `updateRestaurant()` re-serializes the whole record (stored Timestamps become
-// ISO strings), so a full write would report `createdAt` as changed and the
-// rules — which only let an unowned restaurant be claimed by touching the
-// ownership fields — would reject the legitimate claim as permission-denied.
-export async function setRestaurantOwner(id, ownerId) {
-  if (!id || !ownerId) return getRestaurantById(id);
-  await db.updateDoc(path(id), {
-    ownerId,
-    ownerTakenAt: db.serversNow(),
-    updatedAt: db.serversNow(),
-  });
-  return getRestaurantById(id);
+// Real-time listener over the single restaurant document. Returns an
+// unsubscribe function.
+export function subscribeRestaurant(listener) {
+  return db.subscribeDoc(path(RESTAURANT_ID), listener);
 }
 
-// Real-time listener over the owner's own restaurants (single-owner apps see
-// exactly one). Returns an unsubscribe function.
-export function subscribeRestaurant(listener, { ownerId } = {}) {
-  if (!ownerId) return () => {};
-  return db.subscribe(
-    COLLECTION,
-    { where: [{ field: 'ownerId', op: '==', value: ownerId }] },
-    listener
-  );
-}
-
-// --- Onboarding: User -> Restaurant -> Owner ------------------------------
-//
-// The current MVP has ONE restaurant identity (RESTAURANT_ID) — the storefront
-// and the dashboard must always operate against the same restaurant, otherwise
-// an owner manages restaurant A while customers read restaurant B. Ownership
-// scoring is kept multi-tenant-aware (restaurantId/restaurantIds remain), but
-// onboarding itself is deterministic: claim/create RESTAURANT_ID, never a
-// detached random restaurant the storefront would silently ignore.
-
-// Seeds the menu for a restaurant that has already been claimed by its owner.
-// This must run AFTER the owner's `users/{uid}` document carries the
-// restaurant identity, because the rules only let a *member* write a
-// restaurant's categories and products. It is idempotent and best-effort.
-export async function seedOwnerSetup(restaurantId) {
-  if (!restaurantId) return;
+// Seeds the menu for the deployment restaurant. It is idempotent and
+// best-effort so a partial failure never blocks owner recovery.
+export async function seedOwnerSetup(restaurantId = RESTAURANT_ID) {
+  if (restaurantId !== RESTAURANT_ID) return;
   try {
     const { ensureCategories } = await import('./categoryService');
     await ensureCategories(restaurantId);
-    if (restaurantId === RESTAURANT_ID) {
-      const { ensureDefaultProducts } = await import('./menuService');
-      await ensureDefaultProducts();
-    }
+    const { ensureDefaultProducts } = await import('./menuService');
+    await ensureDefaultProducts();
   } catch (err) {
-    // A partial failure must never block the owner's onboarding.
+    // A partial failure must never block the owner's recovery.
   }
-}
-
-// Claims the deployment restaurant for a new owner, or returns it when the
-// caller already owns it. When it is owned by someone else, onboarding FAILS
-// instead of silently creating a second restaurant identity that the storefront
-// never reads. Multi-tenant expansion can reuse this service's building blocks
-// (createRestaurant, setRestaurantOwner) later.
-export async function onboardOwnerRestaurant({ ownerId, name }) {
-  if (!ownerId) return null;
-
-  const claimed = await getRestaurantById(RESTAURANT_ID);
-
-  if (!claimed) {
-    return createRestaurant({
-      ownerId,
-      name: String(name || '').trim() || RESTAURANT_SETTINGS.name,
-      id: RESTAURANT_ID,
-    });
-  }
-
-  if (!claimed.ownerId) {
-    return setRestaurantOwner(claimed.id, ownerId);
-  }
-
-  if (claimed.ownerId === ownerId) {
-    return claimed;
-  }
-
-  const error = new Error(
-    `The ${RESTAURANT_SETTINGS.name} storefront already has an owner. Only its owner can manage this deployment.`
-  );
-  error.code = 'restaurant/already-owned';
-  throw error;
 }
 
 const restaurantService = {
-  getRestaurants,
+  getDefaultRestaurantSettings,
   getRestaurantById,
   getRestaurantSettings,
-  getOwnerRestaurant,
-  getOwnerRestaurants,
-  fetchOwnerRestaurant,
-  createRestaurant,
   updateRestaurant,
-  setRestaurantOwner,
   subscribeRestaurant,
-  onboardOwnerRestaurant,
   seedOwnerSetup,
 };
 

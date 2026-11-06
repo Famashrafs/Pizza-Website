@@ -94,6 +94,30 @@ export async function deleteDoc(path) {
   return path.split('/').pop();
 }
 
+// Real-time listener for one document. `callback` receives the document (with
+// its id) or null when it is missing/deleted; returns an unsubscribe function.
+export function subscribeDoc(path, callback) {
+  let active = true;
+  const unsub = fsOnSnapshot(
+    fsDoc(getDB(), path),
+    (snapshot) => {
+      if (!active) return;
+      callback(snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } : null);
+    },
+    () => {
+      if (active) callback(null);
+    }
+  );
+  return () => {
+    active = false;
+    try {
+      unsub();
+    } catch (err) {
+      /* already unsubscribed */
+    }
+  };
+}
+
 // Real-time listener. `callback` is invoked with the current docs whenever the
 // matching set changes; returns an unsubscribe function. Callers use it to
 // trigger a reload of a loader, never to cache data.
@@ -143,6 +167,7 @@ const db = {
   updateDoc,
   deleteDoc,
   subscribe,
+  subscribeDoc,
   serversNow,
   nowISO,
   timestampToISO,

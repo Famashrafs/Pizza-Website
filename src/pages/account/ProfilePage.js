@@ -13,6 +13,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import ProfileImageUploader from '../../components/account/ProfileImageUploader';
 import SectionTitle from '../../components/account/SectionTitle';
+import { commitImagePipeline } from '../../services/imagePipeline';
+import { IMAGE_KINDS, uploadImageAsset } from '../../services/imageService';
 import {
   getAddresses,
   setDefaultAddress,
@@ -54,20 +56,56 @@ function ProfilePage() {
     }
   };
 
-  const handleSavePhoto = async (dataUrl) => {
+  const handleSavePhoto = async (file, { onProgress } = {}) => {
     setPhotoSaving(true);
-    const result = await updateProfileData({ photoURL: dataUrl });
-    setPhotoSaving(false);
-    if (result.success) {
+    setPhotoError('');
+    try {
+      await commitImagePipeline({
+        changes: [
+          {
+            key: 'photo',
+            upload: () =>
+              uploadImageAsset(file, {
+                kind: IMAGE_KINDS.CUSTOMER_PROFILE,
+                ownerUid: uid,
+                onProgress,
+              }),
+            oldUrl: normalized.photoURL,
+          },
+        ],
+        save: (images) => updateProfileData({ photoURL: images.photo }),
+      });
       showToast(t('account.toastProfilePictureUpdated'));
-    } else {
-      setPhotoError(result.error || t('account.toastProfilePictureFailed'));
+    } catch (err) {
+      setPhotoError(
+        err.code === 'storage/not-configured'
+          ? t('account.imageStorageNotConfigured')
+          : err.message || t('account.toastProfilePictureFailed')
+      );
+      throw err;
+    } finally {
+      setPhotoSaving(false);
     }
   };
 
   const handleRemovePhoto = async () => {
-    const result = await updateProfileData({ photoURL: '' });
-    if (result.success) showToast(t('account.toastProfilePictureRemoved'));
+    setPhotoError('');
+    try {
+      await commitImagePipeline({
+        changes: [
+          {
+            key: 'photo',
+            value: '',
+            oldUrl: normalized.photoURL,
+          },
+        ],
+        save: (images) => updateProfileData({ photoURL: images.photo }),
+      });
+      showToast(t('account.toastProfilePictureRemoved'));
+    } catch (err) {
+      setPhotoError(err.message || t('account.toastProfilePictureFailed'));
+      throw err;
+    }
   };
 
   const handleVerifyEmail = async () => {

@@ -209,13 +209,6 @@ function Login({ adminMode = false }) {
         {adminMode ? (
           <>
             <p className="auth-switch">
-              {t('auth.promptNoRestaurantAccount')}{' '}
-              <Link to="/admin/register">
-                {t('auth.createAdminAccount')}
-              </Link>
-            </p>
-
-            <p className="auth-switch">
               {t('auth.promptAreYouCustomer')}{' '}
               <Link to="/login/customer">
                 {t('auth.customerLogin')}

@@ -8,6 +8,8 @@ import {
   faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import ImagePicker from './ImagePicker';
+import { commitImagePipeline } from '../../services/imagePipeline';
+import { IMAGE_KINDS, uploadImageAsset } from '../../services/imageService';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import {
   DEFAULT_CONTENT_LANGUAGE,
@@ -72,7 +74,15 @@ function cleanNumber(value) {
 // language tabs switch which language the name, description and option labels
 // edit, without changing ids, prices or availability. Empty translations fall
 // back to English on the storefront.
-function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
+function ProductForm({
+  product = null,
+  categories = [],
+  onSubmit,
+  onCancel,
+  onSaved,
+  ownerUid = '',
+  restaurantId = '',
+}) {
   const { t } = useTranslation();
   const isEdit = Boolean(product?.id);
 
@@ -100,6 +110,9 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imageError, setImageError] = useState('');
+  const [imageProgress, setImageProgress] = useState(0);
 
   const isDefaultLanguage = contentLanguage === DEFAULT_CONTENT_LANGUAGE;
   const activeLanguage =
@@ -307,11 +320,32 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
     if (!validate()) return;
 
     setSaving(true);
+    setSubmitError('');
+    setImageError('');
+    setImageProgress(0);
+
+    const payload = buildPayload();
     try {
-      const result = await onSubmit(buildPayload());
-      if (result && result.success === false) {
-        setSubmitError(result.error || t('admin.errorSaveProduct'));
-      }
+      await commitImagePipeline({
+        changes: [
+          {
+            key: 'image',
+            upload: imageFile
+              ? () =>
+                  uploadImageAsset(imageFile, {
+                    kind: IMAGE_KINDS.PRODUCT,
+                    ownerUid,
+                    restaurantId,
+                    onProgress: setImageProgress,
+                  })
+              : null,
+            value: form.image,
+            oldUrl: product?.image || '',
+          },
+        ],
+        save: (images) => onSubmit({ ...payload, image: images.image }),
+      });
+      onSaved?.();
     } catch (err) {
       setSubmitError(err.message || t('admin.errorSaveProduct'));
     } finally {
@@ -463,8 +497,19 @@ function ProductForm({ product = null, categories = [], onSubmit, onCancel }) {
             <ImagePicker
               label={t('admin.fieldProductImage')}
               value={form.image}
-              onChange={(url) => update({ image: url })}
-              path="products"
+              onChange={(url) => {
+                update({ image: url });
+                setImageFile(null);
+                setImageError('');
+              }}
+              onFileSelect={(file, fileError) => {
+                setImageFile(file);
+                setImageError(fileError || '');
+              }}
+              selectedFile={imageFile}
+              uploading={saving && Boolean(imageFile)}
+              progress={imageProgress}
+              error={imageError}
             />
           </div>
         </div>

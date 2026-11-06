@@ -149,7 +149,7 @@ test('owner sees a Dashboard entry in the account menu; customer does not', asyn
   ).not.toBeInTheDocument();
 });
 
-test('admin login and admin signup pages are reachable while signed out', async () => {
+test('admin login is reachable while signed out, but public admin registration is not', async () => {
   goTo('/admin/login');
   const loginView = render(<App />);
   await resolveAuth(null);
@@ -158,13 +158,16 @@ test('admin login and admin signup pages are reachable while signed out', async 
   );
   loginView.unmount();
 
+  // There is no public owner/admin self-service registration any more: the
+  // obsolete /admin/register route was removed.
   authListener = null;
   goTo('/admin/register');
   render(<App />);
   await resolveAuth(null);
-  await waitFor(() =>
-    expect(screen.getByText(/Create Restaurant Admin Account/i)).toBeInTheDocument()
-  );
+  expect(
+    screen.queryByText(/Create Restaurant Admin Account/i)
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText(/Restaurant Name/i)).not.toBeInTheDocument();
 });
 
 test('logged-in customer visiting /admin is redirected to /account', async () => {

@@ -5,5 +5,11 @@
   },
   "functions": {
     "source": "functions"
-  }
+  },
+  "storage": [
+    {
+      "bucket": "resturent-system.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ]
 }

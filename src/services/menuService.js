@@ -268,7 +268,10 @@ export async function createProduct(input, restaurantId = RESTAURANT_ID) {
   );
   const { id, ...data } = product;
   await db.setDoc(`${COLLECTION}/${id}`, data);
-  return (await getProductById(id)) || product;
+  // Do not perform a second read after the write: a failed read would make the
+  // caller believe the save failed and could delete a newly uploaded image
+  // that Firestore has already persisted.
+  return product;
 }
 
 export async function updateProduct(id, patch = {}) {
@@ -296,7 +299,8 @@ export async function updateProduct(id, patch = {}) {
   );
   const { id: _mergeId, ...data } = merged;
   await db.setDoc(`${COLLECTION}/${id}`, data);
-  return (await getProductById(id)) || merged;
+  // The awaited write above is the commit boundary for image replacement.
+  return merged;
 }
 
 export async function setAvailability(id, available) {

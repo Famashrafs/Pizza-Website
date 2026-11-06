@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Firebase Storage rules for the single deployment restaurant.
+//
+// Reads of product/branding images are public because those images are part of
+// the public storefront. Every write is authenticated and owner-scoped; there
+// is no public upload or delete path.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function callerProfilePath() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+
+    // Mirrors the Firestore owner/admin boundary. Storage cannot trust a path
+    // segment alone: the caller must still be an administrator of the same
+    // restaurant according to the authoritative users/{uid} document.
+    function isRestaurantManager(restaurantId) {
+      return isSignedIn()
+        && firestore.exists(callerProfilePath())
+        && firestore.get(callerProfilePath()).data.restaurantId == restaurantId
+        && firestore.get(callerProfilePath()).data.role in [
+          'restaurant_owner',
+          'restaurant_admin'
+        ];
+    }
+
+    function isValidImage() {
+      return request.resource != null
+        && request.resource.contentType.matches('image/(png|jpeg|webp|gif)')
+        && request.resource.size <= 5 * 1024 * 1024;
+    }
+
+    // Product images are written by a restaurant administrator into that
+    // administrator's own uid segment. A manager may delete an older object
+    // uploaded by another manager, but may not upload into someone else's uid.
+    match /products/{restaurantId}/{ownerUid}/{fileName} {
+      allow read: if true;
+      allow create, update: if isRestaurantManager(restaurantId)
+        && request.auth.uid == ownerUid
+        && isValidImage();
+      allow delete: if isRestaurantManager(restaurantId);
+    }
+
+    // Restaurant logo/cover images use the same manager boundary.
+    match /restaurants/{restaurantId}/branding/{imageType}/{ownerUid}/{fileName} {
+      allow read: if true;
+      allow create, update: if isRestaurantManager(restaurantId)
+        && request.auth.uid == ownerUid
+        && isValidImage();
+      allow delete: if isRestaurantManager(restaurantId);
+    }
+
+    // A customer can upload and remove only their own profile photo.
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && isValidImage();
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

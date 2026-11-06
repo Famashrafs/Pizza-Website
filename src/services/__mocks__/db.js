@@ -75,16 +75,21 @@ function applyQuery(entries, { where: clauses = [], orderBy: order = [], limit: 
   return result;
 }
 
-function notify(collectionPath) {
-  const set = listeners.get(collectionPath);
-  if (!set) return;
-  Array.from(set).forEach((cb) => {
-    try {
-      cb();
-    } catch (err) {
-      // A broken subscriber must never break the writer.
-    }
-  });
+function notify(path) {
+  const notifyKey = (key) => {
+    const set = listeners.get(key);
+    if (!set) return;
+    Array.from(set).forEach((cb) => {
+      try {
+        cb();
+      } catch (err) {
+        // A broken subscriber must never break the writer.
+      }
+    });
+  };
+  notifyKey(path);
+  const parent = path.split('/').slice(0, -1).join('/');
+  if (parent && parent !== path) notifyKey(parent);
 }
 
 export async function getDoc(path) {
@@ -103,7 +108,7 @@ export async function setDoc(path, data, merge = false) {
   else next.id = path.split('/').pop();
   delete next.id; // id is derived from the path, like Firestore
   store.set(path, { id: path.split('/').pop(), data: next });
-  notify(path.split('/').slice(0, -1).join('/'));
+  notify(path);
   return { ...next, id: path.split('/').pop() };
 }
 
@@ -121,7 +126,7 @@ export async function updateDoc(path, patch) {
   if (!existing) throw new Error(`Mock Firestore: doc ${path} does not exist.`);
   const next = { ...existing.data, ...hydrateSentinel(clone(patch)) };
   store.set(path, { id: existing.id, data: next });
-  notify(path.split('/').slice(0, -1).join('/'));
+  notify(path);
   return existing.id;
 }
 
@@ -134,6 +139,13 @@ export async function deleteDoc(path) {
 export function subscribe(collectionPath, _queryOptions = {}, callback) {
   if (!listeners.has(collectionPath)) listeners.set(collectionPath, new Set());
   const set = listeners.get(collectionPath);
+  set.add(callback);
+  return () => set.delete(callback);
+}
+
+export function subscribeDoc(path, callback) {
+  if (!listeners.has(path)) listeners.set(path, new Set());
+  const set = listeners.get(path);
   set.add(callback);
   return () => set.delete(callback);
 }
@@ -180,6 +192,7 @@ const mockDb = {
   updateDoc,
   deleteDoc,
   subscribe,
+  subscribeDoc,
   serversNow,
   nowISO,
   timestampToISO,

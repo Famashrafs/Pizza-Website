@@ -20,17 +20,16 @@
 //
 // keep-in-sync: functions/lib/restaurantDefaults.js (server pricing + promos)
 
-// Stable identity of the restaurant owned by this deployment. Resources created
-// through the customer-facing store (orders, products) are tagged with this id
-// so every record is multi-tenant aware. The owner -> restaurant relationship
-// is NEVER derived from here; it comes from the signed-in user's profile. In a
-// production multi-tenant backend (Firestore) this maps to a generated
-// restaurant document id, not a code constant.
+// Stable identity of the single restaurant owned by this deployment. Orders,
+// products and admin profiles are tagged with this id so every record resolves
+// to the same restaurant. The owner -> restaurant relationship is NEVER derived
+// from here; it comes from the signed-in user's profile and is verified against
+// `restaurants/{RESTAURANT_ID}.ownerId` by Firestore Security Rules.
 export const RESTAURANT_ID = 'restaurant-pizza-demo';
 
 export const RESTAURANT_SETTINGS = {
   // Branding and identity.
-  name: 'Pizza',
+  name: 'Restro',
   tagline: 'Wood-fired kitchen & delivery',
   description: 'Wood-fired kitchen & delivery',
   logo: '',

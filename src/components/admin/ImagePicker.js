@@ -13,90 +13,68 @@ import {
   createPreviewUrl,
   isImageStorageConfigured,
   revokePreviewUrl,
-  uploadImage,
   validateImageFile,
 } from '../../services/imageService';
 
-// Image field used by the product form and restaurant settings. Supports a
-// pasted URL (always available) and a real file upload when Firebase Storage is
-// configured. Shows preview, upload progress, success and error states, and
-// never pretends an unconfigured upload succeeded.
+// Image field used by the product form and restaurant settings. The browser
+// file is selected here, but the actual Storage upload is performed by the
+// form's Save action. Deferring the upload prevents a cancelled form from
+// leaving an orphaned object in Storage.
+//
+// Pasted URLs remain supported. When Storage is unavailable they are still a
+// valid way to reference an existing image.
 function ImagePicker({
   value,
   onChange,
+  onFileSelect,
+  selectedFile = null,
   label,
-  path = 'menu',
   disabled = false,
   aspect = 'square',
+  uploading = false,
+  progress = 0,
+  error = '',
+  success = '',
 }) {
   const { t } = useTranslation();
   const [preview, setPreview] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const inputRef = useRef(null);
   const configured = isImageStorageConfigured();
 
   useEffect(() => {
-    return () => revokePreviewUrl(preview);
-  }, [preview]);
+    const localPreview = selectedFile ? createPreviewUrl(selectedFile) : '';
+    setPreview(localPreview);
+    return () => revokePreviewUrl(localPreview);
+  }, [selectedFile]);
 
   const display = preview || value || '';
 
-  const clearTimers = () => {
-    setError('');
-    setSuccess('');
-  };
-
-  const handleFile = async (event) => {
+  const handleFile = (event) => {
     const file = event.target.files && event.target.files[0];
     if (event.target) event.target.value = '';
     if (!file) return;
 
-    clearTimers();
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      setError(validation.error);
+      onFileSelect?.(null, validation.error);
       return;
     }
-
-    const localPreview = createPreviewUrl(file);
-    setPreview(localPreview);
-
     if (!configured) {
-      setError(t('admin.imageStorageNotConfigured'));
+      onFileSelect?.(null, t('admin.imageStorageNotConfigured'));
       return;
     }
 
-    setUploading(true);
-    setProgress(0);
-    try {
-      const url = await uploadImage(file, { path, onProgress: setProgress });
-      onChange(url);
-      setPreview('');
-      revokePreviewUrl(localPreview);
-      setSuccess(t('admin.imageUploaded'));
-    } catch (err) {
-      setError(err.message || t('admin.imageUploadFailed'));
-    } finally {
-      setUploading(false);
-    }
+    onFileSelect?.(file, '');
   };
 
   const handleRemove = () => {
-    clearTimers();
-    revokePreviewUrl(preview);
-    setPreview('');
     onChange('');
-    if (inputRef.current) inputRef.current.value = '';
+    onFileSelect?.(null, '');
   };
 
   const handleUrlChange = (url) => {
-    clearTimers();
-    revokePreviewUrl(preview);
-    setPreview('');
     onChange(url);
+    onFileSelect?.(null, '');
   };
 
   return (

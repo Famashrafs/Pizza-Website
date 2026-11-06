@@ -1,16 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import useOwnerRestaurant from '../../hooks/useOwnerRestaurant';
+import useRestaurant from '../../hooks/useRestaurant';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 
 function AdminLayout() {
   const { currentUser } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { status, restaurant, error, reload } = useOwnerRestaurant(
-    currentUser?.uid
-  );
+  const { status, restaurant, error, reload } = useRestaurant();
 
   const context = useMemo(
     () => ({

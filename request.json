@@ -1,0 +1,11 @@
+﻿{
+    "messages":  [
+                     {
+                         "content":  "Say hello.",
+                         "role":  "user"
+                     }
+                 ],
+    "stream":  true,
+    "model":  "minimaxai/minimax-m3.1-flash",
+    "max_tokens":  32
+}

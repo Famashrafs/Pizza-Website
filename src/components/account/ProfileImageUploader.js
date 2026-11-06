@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCamera,
@@ -7,107 +7,61 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { useTranslation } from 'react-i18next';
+import { createPreviewUrl, revokePreviewUrl } from '../../services/imageService';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
-const MAX_DIMENSION = 320;
-
-// Internal marker for a failed file read. The message shown to the user is
-// translated at the catch site.
-const FILE_READ_ERROR = 'file-read-error';
-
-function readAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error(FILE_READ_ERROR));
-    reader.readAsDataURL(file);
-  });
-}
-
-// Downscales so the stored preview stays small (it is persisted locally).
-function downscale(fallbackUrl) {
-  return new Promise((resolve) => {
-    try {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = () => {
-        // Fall back to the raw data URL if the browser cannot re-encode it.
-        resolve(fallbackUrl);
-      };
-      img.src = fallbackUrl;
-    } catch (err) {
-      resolve(fallbackUrl);
-    }
-  });
-}
 
 function ProfileImageUploader({ photoURL, onSave, onRemove }) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
   const [phase, setPhase] = useState('idle'); // idle | editing | uploading
+  const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const localPreview = file ? createPreviewUrl(file) : '';
+    setPreview(localPreview);
+    return () => revokePreviewUrl(localPreview);
+  }, [file]);
+
   const reset = () => {
     setPhase('idle');
-    setPreview('');
+    setFile(null);
     setUploadProgress(0);
     setError('');
     if (inputRef.current) inputRef.current.value = '';
   };
 
-  const handleSelect = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleSelect = (event) => {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
     setError('');
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+    if (!ACCEPTED_TYPES.includes(selected.type)) {
       setError(t('account.errorImageType'));
       return;
     }
-    if (file.size > MAX_FILE_SIZE) {
+    if (selected.size > MAX_FILE_SIZE) {
       setError(t('account.errorImageSize'));
       return;
     }
-    try {
-      const raw = await readAsDataUrl(file);
-      setPreview(raw);
-      setPhase('editing');
-    } catch (err) {
-      setError(
-        err.message === FILE_READ_ERROR
-          ? t('account.errorReadFile')
-          : t('account.errorLoadImage')
-      );
-    }
+    setFile(selected);
+    setPhase('editing');
   };
 
   const handleSave = async () => {
-    if (!preview) return;
+    if (!file || phase === 'uploading') return;
     setPhase('uploading');
     setError('');
-    // Progress is reported while the browser processes the image.
-    const timer = window.setInterval(() => {
-      setUploadProgress((p) => Math.min(96, p + 12));
-    }, 90);
+    setUploadProgress(0);
     try {
-      const optimized = await downscale(preview);
-      onSave(optimized);
-      window.clearInterval(timer);
+      await onSave(file, { onProgress: setUploadProgress });
       setUploadProgress(100);
       reset();
     } catch (err) {
-      window.clearInterval(timer);
-      setError(t('account.errorSaveImage'));
+      setError(err.message || t('account.errorSaveImage'));
       setPhase('editing');
     }
   };
@@ -172,9 +126,13 @@ function ProfileImageUploader({ photoURL, onSave, onRemove }) {
             <button
               type="button"
               className="menu-btn dash-btn-sm is-danger"
-              onClick={() => {
-                onRemove();
-                reset();
+              onClick={async () => {
+                try {
+                  await onRemove();
+                  reset();
+                } catch (err) {
+                  setError(err.message || t('account.errorSaveImage'));
+                }
               }}
             >
               <FontAwesomeIcon icon={faTrash} /> {t('account.removeProfilePicture')}

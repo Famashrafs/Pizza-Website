@@ -33,8 +33,7 @@ import {
   roleHasAdminAccess,
 } from '../config/roles';
 import {
-  getOwnerRestaurants,
-  onboardOwnerRestaurant,
+  getRestaurantById,
   seedOwnerSetup,
 } from '../services/restaurantService';
 import { RESTAURANT_ID } from '../config/restaurant';
@@ -62,7 +61,6 @@ function defaultCustomerProfile(user) {
     phone: '',
     phoneVerified: false,
     restaurantId: null,
-    restaurantIds: {},
     ...(user.metadata?.creationTime
       ? { createdAt: new Date(user.metadata.creationTime).toISOString() }
       : {}),
@@ -77,27 +75,24 @@ function stripIdentityFields(data) {
   return fields;
 }
 
-// Legacy-owner recovery (migration from before `users/{uid}` documents existed,
-// or from partial profile writes).
+// Owner recovery (migration from before `users/{uid}` documents existed, or
+// from partial profile writes).
 //
-// Owner status is ONLY restored from a Firestore `restaurants` document that
-// explicitly lists `ownerId == currentUser.uid`. That document relationship is
-// the authority — never localStorage, email address, URL, or a client role.
+// Owner status is ONLY restored from the fixed restaurant document when
+// `restaurants/{RESTAURANT_ID}.ownerId == currentUser.uid`. That document
+// relationship is the authority - never localStorage, email address, URL, or a
+// client role. Public owner registration no longer exists.
 //
 // Rule-safe write sequence:
-//   1. create the profile WITHOUT a restaurant identity (the create rule
-//      forbids claiming ownership on create), then
+//   1. create the profile WITHOUT a restaurant identity, then
 //   2. attach the identity through the ownership-grant update, which the rules
 //      re-verify against the restaurant's `ownerId`.
 //
-// Recovery never silently converts a Firestore owner into a customer, never
-// promotes a customer into an owner (rules forbid client role changes, so a
-// mismatch is logged for manual review instead), and never overwrites an
-// existing owner/admin identity.
+// Recovery never silently promotes a customer into an owner and never
+// overwrites an existing admin identity.
 
 function hasRestaurantIdentity(profile) {
-  const ids = (profile && profile.restaurantIds) || {};
-  return !!(profile && profile.restaurantId && Object.keys(ids).length > 0);
+  return !!(profile && profile.restaurantId === RESTAURANT_ID);
 }
 
 // A failed read and a missing document are different facts and must never be
@@ -112,49 +107,35 @@ function describeFailure(err, fallback) {
   return `${fallback} [${code}${detail ? `: ${detail}` : ''}]`;
 }
 
-// Resolves which restaurant a uid owns. Prefers the active deployment
-// restaurant (deterministic MVP identity) and logs when ownership is ambiguous
-// instead of silently picking.
+// Resolves whether the uid owns the deployment restaurant. This is the ONLY
+// ownership source; a detached or legacy restaurant record never grants access.
 async function resolveOwnedRestaurant(uid) {
-  let owned = [];
+  let restaurant = null;
   try {
-    owned = await getOwnerRestaurants(uid);
+    restaurant = await getRestaurantById(RESTAURANT_ID);
   } catch (err) {
     runtimeWarn(
-      'auth.ownership-query-failed',
-      'Could not read the restaurants collection for',
+      'auth.ownership-read-failed',
+      'Could not read restaurants/' + RESTAURANT_ID + ' for',
       uid,
-      '— owner recovery is impossible right now:',
+      '- owner recovery is impossible right now:',
       err?.code || err
     );
-    devLog('[auth] ownership recovery could not query restaurants', uid, err);
+    devLog('[auth] ownership recovery could not read the restaurant', uid, err);
     return null;
   }
-  if (!owned.length) return null;
-
-  const target = owned.find((r) => r.id === RESTAURANT_ID) || owned[0];
-  if (owned.length > 1) {
-    devLog(
-      '[auth] multiple owned restaurants for',
-      uid,
-      'resolving to',
-      target && target.id,
-      '(owned:)',
-      owned.map((r) => r.id)
-    );
-  }
-  // Re-asserted explicitly — ownerId is never inferred.
-  if (!target || target.ownerId !== uid) {
-    devLog('[auth] ownership could not be verified for', uid);
+  if (!restaurant || restaurant.ownerId !== uid) {
+    if (restaurant?.ownerId) {
+      devLog('[auth] ownership could not be verified for', uid);
+    }
     return null;
   }
-  return target;
+  return restaurant;
 }
 
-async function grantRestaurantIdentity(uid, restaurant, existingIds = {}) {
+async function grantRestaurantIdentity(uid, restaurant) {
   await db.updateDoc(`users/${uid}`, {
     restaurantId: restaurant.id,
-    restaurantIds: { ...(existingIds || {}), [restaurant.id]: true },
     updatedAt: db.nowISO(),
   });
 }
@@ -166,18 +147,18 @@ async function recoverOwnerProfile(user, existingDoc) {
   const existingRole = existing ? normalizeRole(existing.role) : null;
   const isAdminRole = ADMIN_ROLES.includes(existingRole);
 
-  // A profile that already carries an admin role + identity is preserved as-is.
+  // A profile that already carries an admin role + fixed identity is preserved.
   if (existing && isAdminRole && hasRestaurantIdentity(existing)) return null;
 
   const restaurant = await resolveOwnedRestaurant(user.uid);
   if (!restaurant) {
-    // No verified ownership. Keep the account exactly as it is and log — we
+    // No verified ownership. Keep the account exactly as it is and log - we
     // never overwrite an owner/admin (or any) profile with a customer role.
     if (existing && isAdminRole) {
       devLog(
         '[auth] owner/admin profile of',
         user.uid,
-        'cannot be repaired (no verified restaurant); keeping existing identity'
+        'cannot be repaired (no verified ownership); keeping existing identity'
       );
     }
     return null;
@@ -185,22 +166,22 @@ async function recoverOwnerProfile(user, existingDoc) {
 
   if (existing) {
     // Repairable only for admin roles (identity-only; rules forbid role edits).
-    // A customer profile backed by a restaurant ownerId is a data conflict —
+    // A customer profile backed by the restaurant ownerId is a data conflict -
     // logged, never silently promoted.
     if (!isAdminRole) {
       devLog(
-        '[auth] restaurants.<id>.ownerId ==',
+        '[auth] restaurants.' + RESTAURANT_ID + '.ownerId ==',
         user.uid,
         'but users/',
         user.uid,
         'role is',
         existingRole,
-        '— not promoting client-side; manual review required'
+        '- not promoting client-side; manual review required'
       );
       return null;
     }
     try {
-      await grantRestaurantIdentity(user.uid, restaurant, existing.restaurantIds);
+      await grantRestaurantIdentity(user.uid, restaurant);
     } catch (err) {
       devLog('[auth] owner identity repair failed', user.uid, err);
       return null;
@@ -213,11 +194,10 @@ async function recoverOwnerProfile(user, existingDoc) {
     return {
       ...existing,
       restaurantId: restaurant.id,
-      restaurantIds: { ...(existing.restaurantIds || {}), [restaurant.id]: true },
     };
   }
 
-  // No profile document → restore it (create without identity, then grant).
+  // No profile document -> restore it (create without identity, then grant).
   const now = db.nowISO();
   const base = {
     uid: user.uid,
@@ -241,7 +221,6 @@ async function recoverOwnerProfile(user, existingDoc) {
     ...base,
     phoneVerified: false,
     restaurantId: restaurant.id,
-    restaurantIds: { [restaurant.id]: true },
   };
 
   try {
@@ -252,7 +231,6 @@ async function recoverOwnerProfile(user, existingDoc) {
 
   return profile;
 }
-
 export function AuthProvider({ children }) {
   const { t, i18n } = useTranslation();
   const [currentUser, setCurrentUser] = useState(null);
@@ -417,73 +395,12 @@ export function AuthProvider({ children }) {
         photoURL: user.photoURL || '',
         phoneVerified: false,
         restaurantId: null,
-        restaurantIds: {},
         createdAt: now,
         updatedAt: now,
       };
       // The profile is the server-side record of truth; the listener may have
       // already cached a default profile, so flush the real one immediately.
       await db.setDoc(`users/${user.uid}`, profile);
-      setProfileState(profile);
-      if (name) await updateProfile(user, { displayName: name });
-    });
-
-  // Owner onboarding: Firebase account → claim/create the SINGLE deployment
-  // restaurant → owner document → restaurant identity → menu seeding.
-  // Onboarding establishes the restaurant first so a taken storefront fails the
-  // registration cleanly instead of leaving an identity-less owner. The
-  // restaurant identity step MUST precede seeding because the rules only let a
-  // *member* write a restaurant's categories/products.
-  const signupOwner = (name, email, password, restaurantName) =>
-    run(async () => {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = credential.user;
-      const now = db.nowISO();
-
-      let restaurant;
-      try {
-        restaurant = await onboardOwnerRestaurant({
-          ownerId: user.uid,
-          name: restaurantName,
-        });
-      } catch (err) {
-        // Fresh registration that cannot claim the storefront is cleaned up so
-        // no stray identity-less owner account lingers.
-        try {
-          await deleteUser(user);
-        } catch (cleanupErr) {
-          devLog('[auth] could not clean up a failed owner registration', user.uid, cleanupErr);
-        }
-        throw err;
-      }
-
-      const base = {
-        uid: user.uid,
-        role: ROLES.RESTAURANT_OWNER,
-        name: String(name || '').trim(),
-        email,
-        phone: '',
-        photoURL: user.photoURL || '',
-        createdAt: now,
-        updatedAt: now,
-      };
-      const profile = {
-        ...base,
-        phoneVerified: false,
-        restaurantId: restaurant.id,
-        restaurantIds: { [restaurant.id]: true },
-      };
-
-      // Profile is created without identity, then identity is granted so the
-      // rules verify ownership against the restaurant's ownerId.
-      await db.setDoc(`users/${user.uid}`, base);
-      await db.updateDoc(`users/${user.uid}`, {
-        restaurantId: restaurant.id,
-        restaurantIds: { [restaurant.id]: true },
-        updatedAt: db.nowISO(),
-      });
-      await seedOwnerSetup(restaurant.id);
-
       setProfileState(profile);
       if (name) await updateProfile(user, { displayName: name });
     });
@@ -523,14 +440,37 @@ export function AuthProvider({ children }) {
       if (!user) {
         throw new Error(t('auth.errorNotSignedIn'));
       }
+      const previousDisplayName = user.displayName || '';
+      const previousPhotoURL = user.photoURL || userProfile?.photoURL || '';
       const authUpdates = {};
       if (data.displayName !== undefined) authUpdates.displayName = data.displayName;
       if (data.photoURL !== undefined) authUpdates.photoURL = data.photoURL;
+
+      // Firebase Auth and Firestore both expose the profile photo. Update Auth
+      // first, then persist the authoritative Firestore document. If the
+      // Firestore write fails, restore Auth so the image pipeline can safely
+      // delete the newly uploaded object without leaving a split profile.
       if (Object.keys(authUpdates).length > 0) {
         await updateProfile(user, authUpdates);
       }
+
       const patch = { ...stripIdentityFields(data), updatedAt: db.nowISO() };
-      await db.updateDoc(`users/${user.uid}`, patch);
+      try {
+        await db.updateDoc(`users/${user.uid}`, patch);
+      } catch (error) {
+        const rollback = {};
+        if (data.displayName !== undefined) rollback.displayName = previousDisplayName;
+        if (data.photoURL !== undefined) rollback.photoURL = previousPhotoURL;
+        if (Object.keys(rollback).length > 0) {
+          try {
+            await updateProfile(user, rollback);
+          } catch (rollbackError) {
+            error.authRollbackFailed = true;
+            error.rollbackError = rollbackError;
+          }
+        }
+        throw error;
+      }
       setProfileState({ ...(userProfile || {}), ...patch });
     });
 
@@ -650,7 +590,6 @@ export function AuthProvider({ children }) {
     profileError,
     clearError,
     signup,
-    signupOwner,
     login,
     loginWithGoogle,
     forgotPassword,

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import 'bootstrap/dist/css/bootstrap.css';
 import './App.css';
@@ -27,7 +32,6 @@ import AdminCustomers from './pages/admin/AdminCustomers';
 import AdminCustomerDetails from './pages/admin/AdminCustomerDetails';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminSettings from './pages/admin/AdminSettings';
-import OwnerRegister from './pages/owner/OwnerRegister';
 import { faTicket, faStar } from '@fortawesome/free-solid-svg-icons';
 import AuthChoice from './pages/AuthChoice';
 // Importing pages
@@ -56,13 +60,11 @@ import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import OrderConfirmation from './pages/OrderConfirmation';
 
-// Public chrome (navbar, cart drawer, footer) is hidden inside the admin and
-// owner-registration areas so the dashboard stays clean and focused.
+// Public chrome (navbar, cart drawer, footer) is hidden inside the admin area
+// so the dashboard stays clean and focused.
 function PublicTopChrome({ isScrolled }) {
   const location = useLocation();
-  const hidden =
-    location.pathname.startsWith('/admin') ||
-    location.pathname === '/owner/register';
+  const hidden = location.pathname.startsWith('/admin');
 
   if (hidden) return null;
 
@@ -77,9 +79,7 @@ function PublicTopChrome({ isScrolled }) {
 function PublicBottomChrome({ showMoveToTop, onMoveToTop }) {
   const location = useLocation();
   const { t } = useTranslation();
-  const hidden =
-    location.pathname.startsWith('/admin') ||
-    location.pathname === '/owner/register';
+  const hidden = location.pathname.startsWith('/admin');
 
   if (hidden) return null;
 
@@ -183,15 +183,11 @@ function App() {
                 <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/order-confirmation" element={<OrderConfirmation />} />
 
-                <Route path="/owner/register" element={<OwnerRegister />} />
-
-                {/* Admin auth entry points (must sit outside the guarded
-                    /admin route so they stay reachable when signed out). */}
+                {/* Admin login stays outside the guarded /admin route so the
+                    existing owner/admin can sign in when signed out. There is
+                    no public owner/admin registration route: owner access is
+                    provisioned by the restaurant owner, never self-service. */}
                 <Route path="/admin/login" element={<Login adminMode />} />
-                <Route
-                  path="/admin/register"
-                    element={<OwnerRegister />}
-                />
 
                 <Route
                   path="/admin"

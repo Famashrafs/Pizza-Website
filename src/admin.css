@@ -1692,7 +1692,6 @@
 
 .admin-option-row input[type="text"],
 .admin-option-row input[type="number"] {
-  background: var(--on-accent);
   border: 1px solid var(--border);
   color: var(--text-primary);
   border-radius: 9px;

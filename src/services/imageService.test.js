@@ -6,8 +6,7 @@ jest.mock('firebase/storage', () => ({
   deleteObject: jest.fn(async () => undefined),
   getDownloadURL: jest.fn(async () => 'https://example.test/download.jpg'),
   getStorage: jest.fn(() => ({ name: 'mock-storage' })),
-  ref: jest.fn((_storage, path) => ({ path })),
-  refFromURL: jest.fn((_storage, url) => ({ url })),
+  ref: jest.fn((_storage, pathOrUrl) => ({ pathOrUrl })),
   uploadBytesResumable: jest.fn(),
 }));
 
@@ -35,8 +34,7 @@ describe('imageService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     storage.getStorage.mockReturnValue({ name: 'mock-storage' });
-    storage.ref.mockImplementation((_storage, path) => ({ path }));
-    storage.refFromURL.mockImplementation((_storage, url) => ({ url }));
+    storage.ref.mockImplementation((_storage, pathOrUrl) => ({ pathOrUrl }));
     storage.deleteObject.mockResolvedValue(undefined);
     storage.uploadBytesResumable.mockReturnValue(successfulTask());
     storage.getDownloadURL.mockResolvedValue(
@@ -131,14 +129,14 @@ describe('imageService', () => {
     expect(storage.deleteObject).toHaveBeenCalledTimes(1);
   });
 
-  test('deletes a configured-bucket object with refFromURL', async () => {
+  test('deletes a configured-bucket object with ref', async () => {
     const url =
       'https://firebasestorage.googleapis.com/v0/b/resturent-system.firebasestorage.app/o/products%2Frestaurant-1%2Fowner-1%2Fold.jpg?token=abc';
 
     await expect(imageService.deleteImage(url)).resolves.toBe(true);
 
-    expect(storage.refFromURL).toHaveBeenCalledWith(expect.anything(), url);
-    expect(storage.deleteObject).toHaveBeenCalledWith({ url });
+    expect(storage.ref).toHaveBeenCalledWith(expect.anything(), url);
+    expect(storage.deleteObject).toHaveBeenCalledWith({ pathOrUrl: url });
   });
 
   test('never tries to delete an image from another bucket', async () => {
@@ -147,7 +145,7 @@ describe('imageService', () => {
 
     await expect(imageService.deleteImage(url)).resolves.toBe(false);
 
-    expect(storage.refFromURL).not.toHaveBeenCalled();
+    expect(storage.ref).not.toHaveBeenCalled();
     expect(storage.deleteObject).not.toHaveBeenCalled();
   });
 });

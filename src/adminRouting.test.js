@@ -393,11 +393,6 @@ test('a failed profile read is reported instead of silently passing as a custome
     .mockRejectedValueOnce(Object.assign(new Error('backend unreachable'), {
       code: 'unavailable',
     }));
-  jest
-    .spyOn(db.default, 'getDocs')
-    .mockRejectedValueOnce(Object.assign(new Error('backend unreachable'), {
-      code: 'unavailable',
-    }));
 
   seedRestaurant({
     id: 'restaurant-pizza-demo',
@@ -418,11 +413,7 @@ test('a failed profile read is reported instead of silently passing as a custome
   ).toBe(true);
   expect(
     warn.mock.calls.some((call) =>
-      call.some(
-        (arg) =>
-          typeof arg === 'string' &&
-          arg.includes('Could not read the restaurants collection')
-      )
+      call.some((arg) => typeof arg === 'string' && arg.includes('unavailable'))
     )
   ).toBe(true);
 });

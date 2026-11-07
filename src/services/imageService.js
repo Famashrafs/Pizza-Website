@@ -14,7 +14,6 @@ import {
   getDownloadURL,
   getStorage,
   ref,
-  refFromURL,
   uploadBytesResumable,
 } from 'firebase/storage';
 import app from '../firebase';
@@ -223,7 +222,7 @@ export async function uploadImage(file, options = {}) {
 
 // Extracts the bucket from a Firebase Storage download URL without attempting
 // to delete it. This prevents an image URL from another bucket/project from
-// being passed to `refFromURL` by mistake.
+// being passed to `ref` by mistake.
 export function getStorageBucketFromUrl(url) {
   const value = String(url || '').trim();
   if (!value) return '';
@@ -247,15 +246,19 @@ export function isImageUrlForConfiguredBucket(url) {
   return Boolean(configured && bucket && bucket === configured);
 }
 
-// Deletes a Firebase Storage object using `refFromURL`. Only URLs belonging to
-// the configured project bucket are accepted; external/pasted image URLs are
-// left untouched. The function is intentionally best-effort and never throws.
+// Deletes a Firebase Storage object using `ref`. Only URLs belonging to the
+// configured project bucket are accepted; external/pasted image URLs are left
+// untouched. The function is intentionally best-effort and never throws.
+//
+// Firebase v12 no longer exports the old `refFromURL` helper. The public `ref`
+// API accepts a full storage URL as its second argument and resolves it to the
+// same StorageReference.
 export async function deleteImage(url) {
   if (!isImageUrlForConfiguredBucket(url)) return false;
 
   try {
     const storage = storageInstance();
-    const objectRef = refFromURL(storage, url);
+    const objectRef = ref(storage, url);
     await deleteObject(objectRef);
     return true;
   } catch (error) {

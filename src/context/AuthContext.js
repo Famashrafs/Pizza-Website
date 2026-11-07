@@ -136,6 +136,12 @@ async function resolveOwnedRestaurant(uid) {
 async function grantRestaurantIdentity(uid, restaurant) {
   await db.updateDoc(`users/${uid}`, {
     restaurantId: restaurant.id,
+    // Keep the legacy membership map in sync as well. Firestore rules accept
+    // either identity field, while older dashboards and migrations may still
+    // inspect `restaurantIds`.
+    restaurantIds: {
+      [restaurant.id]: true,
+    },
     updatedAt: db.nowISO(),
   });
 }
@@ -331,9 +337,13 @@ export function AuthProvider({ children }) {
         // or malformed restaurant identity) — repair those; otherwise preserve.
         profile = (await recoverOwnerProfile(user, doc)) || base;
       } else {
-        // Missing/unreadable profile → only a verified Firestore restaurant
-        // ownership relationship may restore admin access for legacy accounts.
-        profile = (await recoverOwnerProfile(user)) || defaultCustomerProfile(user);
+        // A genuinely missing profile may be restored from verified restaurant
+        // ownership. A read failure is different: the profile's role could not
+        // be established, so owner recovery must fail closed until Firestore
+        // is reachable again.
+        profile = readError
+          ? defaultCustomerProfile(user)
+          : (await recoverOwnerProfile(user)) || defaultCustomerProfile(user);
       }
       if (seq !== profileSeq.current) return;
       setUserProfile(profile);

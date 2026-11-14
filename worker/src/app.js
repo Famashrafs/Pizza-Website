@@ -20,9 +20,17 @@ import {
   corsHeadersFor,
   bearerToken,
 } from './cors.js';
-import { isConfigurationError, isUpstreamUnavailable, safeErrorMessage } from './errors.js';
+import {
+  isConfigurationError,
+  isUpstreamUnavailable,
+  safeErrorMessage,
+  StorageConflictError,
+} from './errors.js';
+import { ImageRequestError } from './imageApi.js';
+import { ImageValidationError } from './imageValidation.js';
+import { ImageAuthorizationError } from './imageAuthorization.js';
 
-const API_VERSION = '2.5.0';
+const API_VERSION = '2.6.0';
 const MAX_BODY_BYTES = 100 * 1024; // matches express.json({ limit: '100kb' })
 
 function json(status, headers, body) {
@@ -40,6 +48,9 @@ function json(status, headers, body) {
  *   Shared order engine (see functions/lib/orderServiceCore.js).
  * @param {(idToken: string) => Promise<object>} deps.verifyToken
  *   Verifies a Firebase ID token and resolves the verified payload.
+ * @param {object} [deps.imageService] Supabase-backed image service with
+ *   upload/signedUrl/remove methods. Optional so the order-only test doubles
+ *   remain valid; production injects the lazy image service from index.js.
  * @param {string|string[]} [deps.allowedOrigins] CORS allowlist.
  * @param {string} [deps.mode] Deployment mode label (e.g. "demo").
  * @param {string|null} [deps.projectId] Public Firebase project id (never secret).
@@ -53,6 +64,7 @@ function json(status, headers, body) {
 export function createWorkerApp({
   orderService,
   verifyToken,
+  imageService = null,
   allowedOrigins,
   mode = 'demo',
   projectId = null,
@@ -68,6 +80,140 @@ export function createWorkerApp({
   }
 
   const allowed = parseAllowedOrigins(allowedOrigins);
+
+  async function authenticateImageRequest(request) {
+    const token = bearerToken(request.headers.get('Authorization'));
+    if (!token) {
+      return {
+        error: {
+          status: 401,
+          body: {
+            success: false,
+            code: 'image_unauthenticated',
+            error: 'You must be signed in to manage images.',
+          },
+        },
+      };
+    }
+
+    let decoded;
+    try {
+      decoded = await verifyToken(token);
+    } catch (err) {
+      if (isConfigurationError(err) || isUpstreamUnavailable(err)) throw err;
+      return {
+        error: {
+          status: 401,
+          body: {
+            success: false,
+            code: 'image_unauthenticated',
+            error: 'Your session is invalid or has expired. Please sign in again.',
+          },
+        },
+      };
+    }
+
+    if (!decoded || !decoded.sub) {
+      return {
+        error: {
+          status: 401,
+          body: {
+            success: false,
+            code: 'image_unauthenticated',
+            error: 'Your session is invalid or has expired. Please sign in again.',
+          },
+        },
+      };
+    }
+
+    const provider =
+      decoded.firebase && decoded.firebase.sign_in_provider
+        ? decoded.firebase.sign_in_provider
+        : '';
+    if (provider === 'anonymous') {
+      return {
+        error: {
+          status: 403,
+          body: {
+            success: false,
+            code: 'image_anonymous_forbidden',
+            error: 'Guest sessions cannot manage images.',
+          },
+        },
+      };
+    }
+
+    return { auth: { uid: decoded.sub, token: decoded } };
+  }
+
+  async function handleImageRequest(request, corsHeaders) {
+    if (!imageService) {
+      return json(
+        503,
+        corsHeaders,
+        {
+          success: false,
+          error: 'The image service is temporarily unavailable. Please try again.',
+        }
+      );
+    }
+
+    const authResult = await authenticateImageRequest(request);
+    if (authResult.error) {
+      return json(authResult.error.status, corsHeaders, authResult.error.body);
+    }
+
+    const url = new URL(request.url);
+    try {
+      let result;
+      if (request.method === 'POST' && url.pathname === '/api/images/upload') {
+        result = await imageService.upload({ request, auth: authResult.auth });
+      } else if (
+        request.method === 'POST' &&
+        url.pathname === '/api/images/profile/signed-url'
+      ) {
+        result = await imageService.signedUrl({ request, auth: authResult.auth });
+      } else if (request.method === 'DELETE' && url.pathname === '/api/images') {
+        result = await imageService.remove({ request, auth: authResult.auth });
+      } else {
+        return json(404, corsHeaders, { success: false, error: 'Not found.' });
+      }
+      return json(200, corsHeaders, result);
+    } catch (err) {
+      if (
+        err instanceof ImageRequestError ||
+        err instanceof ImageValidationError ||
+        err instanceof ImageAuthorizationError ||
+        err instanceof StorageConflictError
+      ) {
+        return json(err.status, corsHeaders, {
+          success: false,
+          code: err.code,
+          error: err.message,
+        });
+      }
+      if (isConfigurationError(err) || isUpstreamUnavailable(err)) {
+        logError(err);
+        return json(
+          503,
+          corsHeaders,
+          {
+            success: false,
+            error: 'The image service is temporarily unavailable. Please try again.',
+          }
+        );
+      }
+      logError(err);
+      return json(
+        500,
+        corsHeaders,
+        {
+          success: false,
+          error: 'The image server encountered an error.',
+        }
+      );
+    }
+  }
 
   return async function handleRequest(request) {
     const url = new URL(request.url);
@@ -99,7 +245,9 @@ export function createWorkerApp({
           200,
           corsHeaders,
           {
-            status: status.firebase.state === 'error' ? 'degraded' : 'ok',
+            status: Object.values(status).some((entry) => entry.state === 'error')
+              ? 'degraded'
+              : 'ok',
             service: 'pizza-demo-api',
             mode,
             dependencies: status,
@@ -118,18 +266,33 @@ export function createWorkerApp({
           200,
           corsHeaders,
           {
-            status: status.firebase.state === 'error' ? 'degraded' : 'ok',
+            status: Object.values(status).some((entry) => entry.state === 'error')
+              ? 'degraded'
+              : 'ok',
             service: 'pizza-demo-api',
             apiVersion: API_VERSION,
             mode,
             transport: 'http-api',
             runtime: 'cloudflare-workers',
             projectId: projectId || null,
-            features: { createOrder: true, guestLookup: true, payment: ['cash'] },
+            features: {
+              createOrder: true,
+              guestLookup: true,
+              payment: ['cash'],
+              images: {
+                upload: true,
+                signedProfileUrl: true,
+                conservativeDelete: true,
+              },
+            },
             dependencies: status,
             time: now().toISOString(),
           }
         );
+      }
+
+      if (url.pathname.startsWith('/api/images/') || url.pathname === '/api/images') {
+        return await handleImageRequest(request, corsHeaders);
       }
 
       if (request.method === 'POST' && url.pathname === '/api/orders/create') {
@@ -223,13 +386,16 @@ function readServiceStatus(getServiceStatus) {
   } catch {
     raw = null;
   }
-  const firebase = raw && raw.firebase ? raw.firebase : {};
-  const state = ['ready', 'configured', 'not_initialized', 'error'].includes(firebase.state)
-    ? firebase.state
-    : 'unknown';
-  const status = { firebase: { state } };
-  if (state === 'error' && typeof firebase.code === 'string' && firebase.code) {
-    status.firebase.code = firebase.code;
+  const status = {};
+  for (const dependency of ['firebase', 'supabase']) {
+    const source = raw && raw[dependency] ? raw[dependency] : {};
+    const state = ['ready', 'configured', 'not_initialized', 'error'].includes(source.state)
+      ? source.state
+      : 'unknown';
+    status[dependency] = { state };
+    if (state === 'error' && typeof source.code === 'string' && source.code) {
+      status[dependency].code = source.code;
+    }
   }
   return status;
 }

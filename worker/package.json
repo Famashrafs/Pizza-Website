@@ -1,6 +1,6 @@
 {
   "name": "pizza-demo-worker",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "description": "Free-tier demo order API on Cloudflare Workers (transport for the shared order engine).",
   "type": "module",
@@ -9,7 +9,7 @@
     "dev": "wrangler dev --config wrangler.toml",
     "deploy": "wrangler deploy --config wrangler.toml --no-autoconfig",
     "deploy:dry-run": "wrangler deploy --config wrangler.toml --no-autoconfig --dry-run",
-    "test": "node --test test/app.test.js test/startup.test.js test/cors.test.js test/serviceAccount.test.js test/firebaseAuth.test.js test/firestore.test.js test/wiring.test.js test/deployConfig.test.js"
+    "test": "node --test test/app.test.js test/startup.test.js test/cors.test.js test/serviceAccount.test.js test/firebaseAuth.test.js test/firestore.test.js test/wiring.test.js test/deployConfig.test.js test/imageValidation.test.js test/imageAuthorization.test.js test/imageApi.test.js test/supabaseStorage.test.js test/imageRoutes.test.js test/imageSecurity.test.js"
   },
   "dependencies": {
     "jose": "^6.1.0"

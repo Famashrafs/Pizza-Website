@@ -323,7 +323,7 @@ export function AuthProvider({ children }) {
           err?.code || err,
           '— the role below falls back to "customer" until Firestore is reachable.'
         );
-        devLog('[auth] unable to read user profile (will attempt recovery)', user.uid, err);
+        devLog('[auth] unable to read user profile (admin recovery is disabled)', user.uid, err);
       }
       if (seq !== profileSeq.current) return; // superseded by a newer write
 

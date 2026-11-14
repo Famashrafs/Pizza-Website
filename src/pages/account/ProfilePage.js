@@ -184,14 +184,7 @@ function ProfilePage() {
           <div className="dash-field">
             <label htmlFor="profile-phone">{t('account.phoneNumber')}</label>
             <div className="dash-phone-summary">
-              <input
-                id="profile-phone"
-                type="text"
-                value={normalized.phone}
-                readOnly
-                tabIndex={-1}
-                aria-label={t('account.phoneNumber')}
-              />
+              <p id="profile-phone">{normalized.phone}</p>
               {normalized.phoneVerified ? (
                 <span className="dash-verify-badge verified">
                   <FontAwesomeIcon icon={faCheckCircle} /> {t('account.verified')}

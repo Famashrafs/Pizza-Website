@@ -31,7 +31,15 @@ test('only restaurant owner/admin roles may access /admin', () => {
 });
 
 test('the restaurant service exposes only the deployment restaurant', async () => {
+  db.__setDocs({
+    'restaurants/restaurant-pizza-demo': {
+      name: 'Slice House',
+      ownerId: 'owner-1',
+    },
+  });
+
   const restaurant = await getRestaurantById('restaurant-pizza-demo');
-  expect(restaurant).toBeNull();
+  expect(restaurant.id).toBe('restaurant-pizza-demo');
+  expect(restaurant.ownerId).toBe('owner-1');
   expect(await getRestaurantById('another-restaurant')).toBeNull();
 });

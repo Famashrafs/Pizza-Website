@@ -357,6 +357,25 @@ test('the fake rejects an Admin-SDK style transform exactly like the real Firest
   );
 });
 
+test('getDocument reads authoritative nested collection documents by full path', async () => {
+  const { db, fake } = makeDb();
+  fake.seedDoc('restaurants/r1/categories/cat-1', { image: 'category.png' });
+
+  const snap = await db.getDocument('restaurants/r1/categories/cat-1');
+  assert.equal(snap.exists, true);
+  assert.equal(snap.id, 'cat-1');
+  assert.equal(snap.data().image, 'category.png');
+
+  const missing = await db.getDocument('restaurants/r1/categories/missing');
+  assert.equal(missing.exists, false);
+  assert.equal(missing.data(), null);
+
+  await assert.rejects(
+    () => db.getDocument('products/../users/victim'),
+    /Invalid document path/
+  );
+});
+
 // --- Emulator mode ----------------------------------------------------------
 
 test('emulator mode targets FIRESTORE_EMULATOR_HOST over plain HTTP without OAuth', async () => {

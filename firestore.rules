@@ -144,7 +144,26 @@ service cloud.firestore {
             'role',
             'restaurantId',
             'restaurantIds'
-          ]);
+          ])
+          && isSafePhotoPath(request.resource.data);
+      }
+
+
+      // A private Supabase profile image is stored as a stable object path,
+      // never as an expiring signed URL. The path must belong to the caller
+      // and use the canonical generated filename/extension shape.
+      function isSafePhotoPath(data) {
+        return !('photoPath' in data)
+          || (
+            data.photoPath is string
+            && (
+              data.photoPath == ''
+              || data.photoPath.matches(
+                'users/' + request.auth.uid
+                  + '/profile/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(png|jpg|webp|gif)'
+              )
+            )
+          );
       }
 
 
@@ -162,7 +181,8 @@ service cloud.firestore {
             request.resource.data.restaurantIds is map
             && request.resource.data.restaurantIds.size() == 0
           )
-        );
+        )
+        && isSafePhotoPath(request.resource.data);
       }
 
 

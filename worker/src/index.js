@@ -42,6 +42,8 @@ import { createFirestore, serverTimestamp } from './firestore.js';
 import { parseServiceAccount, createAccessTokenProvider } from './serviceAccount.js';
 import { parseAllowedOrigins, corsHeadersForRequest } from './cors.js';
 import { ConfigurationError, isConfigurationError, safeErrorMessage } from './errors.js';
+import { createSupabaseStorage } from './supabaseStorage.js';
+import { createImageApi } from './imageApi.js';
 
 /**
  * Build the Worker entry point around an explicit cache.
@@ -58,6 +60,8 @@ export function createWorkerEntrypoint(cache = {}) {
     app: null,
     services: null,
     initError: null,
+    imageServices: null,
+    imageInitError: null,
     ...cache,
   };
 
@@ -80,7 +84,7 @@ export function createWorkerEntrypoint(cache = {}) {
 
     const orderService = createOrderService({ db, serverTimestamp });
 
-    return { orderService, verifyToken };
+    return { orderService, verifyToken, db };
   }
 
   function getServices(env) {
@@ -96,8 +100,40 @@ export function createWorkerEntrypoint(cache = {}) {
             'service_init_failed',
             'The order service could not be initialised.'
           );
-      console.error('[worker] init failed:', safeErrorMessage(err));
+      console.error(
+        '[worker] init failed:',
+        safeErrorMessage(err, [env.FIREBASE_SERVICE_ACCOUNT_JSON])
+      );
       throw state.initError;
+    }
+  }
+
+  function getImageServices(env) {
+    if (state.imageServices) return state.imageServices;
+    if (state.imageInitError) throw state.imageInitError;
+    try {
+      const storage = createSupabaseStorage({
+        url: env.SUPABASE_URL,
+        serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+      });
+      const api = createImageApi({ db: getServices(env).db, storage });
+      state.imageServices = { api, storage };
+      return state.imageServices;
+    } catch (err) {
+      state.imageInitError = isConfigurationError(err)
+        ? err
+        : new ConfigurationError(
+            'image_service_init_failed',
+            'The image service could not be initialised.'
+          );
+      console.error(
+        '[worker] image init failed:',
+        safeErrorMessage(err, [
+          env.SUPABASE_SERVICE_ROLE_KEY,
+          env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        ])
+      );
+      throw state.imageInitError;
     }
   }
 
@@ -112,13 +148,26 @@ export function createWorkerEntrypoint(cache = {}) {
       getGuestOrder: (arg) => getServices(env).orderService.getGuestOrder(arg),
     };
     const verifyToken = (token) => getServices(env).verifyToken(token);
+    const imageService = {
+      upload: (args) => getImageServices(env).api.upload(args),
+      signedUrl: (args) => getImageServices(env).api.signedUrl(args),
+      remove: (args) => getImageServices(env).api.remove(args),
+    };
 
     state.app = createWorkerApp({
       orderService,
       verifyToken,
+      imageService,
       allowedOrigins: env.CORS_ALLOWED_ORIGINS || '',
       mode: env.DEMO_MODE === 'false' ? 'live' : 'demo',
       projectId: env.FIREBASE_PROJECT_ID || null,
+      logError: (err) => {
+        const secrets = [
+          env.SUPABASE_SERVICE_ROLE_KEY,
+          env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        ];
+        console.error('[api]', safeErrorMessage(err, secrets));
+      },
       getServiceStatus: () => readServiceStatus(env),
     });
     return state.app;
@@ -130,23 +179,45 @@ export function createWorkerEntrypoint(cache = {}) {
   // Firebase being reachable. An operator still sees exactly WHY a deployment
   // is broken (missing / invalid JSON / incomplete service account).
   function readServiceStatus(env) {
-    if (state.services) return { firebase: { state: 'ready' } };
-    if (state.initError) {
-      return { firebase: { state: 'error', code: state.initError.code } };
+    let firebase;
+    if (state.services) {
+      firebase = { state: 'ready' };
+    } else if (state.initError) {
+      firebase = { state: 'error', code: state.initError.code };
+    } else {
+      try {
+        parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        firebase = { state: 'configured' };
+      } catch (err) {
+        const code = isConfigurationError(err) ? err.code : 'service_init_failed';
+        firebase = { state: 'error', code };
+      }
     }
-    try {
-      parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT_JSON);
-      return { firebase: { state: 'configured' } };
-    } catch (err) {
-      const code = isConfigurationError(err) ? err.code : 'service_init_failed';
-      return { firebase: { state: 'error', code } };
+
+    let supabase;
+    if (state.imageServices) {
+      supabase = { state: 'ready' };
+    } else if (state.imageInitError) {
+      supabase = { state: 'error', code: state.imageInitError.code };
+    } else if (!String(env.SUPABASE_URL || '').trim()) {
+      supabase = { state: 'error', code: 'supabase_url_missing' };
+    } else if (!String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
+      supabase = { state: 'error', code: 'supabase_service_role_key_missing' };
+    } else {
+      supabase = { state: 'configured' };
     }
+
+    return { firebase, supabase };
   }
 
   // Last line of defence: an exception here would become a Cloudflare 1101
   // page without CORS headers. Convert it into a normal JSON error instead.
   function errorResponse(request, env, err) {
-    console.error('[worker] unhandled error:', safeErrorMessage(err));
+    const secrets = [
+      env && env.SUPABASE_SERVICE_ROLE_KEY,
+      env && env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    ];
+    console.error('[worker] unhandled error:', safeErrorMessage(err, secrets));
     const origin = request.headers.get('Origin');
     const allowed = parseAllowedOrigins((env && env.CORS_ALLOWED_ORIGINS) || '');
     const config = isConfigurationError(err);

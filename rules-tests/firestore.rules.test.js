@@ -198,3 +198,54 @@ test('update rejects a document that violates the review schema', async () => {
     updateDoc(doc(reviewer('user-1'), 'reviews/rev-1'), { rating: 0 })
   );
 });
+
+test('a customer can store their own canonical profile photo path', async () => {
+  await seedPath('users/user-1', { uid: 'user-1', role: 'customer' });
+  const db = reviewer('user-1');
+  const photoPath =
+    'users/user-1/profile/123e4567-e89b-42d3-a456-426614174000.png';
+
+  await assertSucceeds(
+    updateDoc(doc(db, 'users/user-1'), { photoPath })
+  );
+  await assertSucceeds(
+    setDoc(doc(reviewer('user-2'), 'users/user-2'), {
+      uid: 'user-2',
+      role: 'customer',
+      photoPath: 'users/user-2/profile/123e4567-e89b-42d3-a456-426614174001.png',
+    })
+  );
+});
+
+test("a customer cannot store another user's profile photo path", async () => {
+  await seedPath('users/user-1', { uid: 'user-1', role: 'customer' });
+
+  await assertFails(
+    updateDoc(doc(reviewer('user-1'), 'users/user-1'), {
+      photoPath:
+        'users/user-2/profile/123e4567-e89b-42d3-a456-426614174000.png',
+    })
+  );
+});
+
+test('a customer cannot store a signed or public profile photo URL', async () => {
+  await seedPath('users/user-1', { uid: 'user-1', role: 'customer' });
+
+  await assertFails(
+    updateDoc(doc(reviewer('user-1'), 'users/user-1'), {
+      photoPath:
+        'https://project.supabase.co/storage/v1/object/sign/profile-images/users/user-1/profile/123e4567-e89b-42d3-a456-426614174000.png?token=secret',
+    })
+  );
+});
+
+test("a customer cannot update another user's profile", async () => {
+  await seedPath('users/user-2', { uid: 'user-2', role: 'customer' });
+
+  await assertFails(
+    updateDoc(doc(reviewer('user-1'), 'users/user-2'), {
+      photoPath:
+        'users/user-1/profile/123e4567-e89b-42d3-a456-426614174000.png',
+    })
+  );
+});

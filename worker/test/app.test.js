@@ -96,7 +96,16 @@ test('GET /api/diagnostics exposes feature flags but never secrets', async () =>
   assert.equal(body.transport, 'http-api');
   assert.equal(body.runtime, 'cloudflare-workers');
   assert.equal(body.projectId, 'resturent-system');
-  assert.deepEqual(body.features, { createOrder: true, guestLookup: true, payment: ['cash'] });
+  assert.deepEqual(body.features, {
+    createOrder: true,
+    guestLookup: true,
+    payment: ['cash'],
+    images: {
+      upload: true,
+      signedProfileUrl: true,
+      conservativeDelete: true,
+    },
+  });
 
   const raw = JSON.stringify(body);
   assert.ok(!/private_key|serviceAccount|client_email|BEGIN PRIVATE KEY/i.test(raw));

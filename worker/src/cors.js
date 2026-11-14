@@ -38,8 +38,9 @@ export function corsHeadersFor(origin) {
   return {
     'Access-Control-Allow-Origin': normalizeOrigin(origin),
     Vary: 'Origin',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers':
+      'Authorization,Content-Type,X-Image-Kind,X-Original-Filename,X-Restaurant-Id',
     'Access-Control-Max-Age': '600',
   };
 }

@@ -344,6 +344,14 @@ export function createFirestore({ projectId, getAccessToken, fetchImpl = fetch, 
   }
 
   const db = {
+    // Direct document read by full Firestore path. The shared order engine
+    // uses collection(...).doc(...), while server-side image authorization
+    // also needs nested paths such as restaurants/{id}/categories/{id}.
+    async getDocument(path) {
+      const doc = await this._getDocument(path);
+      return new DocumentSnapshot(doc);
+    },
+
     // Transactional document reads are served by POST :runQuery with an exact
     // __name__ equality filter inside the SAME transaction, not by the
     // documented GET ?transaction= contract: the Firestore emulator (jar
@@ -354,8 +362,15 @@ export function createFirestore({ projectId, getAccessToken, fetchImpl = fetch, 
     // against the emulator). RunQueryRequest.transaction is part of the
     // official REST contract, so this path also serves production.
     async _getDocument(path, { transaction = null } = {}) {
-      const segments = path.split('/');
-      if (segments.length < 2) {
+      const segments = String(path || '').split('/');
+      if (
+        segments.length < 2 ||
+        segments.length % 2 !== 0 ||
+        segments.some(
+          (segment) =>
+            !segment || segment === '.' || segment === '..'
+        )
+      ) {
         throw new Error(`Invalid document path: ${path}`);
       }
       if (!transaction) {

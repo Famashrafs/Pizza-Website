@@ -33,6 +33,8 @@
 //   FIREBASE_WEB_API_KEY            public web API key (revocation lookup)
 //   CORS_ALLOWED_ORIGINS            comma-separated browser origin allowlist
 //   DEMO_MODE                       "demo" (default) or "live"
+//   SUPABASE_URL                    Supabase project URL for image storage
+//   SUPABASE_SERVICE_ROLE_KEY       (secret) server-only Storage credential
 //   FIRESTORE_EMULATOR_HOST         local emulator only (wrangler dev)
 
 import { createWorkerApp } from './app.js';

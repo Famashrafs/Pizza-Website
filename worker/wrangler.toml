@@ -11,8 +11,10 @@
 #     for compatibility_date >= 2026-08-04 nodejs_compat is enabled by default,
 #     and it is listed explicitly below for clarity.
 #
-# Secrets (set with `wrangler secret put <NAME>`, NEVER committed here):
+# Bindings (set with `wrangler secret put <NAME>`, NEVER committed here):
 #   - FIREBASE_SERVICE_ACCOUNT_JSON  full service-account JSON as one line
+#   - SUPABASE_URL                    Supabase project URL for image storage
+#   - SUPABASE_SERVICE_ROLE_KEY       server-only Supabase Storage credential
 # Non-secret vars below may also be overridden in the Cloudflare dashboard.
 
 name = "pizza-demo-api"
@@ -28,11 +30,11 @@ FIREBASE_PROJECT_ID = "resturent-system"
 FIREBASE_WEB_API_KEY = "AIzaSyCCyyWpc8U6bWIaduDBjF2AGpiZ1btAoBU"
 # Deployment mode label surfaced by /health and /api/diagnostics.
 DEMO_MODE = "demo"
-# Explicit CORS allowlist (comma-separated). Local dev + the production Vercel
-# aliases of this project (`vercel inspect <production deployment>`) are listed.
-# Preview deployments get a random host per build, so they must be added here
-# individually (or tested against the production alias).
-CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,https://pizza-website-famashrafs-projects.vercel.app,https://pizza-website-taupe.vercel.app"
+# Explicit CORS allowlist (comma-separated). The Vercel value is the stable
+# production alias for the `restro` project, not a deployment-specific host.
+# No preview origins are supported; add an exact preview origin here only when
+# that preview is explicitly approved. Never use a wildcard.
+CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,https://pizza-website-sv2j.vercel.app"
 
 # Local development only: copy real values into worker/.dev.vars (git-ignored).
 # [vars] above are non-secret; .dev.vars holds the service-account secret and

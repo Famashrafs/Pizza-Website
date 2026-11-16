@@ -1,0 +1,30 @@
+{
+  "workerName": "pizza-demo-api",
+  "apiVersion": "2.6.0",
+  "productionOrigins": [
+    "https://pizza-website-sv2j.vercel.app"
+  ],
+  "localDevelopmentOrigins": [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+  ],
+  "supportedPreviewOrigins": [],
+  "requiredProductionVariables": {
+    "plain": [
+      "CORS_ALLOWED_ORIGINS",
+      "DEMO_MODE",
+      "FIREBASE_PROJECT_ID",
+      "FIREBASE_WEB_API_KEY"
+    ],
+    "external": [
+      "SUPABASE_URL"
+    ],
+    "secret": [
+      "FIREBASE_SERVICE_ACCOUNT_JSON",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ]
+  },
+  "optionalLocalVariables": [
+    "FIRESTORE_EMULATOR_HOST"
+  ]
+}

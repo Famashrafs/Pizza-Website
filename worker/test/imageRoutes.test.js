@@ -15,7 +15,7 @@ import {
 } from '../src/errors.js';
 
 const RESTAURANT_ID = 'restaurant-pizza-demo';
-const VERCEL_ORIGIN = 'https://pizza-website-famashrafs-projects.vercel.app';
+const VERCEL_ORIGIN = 'https://pizza-website-sv2j.vercel.app';
 const OBJECT_ID = '123e4567-e89b-42d3-a456-426614174000';
 const SECRET = 'service-role-secret-that-must-not-leak';
 const PNG = new Uint8Array([

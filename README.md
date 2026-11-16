@@ -335,15 +335,30 @@ changes stay on Firestore under the rules.
 `functions/lib/orderServiceCore.js` engine, verifies Firebase ID tokens against
 Google's JWKS, and talks to Firestore over its REST API (the Admin SDK cannot
 run on Workers). Endpoints: `POST /api/orders/create`,
-`POST /api/orders/guest-lookup`, `GET /health`, `GET /api/diagnostics`.
+`POST /api/orders/guest-lookup`, `POST /api/images/upload`,
+`POST /api/images/profile/signed-url`, `DELETE /api/images`, `GET /health`,
+`GET /api/diagnostics`.
 
-The code is complete and its offline suite passes (`npm run test:worker`), but
-**the Worker is not deployed yet** — no Worker URL exists yet, so
-`REACT_APP_API_BASE_URL` must stay empty (callable transport) until it is
-deployed.
+The Worker is deployed at
+`https://pizza-demo-api.famashraf9.workers.dev`. The current Vercel production
+project is `restro`, and its stable production alias is
+`https://pizza-website-sv2j.vercel.app`. The production frontend is configured
+with `REACT_APP_API_BASE_URL=https://pizza-demo-api.famashraf9.workers.dev`.
+
+The exact Worker CORS allowlist is:
+
+```text
+http://localhost:3000,http://127.0.0.1:3000,https://pizza-website-sv2j.vercel.app
+```
+
+No Vercel preview origin is currently supported. Add an exact preview host
+only when it is explicitly approved; never use a wildcard or a
+deployment-specific hostname in place of the stable production alias. See
+`worker/README.md` for the canonical deployment and environment-variable
+reference.
 
 > **Backend only — the storefront stays on Vercel.** The Worker has **no**
-> static-assets binding: it ships `worker/src/**` only (~94 KiB). Never run
+> static-assets binding: it ships `worker/src/**` only (~139 KiB). Never run
 > `wrangler deploy` from the repository root: wrangler's *autoconfig* detects
 > the Create-React-App app and generates `assets.directory = "build"`, which
 > uploads the whole React build to Cloudflare and fails with
@@ -361,27 +376,30 @@ deployed.
 # 1. Install the Worker toolchain
 npm --prefix worker install
 
-# 2. Put the service-account secret in the Worker (never in the repo)
+# 2. Put every production secret/external binding in the Worker (never in the repo)
 npx --prefix worker wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 #    -> paste the service-account JSON as ONE line
 #    (Firebase console > Project settings > Service accounts > Generate new key)
+npx --prefix worker wrangler secret put SUPABASE_URL
+#    -> paste the Supabase project URL only (this value is not a credential)
+npx --prefix worker wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#    -> paste the server-only Supabase Storage credential
 
-# 3. Set the non-secret vars: FIREBASE_WEB_API_KEY (public web key),
-#    FIREBASE_PROJECT_ID, CORS_ALLOWED_ORIGINS (add the frontend origin,
-#    e.g. http://localhost:3000 for local dev and the Vercel origin for prod)
-#    -> edit worker/wrangler.toml [vars]
+# 3. Verify the non-secret vars: FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY,
+#    DEMO_MODE, and CORS_ALLOWED_ORIGINS are in worker/wrangler.toml [vars].
+#    The exact CORS value is documented in worker/README.md.
 
-# 4. Pre-flight (no upload, no auth): must print "Total Upload: ~94 KiB"
+# 4. Pre-flight (no upload, no auth): must print "Total Upload: ~139 KiB"
 #    and list ONLY the env-var bindings — no static assets.
 npm run deploy:worker:dry-run
 
-# 5. Deploy and note the URL wrangler prints
+# 5. Deploy only after configuration approval; the URL is:
 npm run deploy:worker
-#    -> https://<worker-name>.<your-account>.workers.dev
+#    -> https://pizza-demo-api.famashraf9.workers.dev
 
 # 6. Point the frontend at that URL and RESTART the dev server
 #    (CRA inlines REACT_APP_* at build/start time)
-#    .env.local:  REACT_APP_API_BASE_URL=<the URL from step 5>
+#    .env.local:  REACT_APP_API_BASE_URL=https://pizza-demo-api.famashraf9.workers.dev
 npm start
 ```
 
@@ -507,6 +525,9 @@ npm run test:functions
 
 # Free-tier demo HTTP API (Express transport, offline) — Node's built-in runner
 npm run test:server
+
+# Cloudflare Worker transport + deployment/CORS configuration guards
+npm run test:worker
 
 # Static validation of firestore.rules + firestore.indexes.json
 npm run rules:check

@@ -84,6 +84,7 @@ test('GET /health reports a healthy, secret-free status', async () => {
   const body = await res.json();
   assert.equal(body.status, 'ok');
   assert.equal(body.service, 'pizza-demo-api');
+  assert.equal(body.apiVersion, '2.6.0');
   assert.equal(body.mode, 'demo');
   assert.ok(!('FIREBASE_SERVICE_ACCOUNT_JSON' in body));
 });
@@ -95,6 +96,7 @@ test('GET /api/diagnostics exposes feature flags but never secrets', async () =>
   const body = await res.json();
   assert.equal(body.transport, 'http-api');
   assert.equal(body.runtime, 'cloudflare-workers');
+  assert.equal(body.apiVersion, '2.6.0');
   assert.equal(body.projectId, 'resturent-system');
   assert.deepEqual(body.features, {
     createOrder: true,

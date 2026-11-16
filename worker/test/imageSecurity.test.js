@@ -30,10 +30,9 @@ test('the service-role credential has no frontend or browser-variable footprint'
     path.join(repoRoot, '.env.example'),
     path.join(repoRoot, 'package.json'),
     path.join(workerDir, 'wrangler.toml'),
-    path.join(workerDir, '.dev.vars.example'),
   ].filter((file) => fs.existsSync(file));
 
-  for (const file of [...frontendFiles, ...configFiles]) {
+  for (const file of frontendFiles) {
     const source = fs.readFileSync(file, 'utf8');
     const relative = path.relative(repoRoot, file);
     assert.ok(
@@ -45,6 +44,31 @@ test('the service-role credential has no frontend or browser-variable footprint'
       `${relative} must not expose a Supabase browser credential`
     );
   }
+
+  // Server-side deployment artifacts may name the binding, but must never
+  // assign a credential value to it.
+  for (const file of configFiles) {
+    const source = fs.readFileSync(file, 'utf8');
+    const relative = path.relative(repoRoot, file);
+    assert.doesNotMatch(
+      source,
+      /^\s*SUPABASE_SERVICE_ROLE_KEY\s*=/m,
+      `${relative} must not assign a Supabase service-role credential`
+    );
+    assert.ok(
+      !source.includes('REACT_APP_SUPABASE'),
+      `${relative} must not expose a Supabase browser credential`
+    );
+  }
+});
+
+test('the server-only dev template names the service-role binding without a value', () => {
+  const source = fs.readFileSync(path.join(workerDir, '.dev.vars.example'), 'utf8');
+  assert.match(
+    source,
+    /^SUPABASE_SERVICE_ROLE_KEY=replace-with-supabase-service-role-key$/m
+  );
+  assert.doesNotMatch(source, /SUPABASE_SERVICE_ROLE_KEY\s*=\s*(?!replace-with)\S+/);
 });
 
 test('the Worker reads the service-role credential only from its server environment', () => {

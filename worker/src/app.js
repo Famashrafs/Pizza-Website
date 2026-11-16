@@ -249,6 +249,7 @@ export function createWorkerApp({
               ? 'degraded'
               : 'ok',
             service: 'pizza-demo-api',
+            apiVersion: API_VERSION,
             mode,
             dependencies: status,
             time: now().toISOString(),

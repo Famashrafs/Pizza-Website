@@ -1,10 +1,40 @@
-# Local-only secrets for `wrangler dev` (this file is git-ignored; the
-# example below is a template — copy to worker/.dev.vars and fill in).
+# Local Worker bindings for `wrangler dev`.
 #
-# Full Firebase service-account JSON as a SINGLE-LINE string:
-#   https://console.firebase.google.com → Project settings → Service accounts
-#   → Generate new private key → paste the whole JSON on one line.
-FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"your-project","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-...@your-project.iam.gserviceaccount.com"}
+# Copy this file to worker/.dev.vars and replace every placeholder locally.
+# worker/.dev.vars is git-ignored. Never commit or paste real secret values
+# into this example file.
+#
+# Production secrets are stored in Cloudflare with `wrangler secret put`:
+#   FIREBASE_SERVICE_ACCOUNT_JSON
+#   SUPABASE_SERVICE_ROLE_KEY
+#
+# SUPABASE_URL is not secret, but it is an external service URL and must be
+# configured on the deployed Worker as well as locally.
+
+# Firebase project id (public).
+FIREBASE_PROJECT_ID=resturent-system
+
+# Firebase web API key (public by design). It is used for the Identity Toolkit
+# revocation/user-existence check.
+FIREBASE_WEB_API_KEY=replace-with-firebase-web-api-key
+
+# Deployment mode label reported by /health and /api/diagnostics.
+DEMO_MODE=demo
+
+# Exact browser-origin allowlist. Keep this in sync with
+# worker/deployment.config.json and worker/wrangler.toml.
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://pizza-website-sv2j.vercel.app
+
+# Supabase project URL for server-side image storage (not secret).
+SUPABASE_URL=https://replace-with-project.supabase.co
+
+# Full Firebase service-account JSON as a SINGLE-LINE string. The private key
+# and client email are credentials: never log, publish, or commit them.
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"replace-with-project-id","private_key_id":"replace-with-private-key-id","private_key":"replace-with-one-line-private-key","client_email":"replace-with-service-account-email"}
+
+# Supabase service-role key. This bypasses Storage row-level security and must
+# be treated as a server-only secret.
+SUPABASE_SERVICE_ROLE_KEY=replace-with-supabase-service-role-key
 
 # Optional: point the Firestore adapter at the local emulator instead of the
 # production database (used by npm run test:worker:emulator).

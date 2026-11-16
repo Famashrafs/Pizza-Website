@@ -336,6 +336,7 @@ function ProductForm({
                     kind: IMAGE_KINDS.PRODUCT,
                     ownerUid,
                     restaurantId,
+                    resourceId: product?.id,
                     onProgress: setImageProgress,
                   })
               : null,

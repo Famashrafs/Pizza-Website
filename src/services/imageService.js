@@ -1,22 +1,18 @@
-// Firebase Storage image access for the customer and restaurant apps.
+// Authenticated image access through the Cloudflare Worker Supabase API.
 //
-// Image files never live in Firestore. The safe write sequence is:
-//   1. upload the bytes to a scoped Storage object;
-//   2. retrieve the download URL;
-//   3. save that URL in the owning Firestore document;
-//   4. remove the old object only after the Firestore save succeeds.
+// The browser never receives a Supabase key and never uploads bytes directly
+// to Supabase. It sends the image to the Worker with the current Firebase ID
+// token; the Worker validates the bytes, authorizes the caller against
+// Firestore, and uses the server-only service-role credential.
 //
-// `commitImagePipeline` in `imagePipeline.js` coordinates that sequence and
-// removes a newly uploaded object when the Firestore save fails.
+// Public restaurant assets use the `restaurant-assets` bucket and keep their
+// existing Firestore URL fields. Private profile images use the
+// `profile-images` bucket: Firestore stores only the stable object path in
+// `users/{uid}.photoPath`, and the browser obtains a short-lived signed URL
+// when it needs to display the image.
 
-import {
-  deleteObject,
-  getDownloadURL,
-  getStorage,
-  ref,
-  uploadBytesResumable,
-} from 'firebase/storage';
-import app from '../firebase';
+import { auth } from '../firebase';
+import { API_BASE_URL, transport } from './orderGateway';
 
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = [
@@ -30,15 +26,20 @@ export const IMAGE_KINDS = Object.freeze({
   PRODUCT: 'product',
   RESTAURANT_LOGO: 'restaurantLogo',
   RESTAURANT_COVER: 'restaurantCover',
+  CATEGORY: 'category',
   CUSTOMER_PROFILE: 'customerProfile',
 });
 
-const EXTENSION_BY_TYPE = Object.freeze({
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-});
+function imageError(code, message, status = 0) {
+  return Object.assign(new Error(message), { code, status });
+}
+
+function configurationError() {
+  return imageError(
+    'image/not-configured',
+    'Image uploads are not configured. Set REACT_APP_API_BASE_URL to the deployed Worker URL.'
+  );
+}
 
 export function validateImageFile(file) {
   if (!file) return { valid: false, error: 'Choose an image to upload.' };
@@ -54,214 +55,324 @@ export function validateImageFile(file) {
   return { valid: true, error: null };
 }
 
-// The project and bucket are intentionally derived from the existing Firebase
-// configuration. Do not silently fall back to another bucket: using the wrong
-// bucket would create files that the deployed rules do not protect.
-export function getConfiguredStorageBucketName() {
-  return String(process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || '')
-    .trim()
-    .replace(/^gs:\/\//, '')
-    .replace(/\/+$/, '');
-}
-
-export function getExpectedStorageBucketName() {
-  const projectId = String(process.env.REACT_APP_FIREBASE_PROJECT_ID || '').trim();
-  return projectId ? `${projectId}.firebasestorage.app` : '';
-}
-
+// Synchronous capability check used by the existing image picker. It verifies
+// that the HTTP Worker transport is configured; the asynchronous upload path
+// additionally checks the Worker's Supabase dependency state.
 export function isImageStorageConfigured() {
-  const configured = getConfiguredStorageBucketName();
-  const expected = getExpectedStorageBucketName();
-  return Boolean(configured && expected && configured === expected);
+  return transport === 'http' && Boolean(API_BASE_URL);
 }
 
-function notConfiguredError() {
-  const configured = getConfiguredStorageBucketName();
-  const expected = getExpectedStorageBucketName();
-  const detail =
-    configured && expected && configured !== expected
-      ? ` Configured bucket "${configured}" does not match the Firebase project bucket "${expected}".`
-      : '';
-  return Object.assign(
-    new Error(
-      `Image uploads are not configured.${detail} Set REACT_APP_FIREBASE_STORAGE_BUCKET to "${expected}", or paste an image URL instead.`
-    ),
-    { code: 'storage/not-configured' }
-  );
-}
-
-function safeSegment(value, label) {
-  const clean = String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-  if (!clean) throw new Error(`${label} is required for an image upload.`);
-  return clean;
-}
-
-function randomName(file) {
-  const extension = EXTENSION_BY_TYPE[file.type] || 'jpg';
-  const random =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `${random}.${extension}`;
-}
-
-// Builds owner-scoped paths. The owner uid in the path lets the Storage rules
-// distinguish an administrator's upload from another administrator's upload.
-export function buildImageObjectPath({
-  kind,
-  ownerUid,
-  restaurantId,
-  file,
-  path,
-} = {}) {
-  const name = randomName(file || { type: 'image/jpeg' });
-
-  if (kind === IMAGE_KINDS.PRODUCT) {
-    return `products/${safeSegment(restaurantId, 'Restaurant id')}/${safeSegment(
-      ownerUid,
-      'Owner uid'
-    )}/${name}`;
-  }
-
-  if (
-    kind === IMAGE_KINDS.RESTAURANT_LOGO ||
-    kind === IMAGE_KINDS.RESTAURANT_COVER
-  ) {
-    const branding = kind === IMAGE_KINDS.RESTAURANT_LOGO ? 'logo' : 'cover';
-    return `restaurants/${safeSegment(
-      restaurantId,
-      'Restaurant id'
-    )}/branding/${branding}/${safeSegment(ownerUid, 'Owner uid')}/${name}`;
-  }
-
-  if (kind === IMAGE_KINDS.CUSTOMER_PROFILE) {
-    return `users/${safeSegment(ownerUid, 'User uid')}/profile/${name}`;
-  }
-
-  // Backwards-compatible escape hatch for older callers. New code must use a
-  // kind so the Storage rules can authorize it.
-  const legacyPath = String(path || '').trim().replace(/^\/+|\/+$/g, '');
-  if (!legacyPath) throw new Error('An image path is required.');
-  return `${legacyPath}/${name}`;
-}
-
-function storageInstance() {
-  return getStorage(app);
-}
-
-function waitForUpload(task, onProgress) {
-  return new Promise((resolve, reject) => {
-    task.on(
-      'state_changed',
-      (snapshot) => {
-        if (onProgress && snapshot.totalBytes) {
-          const percent = Math.round(
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          );
-          onProgress(Math.max(0, Math.min(100, percent)));
-        }
-      },
-      (error) => reject(error),
-      (snapshot) => resolve(snapshot)
+async function getFirebaseIdToken(forceRefresh = false) {
+  const user = auth && auth.currentUser;
+  if (!user || typeof user.getIdToken !== 'function') {
+    throw imageError(
+      'image/unauthenticated',
+      'You must be signed in to manage images.',
+      401
     );
-  });
-}
-
-// Uploads a file and returns both its download URL and canonical object path.
-// If URL retrieval fails after the bytes were accepted, the new object is
-// removed immediately so a failed upload cannot become an orphan.
-export async function uploadImageAsset(
-  file,
-  { kind, ownerUid, restaurantId, path, onProgress } = {}
-) {
-  const validation = validateImageFile(file);
-  if (!validation.valid) {
-    throw Object.assign(new Error(validation.error), { code: 'image/invalid' });
   }
-  if (!isImageStorageConfigured()) {
-    throw notConfiguredError();
-  }
-
-  const objectPath = buildImageObjectPath({
-    kind,
-    ownerUid,
-    restaurantId,
-    file,
-    path,
-  });
-  const storage = storageInstance();
-  const objectRef = ref(storage, objectPath);
-  const task = uploadBytesResumable(objectRef, file, {
-    contentType: file.type,
-  });
 
   try {
-    const snapshot = await waitForUpload(task, onProgress);
-    const url = await getDownloadURL(snapshot.ref || task.snapshot.ref);
-    return { url, objectPath };
+    return await user.getIdToken(forceRefresh);
   } catch (error) {
-    try {
-      if (typeof task.cancel === 'function') task.cancel();
-    } catch (cancelError) {
-      /* the upload may already have settled */
+    // A token can expire between rendering the page and starting an upload.
+    // Firebase normally refreshes it automatically; force one refresh when
+    // the cached-token call itself fails.
+    if (!forceRefresh) return user.getIdToken(true);
+    throw imageError(
+      'image/unauthenticated',
+      'Your session has expired. Please sign in again.',
+      401
+    );
+  }
+}
+
+async function parseJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function responseError(response, data) {
+  const status = response.status;
+  let code = data && typeof data.code === 'string' ? data.code : '';
+  if (!code) {
+    if (status === 401) code = 'image/unauthenticated';
+    else if (status === 403) code = 'image/forbidden';
+    else if (status === 404) code = 'image/endpoint-not-found';
+    else if (status === 413) code = 'image/too-large';
+    else if (status === 415) code = 'image/invalid';
+    else if (status === 503) code = 'image/service-unavailable';
+    else code = 'image/request-failed';
+  }
+
+  const message =
+    (data && typeof data.error === 'string' && data.error) ||
+    `The image service responded with ${status}.`;
+  return imageError(code, message, status);
+}
+
+async function imageServiceStatus() {
+  if (!isImageStorageConfigured()) {
+    return {
+      configured: false,
+      code: 'image/not-configured',
+      message: 'The Worker image API is not configured.',
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/diagnostics`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      return {
+        configured: false,
+        code: responseError(response, data).code,
+        message: 'The Worker diagnostics endpoint is unavailable.',
+      };
     }
-    try {
-      await deleteObject(objectRef);
-    } catch (deleteError) {
-      /* best-effort cleanup; preserve the original upload error */
+
+    const supabase = data && data.dependencies && data.dependencies.supabase;
+    if (!supabase) {
+      return {
+        configured: false,
+        code: 'image/service-outdated',
+        message: 'The deployed Worker does not expose the Supabase image API.',
+      };
+    }
+    if (supabase.state === 'error') {
+      const missing = String(supabase.code || '').startsWith('supabase_');
+      return {
+        configured: false,
+        code: missing
+          ? 'image/supabase-not-configured'
+          : 'image/service-unavailable',
+        message: 'The Worker image service is not configured.',
+      };
+    }
+    return { configured: true, code: '', message: '' };
+  } catch {
+    return {
+      configured: false,
+      code: 'image/service-unavailable',
+      message: 'The Worker image service could not be reached.',
+    };
+  }
+}
+
+export async function getImageServiceStatus() {
+  return imageServiceStatus();
+}
+
+async function requestImageApi(
+  path,
+  {
+    method = 'GET',
+    body = null,
+    headers = {},
+    authenticated = true,
+    retryUnauthorized = true,
+  } = {}
+) {
+  if (!isImageStorageConfigured()) throw configurationError();
+
+  const requestHeaders = { Accept: 'application/json', ...headers };
+  let token = null;
+  if (authenticated) {
+    token = await getFirebaseIdToken(false);
+    requestHeaders.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: requestHeaders,
+    ...(body != null ? { body } : {}),
+  });
+  const data = await parseJson(response);
+
+  if (response.status === 401 && authenticated && retryUnauthorized) {
+    // The Worker rejected the cached token. Refresh it once and replay the
+    // request; a 401 means the Worker did not process the upload/delete.
+    const refreshedToken = await getFirebaseIdToken(true);
+    const retryHeaders = {
+      ...requestHeaders,
+      Authorization: `Bearer ${refreshedToken}`,
+    };
+    const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: retryHeaders,
+      ...(body != null ? { body } : {}),
+    });
+    const retryData = await parseJson(retryResponse);
+    if (!retryResponse.ok) throw responseError(retryResponse, retryData);
+    return retryData;
+  }
+
+  if (!response.ok) {
+    const error = responseError(response, data);
+    if (error.status === 503) {
+      const status = await imageServiceStatus();
+      if (!status.configured) {
+        throw imageError(status.code, status.message, error.status);
+      }
     }
     throw error;
   }
+
+  return data || {};
 }
 
-// Backwards-compatible helper: callers that only need the URL receive a string.
+function encodedOriginalFilename(file) {
+  const name = String((file && file.name) || 'image').trim() || 'image';
+  return encodeURIComponent(name);
+}
+
+function cleanupDescriptor({ kind, path, restaurantId, resourceId }) {
+  if (kind === IMAGE_KINDS.CUSTOMER_PROFILE) {
+    return {
+      kind,
+      path,
+      reason: 'profile-remove',
+    };
+  }
+
+  const fallbackResourceId = String(path || '').split('/').pop()?.split('.')[0] || '';
+  return {
+    kind,
+    path,
+    restaurantId,
+    resourceId: resourceId || fallbackResourceId,
+    reason: 'orphan-cleanup',
+  };
+}
+
+/**
+ * Upload an image through the authenticated Worker API.
+ *
+ * `ownerUid` is accepted only for call-site compatibility and is deliberately
+ * ignored: identity comes from the verified Firebase token on the Worker, not
+ * from a browser-supplied uid.
+ */
+export async function uploadImageAsset(
+  file,
+  { kind, ownerUid: _ignoredOwnerUid, restaurantId, resourceId, onProgress } = {}
+) {
+  const validation = validateImageFile(file);
+  if (!validation.valid) {
+    throw imageError('image/invalid', validation.error, 400);
+  }
+  if (!kind) {
+    throw imageError('image/invalid', 'An image kind is required.', 400);
+  }
+  if (!isImageStorageConfigured()) throw configurationError();
+
+  if (typeof onProgress === 'function') onProgress(0);
+
+  const headers = {
+    'Content-Type': file.type,
+    'X-Image-Kind': kind,
+    'X-Original-Filename': encodedOriginalFilename(file),
+  };
+  if (restaurantId) headers['X-Restaurant-Id'] = restaurantId;
+
+  const data = await requestImageApi('/api/images/upload', {
+    method: 'POST',
+    body: file,
+    headers,
+  });
+
+  const objectPath = String(data.objectPath || data.reference || '').trim();
+  if (!objectPath) {
+    throw imageError(
+      'image/invalid-response',
+      'The image service returned no object path.'
+    );
+  }
+
+  const isPrivateProfile = kind === IMAGE_KINDS.CUSTOMER_PROFILE;
+  const result = {
+    // Private profile uploads deliberately do not expose a public URL. The
+    // canonical path is persisted and a signed URL is requested separately.
+    url: isPrivateProfile ? objectPath : String(data.url || data.reference || ''),
+    objectPath,
+    reference: String(data.reference || objectPath),
+    bucket: data.bucket || '',
+    contentType: data.contentType || file.type,
+    private: isPrivateProfile,
+    deleteRequest: cleanupDescriptor({
+      kind,
+      path: objectPath,
+      restaurantId,
+      resourceId,
+    }),
+  };
+
+  if (typeof onProgress === 'function') onProgress(100);
+  return result;
+}
+
+// Backwards-compatible helper: callers that only need the persisted reference
+// receive a string.
 export async function uploadImage(file, options = {}) {
   const uploaded = await uploadImageAsset(file, options);
   return uploaded.url;
 }
 
-// Extracts the bucket from a Firebase Storage download URL without attempting
-// to delete it. This prevents an image URL from another bucket/project from
-// being passed to `ref` by mistake.
-export function getStorageBucketFromUrl(url) {
-  const value = String(url || '').trim();
-  if (!value) return '';
-
-  if (value.startsWith('gs://')) {
-    return value.slice('gs://'.length).split('/')[0];
+/** Create a short-lived signed URL for the signed-in user's private image. */
+export async function getProfileImageSignedUrl(path) {
+  const objectPath = String(path || '').trim();
+  if (!objectPath) {
+    throw imageError('image/path-missing', 'The profile image path is required.', 400);
   }
-
-  try {
-    const parsed = new URL(value);
-    const match = parsed.pathname.match(/\/v0\/b\/([^/]+)\/o(?:\/|$)/);
-    return match ? decodeURIComponent(match[1]) : '';
-  } catch (error) {
-    return '';
-  }
+  return requestImageApi('/api/images/profile/signed-url', {
+    method: 'POST',
+    body: JSON.stringify({ path: objectPath }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
-export function isImageUrlForConfiguredBucket(url) {
-  const configured = getConfiguredStorageBucketName();
-  const bucket = getStorageBucketFromUrl(url);
-  return Boolean(configured && bucket && bucket === configured);
+/** Explicitly delete a Supabase image through the Worker's guarded endpoint. */
+export async function deleteImageAsset({
+  kind,
+  path,
+  reason,
+  restaurantId,
+  resourceId,
+} = {}) {
+  if (!kind || !path || !reason) {
+    throw imageError(
+      'image/delete-request-invalid',
+      'The image deletion request is incomplete.',
+      400
+    );
+  }
+  return requestImageApi('/api/images', {
+    method: 'DELETE',
+    body: JSON.stringify({ kind, path, reason, restaurantId, resourceId }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
-// Deletes a Firebase Storage object using `ref`. Only URLs belonging to the
-// configured project bucket are accepted; external/pasted image URLs are left
-// untouched. The function is intentionally best-effort and never throws.
-//
-// Firebase v12 no longer exports the old `refFromURL` helper. The public `ref`
-// API accepts a full storage URL as its second argument and resolves it to the
-// same StorageReference.
-export async function deleteImage(url) {
-  if (!isImageUrlForConfiguredBucket(url)) return false;
-
+/**
+ * Conservative cleanup hook used by the image pipeline.
+ *
+ * A URL alone is not enough to authorize deletion: public deletion also needs
+ * the resource id and an explicit reason. Existing Firebase URLs and pasted
+ * external URLs are therefore never deleted. New Supabase uploads provide a
+ * complete delete descriptor, which is used only when their Firestore save
+ * fails.
+ */
+export async function deleteImage(_url, deleteRequest = null) {
+  if (!deleteRequest) return false;
   try {
-    const storage = storageInstance();
-    const objectRef = ref(storage, url);
-    await deleteObject(objectRef);
+    await deleteImageAsset(deleteRequest);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -283,14 +394,12 @@ const imageService = {
   ACCEPTED_IMAGE_TYPES,
   IMAGE_KINDS,
   validateImageFile,
-  getConfiguredStorageBucketName,
-  getExpectedStorageBucketName,
   isImageStorageConfigured,
-  buildImageObjectPath,
+  getImageServiceStatus,
   uploadImageAsset,
   uploadImage,
-  getStorageBucketFromUrl,
-  isImageUrlForConfiguredBucket,
+  getProfileImageSignedUrl,
+  deleteImageAsset,
   deleteImage,
   createPreviewUrl,
   revokePreviewUrl,

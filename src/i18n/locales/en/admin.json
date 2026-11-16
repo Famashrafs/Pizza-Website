@@ -331,6 +331,6 @@
   "pasteImageUrl": "Paste an image URL",
   "imageUploaded": "Image uploaded.",
   "imageUploadFailed": "Upload failed. Please try again.",
-  "imageStorageNotConfigured": "File uploads require Firebase Storage. Paste an image URL, or configure REACT_APP_FIREBASE_STORAGE_BUCKET.",
-  "imageStorageHint": "File uploads need Firebase Storage; pasted URLs always work."
+  "imageStorageNotConfigured": "File uploads require the Worker image service. Paste an image URL, or ask the site administrator to configure the service.",
+  "imageStorageHint": "File uploads use the authenticated Worker image service; pasted URLs always work."
 }

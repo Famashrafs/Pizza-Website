@@ -133,6 +133,7 @@ function AdminSettings() {
                     kind: IMAGE_KINDS.RESTAURANT_LOGO,
                     ownerUid: currentUser?.uid || '',
                     restaurantId: restaurant.id,
+                    resourceId: restaurant.id,
                     onProgress: setLogoProgress,
                   })
               : null,
@@ -147,6 +148,7 @@ function AdminSettings() {
                     kind: IMAGE_KINDS.RESTAURANT_COVER,
                     ownerUid: currentUser?.uid || '',
                     restaurantId: restaurant.id,
+                    resourceId: restaurant.id,
                     onProgress: setCoverProgress,
                   })
               : null,

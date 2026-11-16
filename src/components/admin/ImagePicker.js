@@ -17,9 +17,9 @@ import {
 } from '../../services/imageService';
 
 // Image field used by the product form and restaurant settings. The browser
-// file is selected here, but the actual Storage upload is performed by the
-// form's Save action. Deferring the upload prevents a cancelled form from
-// leaving an orphaned object in Storage.
+// file is selected here, but the actual upload is performed by the form's
+// Save action through the authenticated Worker image API. Deferring the upload
+// prevents a cancelled form from leaving an orphaned object.
 //
 // Pasted URLs remain supported. When Storage is unavailable they are still a
 // valid way to reference an existing image.

@@ -367,6 +367,6 @@
   "pasteImageUrl": "الصق رابط صورة",
   "imageUploaded": "تم رفع الصورة.",
   "imageUploadFailed": "فشل الرفع. يرجى المحاولة مرة أخرى.",
-  "imageStorageNotConfigured": "يتطلب رفع الملفات Firebase Storage. الصق رابط صورة، أو اضبط REACT_APP_FIREBASE_STORAGE_BUCKET.",
-  "imageStorageHint": "يتطلب رفع الملفات Firebase Storage؛ أما الروابط الملصقة فتعمل دائمًا."
+  "imageStorageNotConfigured": "يتطلب رفع الملفات خدمة الصور في Worker. الصق رابط صورة، أو اطلب من مسؤول الموقع إعداد الخدمة.",
+  "imageStorageHint": "تستخدم رفعات الملفات خدمة صور Worker المصادَق عليها؛ أما الروابط الملصقة فتعمل دائمًا."
 }

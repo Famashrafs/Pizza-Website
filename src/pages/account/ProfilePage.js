@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -14,7 +14,11 @@ import { useToast } from '../../context/ToastContext';
 import ProfileImageUploader from '../../components/account/ProfileImageUploader';
 import SectionTitle from '../../components/account/SectionTitle';
 import { commitImagePipeline } from '../../services/imagePipeline';
-import { IMAGE_KINDS, uploadImageAsset } from '../../services/imageService';
+import {
+  IMAGE_KINDS,
+  getProfileImageSignedUrl,
+  uploadImageAsset,
+} from '../../services/imageService';
 import {
   getAddresses,
   setDefaultAddress,
@@ -42,6 +46,32 @@ function ProfilePage() {
 
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  const [signedPhotoURL, setSignedPhotoURL] = useState('');
+
+  const normalized = normalizeAccount(uid, currentUser, userProfile);
+
+  // Private Supabase profile images are stored as a stable path in Firestore.
+  // Resolve a short-lived signed URL only for display; never persist that URL.
+  useEffect(() => {
+    let active = true;
+    const path = normalized.photoPath;
+    if (!path) {
+      setSignedPhotoURL('');
+      return undefined;
+    }
+
+    getProfileImageSignedUrl(path).then(
+      (result) => {
+        if (active) setSignedPhotoURL(result.url || '');
+      },
+      () => {
+        if (active) setSignedPhotoURL('');
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [normalized.photoPath]);
 
   const handleSaveProfile = async (event) => {
     event.preventDefault();
@@ -70,15 +100,17 @@ function ProfilePage() {
                 ownerUid: uid,
                 onProgress,
               }),
-            oldUrl: normalized.photoURL,
+            oldUrl: normalized.photoPath,
           },
         ],
-        save: (images) => updateProfileData({ photoURL: images.photo }),
+        // Firestore keeps only the canonical private object path. The
+        // expiring signed URL is resolved separately for display.
+        save: (images) => updateProfileData({ photoPath: images.photo }),
       });
       showToast(t('account.toastProfilePictureUpdated'));
     } catch (err) {
       setPhotoError(
-        err.code === 'storage/not-configured'
+        ['image/not-configured', 'image/supabase-not-configured'].includes(err.code)
           ? t('account.imageStorageNotConfigured')
           : err.message || t('account.toastProfilePictureFailed')
       );
@@ -96,11 +128,15 @@ function ProfilePage() {
           {
             key: 'photo',
             value: '',
-            oldUrl: normalized.photoURL,
+            oldUrl: normalized.photoPath,
           },
         ],
-        save: (images) => updateProfileData({ photoURL: images.photo }),
+        // Clearing the path removes the reference without deleting the object.
+        // The old file may still be referenced elsewhere and can only be
+        // removed through an explicit, separately authorized deletion.
+        save: (images) => updateProfileData({ photoPath: images.photo }),
       });
+      setSignedPhotoURL('');
       showToast(t('account.toastProfilePictureRemoved'));
     } catch (err) {
       setPhotoError(err.message || t('account.toastProfilePictureFailed'));
@@ -143,8 +179,6 @@ function ProfilePage() {
     showToast(t('account.toastDefaultAddressUpdated'));
   };
 
-  const normalized = normalizeAccount(uid, currentUser, userProfile);
-
   return (
     <div className="dash-section">
       <SectionTitle
@@ -155,7 +189,7 @@ function ProfilePage() {
       <div className="dash-card dash-profile-layout">
         <div className="dash-profile-photo">
           <ProfileImageUploader
-            photoURL={normalized.photoURL}
+            photoURL={signedPhotoURL || normalized.photoURL}
             onSave={handleSavePhoto}
             onRemove={handleRemovePhoto}
           />

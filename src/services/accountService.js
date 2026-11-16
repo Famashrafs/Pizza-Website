@@ -74,6 +74,7 @@ export function normalizeAccount(uid, authUser = null, serverProfile = null) {
     email: authUser?.email || serverProfile?.email || '',
     emailVerified: Boolean(authUser?.emailVerified),
     photoURL: authUser?.photoURL || serverProfile?.photoURL || '',
+    photoPath: serverProfile?.photoPath || '',
     phone: serverProfile?.phone || prefs.phone || '',
     phoneVerified: Boolean(serverProfile?.phoneVerified),
     role: serverProfile?.role || null,

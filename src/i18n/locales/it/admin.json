@@ -331,6 +331,6 @@
   "pasteImageUrl": "Incolla un URL di immagine",
   "imageUploaded": "Immagine caricata.",
   "imageUploadFailed": "Caricamento non riuscito. Riprova.",
-  "imageStorageNotConfigured": "Il caricamento dei file richiede Firebase Storage. Incolla un URL di immagine oppure configura REACT_APP_FIREBASE_STORAGE_BUCKET.",
-  "imageStorageHint": "Il caricamento dei file richiede Firebase Storage; gli URL incollati funzionano sempre."
+  "imageStorageNotConfigured": "Il caricamento dei file richiede il servizio immagini del Worker. Incolla un URL di immagine oppure chiedi all'amministratore di configurare il servizio.",
+  "imageStorageHint": "Il caricamento dei file usa il servizio immagini autenticato del Worker; gli URL incollati funzionano sempre."
 }

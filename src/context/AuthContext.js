@@ -58,6 +58,7 @@ function defaultCustomerProfile(user) {
     name: user.displayName || '',
     email: user.email || '',
     photoURL: user.photoURL || '',
+    photoPath: '',
     phone: '',
     phoneVerified: false,
     restaurantId: null,
@@ -212,6 +213,7 @@ async function recoverOwnerProfile(user, existingDoc) {
     email: user.email || '',
     phone: '',
     photoURL: user.photoURL || '',
+    photoPath: '',
     createdAt: now,
     updatedAt: now,
   };
@@ -403,6 +405,7 @@ export function AuthProvider({ children }) {
         email,
         phone: String(phone || '').trim(),
         photoURL: user.photoURL || '',
+        photoPath: '',
         phoneVerified: false,
         restaurantId: null,
         createdAt: now,
